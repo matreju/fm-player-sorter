@@ -11,7 +11,6 @@ import { PlayerCompare } from "./components/player-compare";
 import { MainToolbar } from "./components/main-toolbar";
 import { useSquadDepth } from "./hooks/useSquadDepth";
 import { getPlayerRoleAttributeInsights } from "./utils/playerRoleInsights";
-import { getCandidateTypeForPosition } from "./utils/candidateType";
 import { NationalCoreDrawer } from "./components/national-core";
 import {
   ROLE_DEFINITIONS,
@@ -32,15 +31,9 @@ import {
 } from "./utils/sideFit";
 import {
   calculatePositionFit,
-  formatCandidateKind,
-  formatPositionScore,
-  getBestPositionFit,
-  getCandidateKind,
-  getPhaseLabel,
   getPositionGroups,
 } from "./utils/positionScoring";
 import {
-  applyClubFormImpact,
   calculateClubFormImpact,
   formatClubFormImpact,
 } from "./utils/clubForm";
@@ -75,9 +68,64 @@ import {
   insertRoleAnalysisColumns,
 } from "./constants/appColumns";
 import { normalizeTextForSearch } from "./utils/textSearch";
+import type { FormationSlot, TacticalView } from "./types/squadBuilderTypes";
+import { scorePlayerForSlot } from "./utils/squadBuilderScoring";
 
+function getPrimaryAnalysisPhase(
+  analysisPhase: RolePhaseFilter,
+  analysisRoleId: string
+): TacticalView {
+  const selectedRole = ROLE_DEFINITIONS.find(
+    (role) => role.id === analysisRoleId
+  );
 
+  if (selectedRole) {
+    return selectedRole.phase;
+  }
 
+  if (analysisPhase === "without-ball") {
+    return "without-ball";
+  }
+
+  return "with-ball";
+}
+
+function makeTableAnalysisSlot(
+  positionGroup: string,
+  phase: TacticalView,
+  roleId: string
+): FormationSlot {
+  return {
+    id: `table-${positionGroup}`,
+    label: positionGroup,
+    line: "Pomoc",
+    positionGroup,
+    phase,
+    roleId: roleId === "any" ? "best" : roleId,
+    footRequirement: "any",
+  };
+}
+
+function getBestOverallTableCandidate(row: TableRow, phase: TacticalView) {
+  let bestCandidate: ReturnType<typeof scorePlayerForSlot> = null;
+
+  for (const positionGroup of getPositionGroups()) {
+    const candidate = scorePlayerForSlot(
+      row,
+      makeTableAnalysisSlot(positionGroup, phase, "any")
+    );
+
+    if (!candidate) {
+      continue;
+    }
+
+    if (!bestCandidate || candidate.finalScore > bestCandidate.finalScore) {
+      bestCandidate = candidate;
+    }
+  }
+
+  return bestCandidate;
+}
 export default function App() {
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<TableRow[]>([]);
@@ -213,143 +261,97 @@ const filteredRows = useMemo(() => {
   });
 }, [rows, searchTerm, visibleHeaders, minAge, maxAge, footFilter]);
 const scoredRows = useMemo<TableRow[]>(() => {
-  const usePositionRanking =
-    analysisPositionGroup !== "any" &&
-    analysisPhase === "any" &&
-    analysisRoleId === "any";
+  return filteredRows.map((row) => {
+    const clubFormImpact = calculateClubFormImpact(row);
+    const effectivePhase = getPrimaryAnalysisPhase(
+      analysisPhase,
+      analysisRoleId
+    );
 
-  return filteredRows
-    .map((row) => {
-      const clubFormImpact = calculateClubFormImpact(row);
-      if (usePositionRanking) {
-        const targetPositionFit = calculatePositionFit(
+    const selectedRoleDefinition = ROLE_DEFINITIONS.find(
+      (role) => role.id === analysisRoleId
+    );
+
+    const selectedPositionGroup =
+      analysisPositionGroup !== "any"
+        ? analysisPositionGroup
+        : selectedRoleDefinition?.positionGroup;
+
+    const bestOverallCandidate = getBestOverallTableCandidate(
+      row,
+      effectivePhase
+    );
+
+    const selectedCandidate = selectedPositionGroup
+      ? scorePlayerForSlot(
           row,
-          analysisPositionGroup
-        );
+          makeTableAnalysisSlot(
+            selectedPositionGroup,
+            effectivePhase,
+            analysisRoleId
+          )
+        )
+      : bestOverallCandidate;
 
-        const overallPositionFit = getBestPositionFit(row);
+    const selectedRoleResult = selectedCandidate?.roleResult ?? null;
+    const selectedSideFit = selectedRoleResult
+      ? getRoleSideFit(row, selectedRoleResult.role)
+      : null;
 
-        const candidateKind = getCandidateKind(
-          targetPositionFit,
-          overallPositionFit
-        );
+    return {
+      ...row,
 
-        return {
-          ...row,
+      [ROLE_SCORE_COLUMN]: selectedCandidate
+        ? formatRoleScore(selectedCandidate.finalScore)
+        : "-",
 
-          [ROLE_SCORE_COLUMN]: targetPositionFit
-  ? formatPositionScore(
-      applyClubFormImpact(targetPositionFit.score, clubFormImpact)
-    )
-  : "-",
+      [CLUB_FORM_COLUMN]: formatClubFormImpact(clubFormImpact),
 
-  [CLUB_FORM_COLUMN]: formatClubFormImpact(clubFormImpact),
-  [MONEYBALL_COLUMN]:getMoneyballTableSummary(row, rows),
-          [CANDIDATE_TYPE_COLUMN]: formatCandidateKind(candidateKind),
+      [MONEYBALL_COLUMN]: getMoneyballTableSummary(row, rows),
 
-          [ROLE_SCORE_RANGE_COLUMN]: "-",
+      [CANDIDATE_TYPE_COLUMN]: selectedCandidate
+        ? selectedCandidate.candidateKindLabel
+        : "-",
 
-          [ROLE_SCORE_UNCERTAINTY_COLUMN]: "-",
+      [ROLE_SCORE_RANGE_COLUMN]: formatRoleScoreRange(selectedRoleResult),
 
-          [ROLE_BEST_ROLE_COLUMN]: targetPositionFit?.primaryRole
-            ? targetPositionFit.primaryRole.role.name
-            : "-",
+      [ROLE_SCORE_UNCERTAINTY_COLUMN]:
+        formatRoleUncertainty(selectedRoleResult),
 
-          [ROLE_PHASE_COLUMN]: targetPositionFit?.primaryRole
-            ? `pozycja łączona / ${getPhaseLabel(
-                targetPositionFit.primaryRole.role.phase
-              )}`
-            : "-",
+      [ROLE_BEST_ROLE_COLUMN]: selectedRoleResult
+        ? selectedRoleResult.role.name
+        : "-",
 
-          [ROLE_SIDE_COLUMN]: "-",
+      [ROLE_PHASE_COLUMN]: selectedRoleResult
+        ? getRolePhaseLabel(selectedRoleResult.role.phase)
+        : "-",
 
-          [ROLE_SIDE_SCORE_COLUMN]: "-",
+      [ROLE_SIDE_COLUMN]: formatRoleSide(selectedSideFit),
 
-          [ROLE_SIDE_PROFILE_COLUMN]: "-",
+      [ROLE_SIDE_SCORE_COLUMN]: formatSideScore(selectedSideFit),
 
-          [OVERALL_POSITION_COLUMN]: overallPositionFit
-            ? overallPositionFit.positionGroup
-            : "-",
+      [ROLE_SIDE_PROFILE_COLUMN]: formatSideProfile(selectedSideFit),
 
-          [OVERALL_ROLE_COLUMN]: overallPositionFit?.primaryRole
-            ? overallPositionFit.primaryRole.role.name
-            : "-",
+      [OVERALL_POSITION_COLUMN]: bestOverallCandidate
+        ? bestOverallCandidate.roleResult.role.positionGroup
+        : "-",
 
-          [OVERALL_SCORE_COLUMN]: overallPositionFit
-            ? formatPositionScore(overallPositionFit.score)
-            : "-",
-        };
-      }
+      [OVERALL_ROLE_COLUMN]: bestOverallCandidate
+        ? bestOverallCandidate.roleResult.role.name
+        : "-",
 
-      const bestSelectedMatch = getBestRoleMatch(row, {
-        positionGroup:
-          analysisPositionGroup === "any"
-            ? undefined
-            : analysisPositionGroup,
-        phase: analysisPhase,
-        roleId: analysisRoleId,
-      });
-
-      const bestOverallMatch = getBestRoleMatch(row);
-
-      const selectedSideFit = bestSelectedMatch
-        ? getRoleSideFit(row, bestSelectedMatch.role)
-        : null;
-
-      return {
-        ...row,
-
-        [ROLE_SCORE_COLUMN]: bestSelectedMatch
-  ? formatRoleScore(
-      applyClubFormImpact(bestSelectedMatch.score, clubFormImpact)
-    )
-  : "-",
-
-  [CLUB_FORM_COLUMN]: formatClubFormImpact(clubFormImpact),
-  [MONEYBALL_COLUMN]: getMoneyballTableSummary(row, rows),
-        [CANDIDATE_TYPE_COLUMN]: getCandidateTypeForPosition(
-  row,
-  analysisPositionGroup
-),
-
-        [ROLE_SCORE_RANGE_COLUMN]: formatRoleScoreRange(bestSelectedMatch),
-
-        [ROLE_SCORE_UNCERTAINTY_COLUMN]:
-          formatRoleUncertainty(bestSelectedMatch),
-
-        [ROLE_BEST_ROLE_COLUMN]: bestSelectedMatch
-          ? bestSelectedMatch.role.name
-          : "-",
-
-        [ROLE_PHASE_COLUMN]: bestSelectedMatch
-          ? getRolePhaseLabel(bestSelectedMatch.role.phase)
-          : "-",
-
-        [ROLE_SIDE_COLUMN]: formatRoleSide(selectedSideFit),
-
-        [ROLE_SIDE_SCORE_COLUMN]: formatSideScore(selectedSideFit),
-
-        [ROLE_SIDE_PROFILE_COLUMN]: formatSideProfile(selectedSideFit),
-
-        [OVERALL_POSITION_COLUMN]: bestOverallMatch
-          ? bestOverallMatch.role.positionGroup
-          : "-",
-
-        [OVERALL_ROLE_COLUMN]: bestOverallMatch
-          ? bestOverallMatch.role.name
-          : "-",
-
-        [OVERALL_SCORE_COLUMN]: bestOverallMatch
-          ? formatRoleScore(bestOverallMatch.score)
-          : "-",
-      };
-    })
-  }, [
+      [OVERALL_SCORE_COLUMN]: bestOverallCandidate
+        ? formatRoleScore(bestOverallCandidate.finalScore)
+        : "-",
+    };
+  });
+}, [
   filteredRows,
   analysisPositionGroup,
   analysisPhase,
   analysisRoleId,
-  ]);
+  rows,
+]);
 const analyzedRows = useMemo<TableRow[]>(() => {
   const minimumScore = getSortableNumber(minRoleScore) ?? 0;
 
@@ -460,10 +462,15 @@ const selectedPlayerCurrentRoleMatch = useMemo(() => {
     return null;
   }
 
+  const effectivePhase = getPrimaryAnalysisPhase(
+    analysisPhase,
+    analysisRoleId
+  );
+
   return getBestRoleMatch(selectedPlayer, {
     positionGroup:
       analysisPositionGroup === "any" ? undefined : analysisPositionGroup,
-    phase: analysisPhase,
+    phase: effectivePhase,
     roleId: analysisRoleId,
   });
 }, [

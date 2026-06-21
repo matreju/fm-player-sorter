@@ -152,13 +152,19 @@ export function getPlayerMobilityProfiles(
   const position = normalizeText(rawPosition);
   const profiles: PlayerMobilityProfile[] = [];
 
-  const parentheticalMatches = [
-    ...position.matchAll(/\b(OP|WO|DP|BR|O|P|N)\s*\(([^)]*)\)/g),
-  ];
+const parentheticalMatches = [
+  ...position.matchAll(
+    /\b((?:OP|WO|DP|BR|O|P|N)(?:\/(?:OP|WO|DP|BR|O|P|N))*)\s*\(([^)]*)\)/g
+  ),
+];
 
-  for (const match of parentheticalMatches) {
-    addProfilesForPositionCode(profiles, match[1], match[2]);
+for (const match of parentheticalMatches) {
+  const positionCodes = match[1].split("/");
+
+  for (const code of positionCodes) {
+    addProfilesForPositionCode(profiles, code, match[2]);
   }
+}
 
   if (/\bDP\b/.test(position)) {
     profiles.push({ family: "defensive-midfielder", side: "center" });
@@ -225,6 +231,10 @@ export function getSlotSide(slot: FormationSlot): SlotSide {
 }
 
 export function getSlotFamily(slot: FormationSlot): PositionFamily {
+
+    if (slot.positionGroup === "Bramkarz") {
+    return "goalkeeper";
+  }
   if (slot.positionGroup === "Napastnik") {
     return "striker";
   }
@@ -536,7 +546,13 @@ function scoreProfileToSlot(
   profile: PlayerMobilityProfile,
   slot: FormationSlot
 ): MobilityResult {
+  const slotFamily = getSlotFamily(slot);
+
   if (profile.family === "goalkeeper") {
+    if (slotFamily === "goalkeeper") {
+      return result(100, "natural", "Naturalny bramkarz");
+    }
+
     return BLOCKED;
   }
 

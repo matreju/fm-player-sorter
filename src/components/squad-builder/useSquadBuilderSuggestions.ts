@@ -18,11 +18,13 @@ import {
 import {
   getSlotFamily,
   getSlotSide,
+  scorePlayerMobilityToSlot,
   type PositionFamily,
   type SlotSide,
 } from "../../utils/squadBuilderMobility";
 import type { TacticalView } from "../../utils/squadBuilderTacticalView";
 import { compareCandidatesForMode } from "../../utils/squadBuilderScoreMode";
+import { scorePlayerForSlot } from "../../utils/squadBuilderScoring";
 
 const SQUAD_BUILDER_HIDDEN_TOP_STORAGE_KEY =
   "fm-player-sorter-squad-builder-hidden-top-v4";
@@ -148,109 +150,241 @@ function getCentralFamilyLevel(family: PositionFamily) {
 
   return null;
 }
+function getSlotLane(label: string): SlotSide {
+  const normalized = label
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/Ł/g, "L")
+    .replace(/ł/g, "l")
+    .toUpperCase();
 
+  if (normalized.startsWith("L")) {
+    return "left";
+  }
+
+  if (normalized.startsWith("P")) {
+    return "right";
+  }
+
+  return "center";
+}
 function getTransitionSelectionAdjustment(
   candidate: SlotCandidate,
   targetSlot: FormationSlot,
   withBallProfileByPlayerKey: Map<string, WithBallPlayerSlotProfile>
-) {
+): number | null {
   const sourceProfile = withBallProfileByPlayerKey.get(candidate.key);
 
   if (!sourceProfile) {
-    return 0;
+    return null;
   }
 
   const targetSide = getSlotSide(targetSlot);
   const targetFamily = getSlotFamily(targetSlot);
+  const sourceSide = sourceProfile.side;
+  const sourceFamily = sourceProfile.family;
+
+  const sourceLane = getSlotLane(sourceProfile.slotLabel);
+  const targetLane = getSlotLane(targetSlot.label);
 
   let adjustment = 0;
 
-  if (sourceProfile.side !== "center" && targetSide !== "center") {
-    if (sourceProfile.side === targetSide) {
-      adjustment += 60;
-    } else {
-      adjustment -= 170;
+  if (sourceProfile.slotLabel === targetSlot.label) {
+    adjustment += 500;
+  }
+
+  if (
+    sourceLane !== "center" &&
+    targetLane !== "center" &&
+    sourceLane !== targetLane
+  ) {
+    return null;
+  }
+
+  if (
+    sourceSide !== "center" &&
+    targetSide !== "center" &&
+    sourceSide !== targetSide
+  ) {
+    return null;
+  }
+
+  if (sourceFamily === "goalkeeper") {
+    return targetFamily === "goalkeeper" ? 1000 : null;
+  }
+
+  if (targetFamily === "goalkeeper") {
+    return null;
+  }
+
+  if (sourceFamily === targetFamily) {
+    adjustment += 180;
+  }
+
+  if (
+    areCentralFamilies(sourceFamily, targetFamily)
+  ) {
+    const sourceCentralLevel = getCentralFamilyLevel(sourceFamily);
+    const targetCentralLevel = getCentralFamilyLevel(targetFamily);
+
+    if (sourceCentralLevel === null || targetCentralLevel === null) {
+      return null;
     }
-  }
 
-  if (sourceProfile.side !== "center" && targetSide === "center") {
-    adjustment -= 18;
-  }
-
-  if (sourceProfile.side === "center" && targetSide !== "center") {
-    adjustment -= 26;
-  }
-
-  if (sourceProfile.family === targetFamily) {
-    adjustment += 28;
-  } else if (areCentralFamilies(sourceProfile.family, targetFamily)) {
-    adjustment += 6;
-  }
-
-  const sourceCentralLevel = getCentralFamilyLevel(sourceProfile.family);
-  const targetCentralLevel = getCentralFamilyLevel(targetFamily);
-
-  if (sourceCentralLevel !== null && targetCentralLevel !== null) {
     const levelDistance = Math.abs(sourceCentralLevel - targetCentralLevel);
 
     if (levelDistance === 0) {
-      adjustment += 26;
-    }
-
-    if (levelDistance === 1) {
-      adjustment += 4;
-    }
-
-    if (levelDistance === 2) {
-      adjustment -= 120;
+      adjustment += 170;
+    } else if (levelDistance === 1) {
+      adjustment += 75;
+    } else {
+      return null;
     }
   }
 
-  if (
-    sourceProfile.family === "attacking-midfielder" &&
-    targetFamily === "defensive-midfielder"
-  ) {
-    adjustment -= 80;
+  if (sourceFamily === "striker") {
+    if (targetFamily === "striker") {
+      adjustment += 250;
+    } else if (targetFamily === "attacking-midfielder") {
+      adjustment += 80;
+    } else if (targetFamily === "winger") {
+      adjustment += 35;
+    } else {
+      return null;
+    }
   }
 
-  if (
-    sourceProfile.family === "defensive-midfielder" &&
-    targetFamily === "attacking-midfielder"
-  ) {
-    adjustment -= 95;
+  if (sourceFamily === "attacking-midfielder") {
+    if (targetFamily === "striker") {
+      adjustment += 70;
+    } else if (targetFamily === "central-midfielder") {
+      adjustment += 80;
+    } else if (
+      targetFamily === "winger" ||
+      targetFamily === "wide-midfielder"
+    ) {
+      adjustment += 45;
+    } else if (targetFamily === "defensive-midfielder") {
+      return null;
+    }
   }
 
-  if (
-    (sourceProfile.family === "winger" ||
-      sourceProfile.family === "wide-midfielder") &&
-    (targetFamily === "winger" || targetFamily === "wide-midfielder")
-  ) {
-    adjustment += 18;
+  if (sourceFamily === "central-midfielder") {
+    if (targetFamily === "defensive-midfielder") {
+      adjustment += 70;
+    } else if (targetFamily === "attacking-midfielder") {
+      adjustment += 65;
+    } else if (
+      targetFamily === "wide-midfielder" ||
+      targetFamily === "winger"
+    ) {
+      adjustment += 28;
+    } else if (targetFamily === "center-back") {
+      return null;
+    }
   }
 
-  if (
-    (sourceProfile.family === "wide-back" ||
-      sourceProfile.family === "wing-back") &&
-    (targetFamily === "wide-back" ||
-      targetFamily === "wing-back" ||
-      targetFamily === "wide-midfielder")
-  ) {
-    adjustment += 18;
+  if (sourceFamily === "defensive-midfielder") {
+    if (targetFamily === "central-midfielder") {
+      adjustment += 80;
+    } else if (targetFamily === "center-back") {
+      adjustment += 55;
+    } else if (
+      targetFamily === "attacking-midfielder" ||
+      targetFamily === "winger" ||
+      targetFamily === "wide-midfielder" ||
+      targetFamily === "striker"
+    ) {
+      return null;
+    }
   }
 
-  if (
-    sourceProfile.family === "center-back" &&
-    targetFamily !== "center-back"
-  ) {
-    adjustment -= 75;
+  if (sourceFamily === "center-back") {
+    if (targetFamily === "center-back") {
+      adjustment += 220;
+    } else if (targetFamily === "defensive-midfielder") {
+      adjustment += 35;
+    } else {
+      return null;
+    }
   }
 
-  if (
-    sourceProfile.family === "striker" &&
-    targetFamily !== "striker" &&
-    targetFamily !== "attacking-midfielder"
-  ) {
-    adjustment -= 90;
+  if (sourceFamily === "wide-back") {
+    if (targetFamily === "wide-back") {
+      adjustment += 230;
+    } else if (targetFamily === "wing-back") {
+      adjustment += 130;
+    } else if (targetFamily === "wide-midfielder") {
+      adjustment += 65;
+    } else if (targetFamily === "center-back") {
+      adjustment += 30;
+    } else {
+      return null;
+    }
+  }
+
+  if (sourceFamily === "wing-back") {
+    if (targetFamily === "wide-back") {
+      adjustment += 150;
+    } else if (targetFamily === "wing-back") {
+      adjustment += 220;
+    } else if (targetFamily === "wide-midfielder") {
+      adjustment += 110;
+    } else if (targetFamily === "winger") {
+      adjustment += 65;
+    } else if (targetFamily === "center-back") {
+      adjustment += 20;
+    } else {
+      return null;
+    }
+  }
+
+  if (sourceFamily === "wide-midfielder") {
+    if (targetFamily === "wide-midfielder") {
+      adjustment += 210;
+    } else if (targetFamily === "winger") {
+      adjustment += 130;
+    } else if (targetFamily === "wing-back") {
+      adjustment += 65;
+    } else if (targetFamily === "wide-back") {
+      adjustment += 35;
+    } else if (targetFamily === "attacking-midfielder") {
+      adjustment += 45;
+    } else if (targetFamily === "central-midfielder") {
+      adjustment += 25;
+    } else {
+      return null;
+    }
+  }
+
+  if (sourceFamily === "winger") {
+    if (targetFamily === "winger") {
+      adjustment += 220;
+    } else if (targetFamily === "wide-midfielder") {
+      adjustment += 150;
+    } else if (targetFamily === "attacking-midfielder") {
+      adjustment += 65;
+    } else if (targetFamily === "central-midfielder") {
+      adjustment += 30;
+    } else if (targetFamily === "wing-back") {
+      adjustment += 25;
+    } else {
+      return null;
+    }
+  }
+
+  if (sourceLane !== "center" && targetLane !== "center") {
+    if (sourceLane === targetLane) {
+      adjustment += 90;
+    }
+  }
+
+  if (sourceLane === "center" && targetLane !== "center") {
+    adjustment -= 35;
+  }
+
+  if (sourceLane !== "center" && targetLane === "center") {
+    adjustment -= 25;
   }
 
   return adjustment;
@@ -287,6 +421,207 @@ function filterOnlyNaturalIfNeeded(
   return candidates.filter((candidate) => candidate.candidateKind === "natural");
 }
 
+function buildDirectCandidateForSlot(
+  row: TableRow,
+  slot: FormationSlot
+): SlotCandidate | null {
+  const candidate = scorePlayerForSlot(row, slot);
+
+  if (!candidate) {
+    return null;
+  }
+
+  if (slot.positionGroup === "Bramkarz") {
+    return candidate;
+  }
+
+  const mobility = scorePlayerMobilityToSlot(row, slot);
+
+  if (mobility.kind === "blocked") {
+    return null;
+  }
+
+  return {
+    ...candidate,
+    mobilityScore: mobility.score,
+    sideScore: mobility.score,
+    candidateKind: mobility.kind,
+    candidateKindLabel: mobility.reason,
+  };
+}
+
+function buildDirectCandidatesForSlot(
+  rows: TableRow[],
+  slot: FormationSlot
+): SlotCandidate[] {
+  return rows.reduce<SlotCandidate[]>((acc, row) => {
+    const candidate = buildDirectCandidateForSlot(row, slot);
+
+    if (candidate) {
+      acc.push(candidate);
+    }
+
+    return acc;
+  }, []);
+}
+function isCentralFamily(family: PositionFamily): boolean {
+  return (
+    family === "defensive-midfielder" ||
+    family === "central-midfielder" ||
+    family === "attacking-midfielder"
+  );
+}
+
+function getCentralFamilyLevelForTransition(family: PositionFamily): number | null {
+  if (family === "defensive-midfielder") return 0;
+  if (family === "central-midfielder") return 1;
+  if (family === "attacking-midfielder") return 2;
+  return null;
+}
+
+function getPhysicalTransitionScore(
+  sourceSlot: FormationSlot,
+  targetSlot: FormationSlot
+): number {
+  if (sourceSlot.id === targetSlot.id) {
+    return 10000;
+  }
+
+  const sourceFamily = getSlotFamily(sourceSlot);
+  const targetFamily = getSlotFamily(targetSlot);
+  const sourceSide = getSlotSide(sourceSlot);
+  const targetSide = getSlotSide(targetSlot);
+
+  if (targetFamily === "goalkeeper") {
+    return sourceFamily === "goalkeeper" ? 9000 : -9999;
+  }
+
+  if (targetFamily === "striker") {
+    if (sourceFamily === "striker") return 9000;
+    if (sourceFamily === "attacking-midfielder") return 450;
+    return -9999;
+  }
+
+  if (targetSide !== "center") {
+    if (sourceSide !== targetSide) {
+      return -9999;
+    }
+
+    if (targetFamily === "wide-midfielder") {
+      if (sourceFamily === "winger") return 900;
+      if (sourceFamily === "wide-midfielder") return 850;
+      if (sourceFamily === "wing-back") return 650;
+      if (sourceFamily === "wide-back") return 600;
+      return -9999;
+    }
+
+    if (targetFamily === "winger") {
+      if (sourceFamily === "winger") return 900;
+      if (sourceFamily === "wide-midfielder") return 760;
+      return -9999;
+    }
+
+    if (targetFamily === "wing-back") {
+      if (sourceFamily === "wide-back") return 860;
+      if (sourceFamily === "wing-back") return 840;
+      if (sourceFamily === "wide-midfielder") return 650;
+      if (sourceFamily === "winger") return 560;
+      return -9999;
+    }
+
+    if (targetFamily === "wide-back") {
+      if (sourceFamily === "wide-back") return 900;
+      if (sourceFamily === "wing-back") return 820;
+      if (sourceFamily === "wide-midfielder") return 520;
+      return -9999;
+    }
+
+    if (targetFamily === "center-back") {
+      if (sourceFamily === "center-back") return 780;
+      if (sourceFamily === "wide-back") return 500;
+      return -9999;
+    }
+  }
+
+  if (targetSide === "center") {
+    if (sourceSide !== "center") {
+      return -9999;
+    }
+
+    if (sourceFamily === targetFamily) {
+      return 900;
+    }
+
+    if (isCentralFamily(sourceFamily) && isCentralFamily(targetFamily)) {
+      const sourceLevel = getCentralFamilyLevelForTransition(sourceFamily);
+      const targetLevel = getCentralFamilyLevelForTransition(targetFamily);
+
+      if (sourceLevel === null || targetLevel === null) {
+        return -9999;
+      }
+
+      const distance = Math.abs(sourceLevel - targetLevel);
+
+      if (distance === 1) {
+        return 420;
+      }
+
+      return -9999;
+    }
+
+    if (targetFamily === "center-back" && sourceFamily === "defensive-midfielder") {
+      return 360;
+    }
+
+    if (targetFamily === "defensive-midfielder" && sourceFamily === "center-back") {
+      return 320;
+    }
+  }
+
+  return -9999;
+}
+
+function findPhysicalSourceSlotForWithoutBallSlot(
+  targetSlot: FormationSlot,
+  sourceSlots: FormationSlot[],
+  usedSourceSlotIds: Set<string>
+): FormationSlot | null {
+  const candidates = sourceSlots
+    .filter((sourceSlot) => !usedSourceSlotIds.has(sourceSlot.id))
+    .map((sourceSlot) => ({
+      sourceSlot,
+      score: getPhysicalTransitionScore(sourceSlot, targetSlot),
+    }))
+    .filter((candidate) => candidate.score > -9999)
+    .sort((left, right) => right.score - left.score);
+
+  return candidates[0]?.sourceSlot ?? null;
+}
+
+function buildMappedWithoutBallCandidate(
+  sourceCandidate: SlotCandidate,
+  targetSlot: FormationSlot
+): SlotCandidate {
+  const scoredCandidate = scorePlayerForSlot(sourceCandidate.row, targetSlot);
+
+  if (scoredCandidate) {
+    return {
+      ...scoredCandidate,
+      withBallScore: sourceCandidate.finalScore,
+      withoutBallScore: scoredCandidate.finalScore,
+      candidateKindLabel: `${sourceCandidate.roleResult.role.positionGroup} z fazy przy piłce → ${targetSlot.label}`,
+    };
+  }
+
+  return {
+    ...sourceCandidate,
+    phaseScore: sourceCandidate.finalScore,
+    withBallScore: sourceCandidate.finalScore,
+    withoutBallScore: sourceCandidate.finalScore,
+    candidateKind: "conversion",
+    candidateKindLabel: `Ten sam zawodnik z fazy przy piłce → ${targetSlot.label}`,
+  };
+}
 export function useSquadBuilderSuggestions({
   rows,
   withBallSlots,
@@ -375,39 +710,36 @@ export function useSquadBuilderSuggestions({
     return result;
   }, [withoutBallSlots, lockedSlotCandidateKeys]);
 
-  const candidatesBySlotWithBall = useMemo(() => {
-    const baseCandidates = buildCandidatesBySlot(availableRows, withBallSlots, {
-      topOnlyNatural: false,
-      scoreMode,
-    });
+const candidatesBySlotWithBall = useMemo(() => {
+  const result: Record<string, SlotCandidate[]> = {};
 
-    const result: Record<string, SlotCandidate[]> = {};
+  for (const slot of withBallSlots) {
+    const directCandidates = buildDirectCandidatesForSlot(availableRows, slot);
 
-    for (const slot of withBallSlots) {
-      const visibleCandidates = filterHiddenForSlot(
-        baseCandidates[slot.id] ?? [],
-        hiddenTopCandidateKeys,
-        "with-ball",
-        slot.id,
-        withBallLockedSlotCandidateKeys[slot.id] ?? ""
-      );
+    const visibleCandidates = filterHiddenForSlot(
+      directCandidates,
+      hiddenTopCandidateKeys,
+      "with-ball",
+      slot.id,
+      withBallLockedSlotCandidateKeys[slot.id] ?? ""
+    );
 
-      result[slot.id] = sortCandidatesForMode(
-        visibleCandidates.map((candidate) =>
-          withScoreModeSelectionScore(candidate, scoreMode)
-        ),
-        scoreMode
-      );
-    }
+    result[slot.id] = sortCandidatesForMode(
+      visibleCandidates.map((candidate) =>
+        withScoreModeSelectionScore(candidate, scoreMode)
+      ),
+      scoreMode
+    );
+  }
 
-    return result;
-  }, [
-    availableRows,
-    withBallSlots,
-    hiddenTopCandidateKeys,
-    withBallLockedSlotCandidateKeys,
-    scoreMode,
-  ]);
+  return result;
+}, [
+  availableRows,
+  withBallSlots,
+  hiddenTopCandidateKeys,
+  withBallLockedSlotCandidateKeys,
+  scoreMode,
+]);
 
   const suggestedSquadWithBall = useMemo(() => {
     return solveLineupFromCandidates(
@@ -463,22 +795,32 @@ export function useSquadBuilderSuggestions({
         withoutBallLockedSlotCandidateKeys[slot.id] ?? ""
       );
 
-      result[slot.id] = sortCandidatesForMode(
-        visibleForSlot.map((candidate) => {
-          const transitionAdjustment = getTransitionSelectionAdjustment(
-            candidate,
-            slot,
-            withBallProfileByPlayerKey
-          );
+      const adjustedCandidates = visibleForSlot.reduce<SlotCandidate[]>(
+  (acc, candidate) => {
+    const transitionAdjustment = getTransitionSelectionAdjustment(
+      candidate,
+      slot,
+      withBallProfileByPlayerKey
+    );
 
-          return withScoreModeSelectionScore(
-            candidate,
-            scoreMode,
-            transitionAdjustment
-          );
-        }),
-        scoreMode
-      );
+    if (transitionAdjustment === null) {
+      return acc;
+    }
+
+    acc.push(
+      withScoreModeSelectionScore(
+        candidate,
+        scoreMode,
+        transitionAdjustment
+      )
+    );
+
+    return acc;
+  },
+  []
+);
+
+result[slot.id] = sortCandidatesForMode(adjustedCandidates, scoreMode);
     }
 
     return result;
@@ -491,55 +833,62 @@ export function useSquadBuilderSuggestions({
     scoreMode,
   ]);
 
-  const candidatesBySlotWithoutBallForTop = useMemo(() => {
-    const baseCandidates = buildCandidatesBySlot(
-      availableRows,
-      withoutBallSlots,
-      {
-        topOnlyNatural: false,
-        scoreMode,
-      }
-    );
+const candidatesBySlotWithoutBallForTop = useMemo(() => {
+  return candidatesBySlotWithoutBallForLineup;
+}, [candidatesBySlotWithoutBallForLineup]);
 
-    const result: Record<string, SlotCandidate[]> = {};
+const suggestedSquadWithoutBall = useMemo(() => {
+  const result: Record<string, SlotCandidate | null> = {};
+  const usedSourceSlotIds = new Set<string>();
 
-    for (const slot of withoutBallSlots) {
-      const visibleCandidates = filterHiddenForSlot(
-        baseCandidates[slot.id] ?? [],
-        hiddenTopCandidateKeys,
-        "without-ball",
-        slot.id,
-        withoutBallLockedSlotCandidateKeys[slot.id] ?? ""
-      );
+  for (const withoutBallSlot of withoutBallSlots) {
+    const lockedKey =
+      withoutBallLockedSlotCandidateKeys[withoutBallSlot.id] ?? "";
 
-      result[slot.id] = sortCandidatesForMode(
-        visibleCandidates.map((candidate) =>
-          withScoreModeSelectionScore(candidate, scoreMode)
-        ),
-        scoreMode
-      );
+    if (lockedKey) {
+      const lockedCandidate =
+        candidatesBySlotWithoutBallForLineup[withoutBallSlot.id]?.find(
+          (candidate) => candidate.key === lockedKey
+        ) ?? null;
+
+      result[withoutBallSlot.id] = lockedCandidate;
+      continue;
     }
 
-    return result;
-  }, [
-    availableRows,
-    withoutBallSlots,
-    hiddenTopCandidateKeys,
-    withoutBallLockedSlotCandidateKeys,
-    scoreMode,
-  ]);
-
-  const suggestedSquadWithoutBall = useMemo(() => {
-    return solveLineupFromCandidates(
-      withoutBallSlots,
-      candidatesBySlotWithoutBallForLineup,
-      withoutBallLockedSlotCandidateKeys
+    const sourceSlot = findPhysicalSourceSlotForWithoutBallSlot(
+      withoutBallSlot,
+      withBallSlots,
+      usedSourceSlotIds
     );
-  }, [
-    withoutBallSlots,
-    candidatesBySlotWithoutBallForLineup,
-    withoutBallLockedSlotCandidateKeys,
-  ]);
+
+    if (!sourceSlot) {
+      result[withoutBallSlot.id] = null;
+      continue;
+    }
+
+    const sourceCandidate = suggestedSquadWithBall[sourceSlot.id];
+
+    if (!sourceCandidate) {
+      result[withoutBallSlot.id] = null;
+      continue;
+    }
+
+    usedSourceSlotIds.add(sourceSlot.id);
+
+    result[withoutBallSlot.id] = buildMappedWithoutBallCandidate(
+      sourceCandidate,
+      withoutBallSlot
+    );
+  }
+
+  return result;
+}, [
+  withoutBallSlots,
+  withBallSlots,
+  suggestedSquadWithBall,
+  withoutBallLockedSlotCandidateKeys,
+  candidatesBySlotWithoutBallForLineup,
+]);
 
   const candidatesBySlot =
     tacticalView === "with-ball"
@@ -640,40 +989,45 @@ export function useSquadBuilderSuggestions({
   function clearHiddenTopCandidates() {
     setHiddenTopCandidateKeys({});
   }
+function getVisibleTopCandidates(
+  slot: FormationSlot,
+  limit = 3,
+  view: TacticalView = tacticalView
+): SlotCandidate[] {
+  const currentSlot =
+    view === "with-ball"
+      ? withBallSlots.find((candidateSlot) => candidateSlot.id === slot.id) ?? slot
+      : withoutBallSlots.find((candidateSlot) => candidateSlot.id === slot.id) ?? slot;
 
-  function getVisibleTopCandidates(
-    slot: FormationSlot,
-    limit = 3,
-    view: TacticalView = tacticalView
-  ) {
-    const sourceCandidates =
-      view === "with-ball"
-        ? candidatesBySlotWithBall[slot.id] ?? []
-        : candidatesBySlotWithoutBallForTop[slot.id] ?? [];
+  const rowsForTop = view === "with-ball" ? availableRows : selectedXiRows;
 
-    const sourceLineup =
-      view === "with-ball" ? suggestedSquadWithBall : suggestedSquadWithoutBall;
+  const hiddenForSlot = new Set(
+    hiddenTopCandidateKeys[getPhaseSlotKey(view, currentSlot.id)] ?? []
+  );
 
-    const usedPlayerKeys = new Set(
-      getLineupCandidates(sourceLineup)
-        .filter((candidate) => sourceLineup[slot.id]?.key !== candidate.key)
-        .map((candidate) => candidate.key)
-    );
+  const rawCandidates = rowsForTop.reduce<SlotCandidate[]>((acc, row) => {
+    const candidate = scorePlayerForSlot(row, currentSlot);
 
-    return filterOnlyNaturalIfNeeded(
-      sourceCandidates
-        .filter((candidate) => !usedPlayerKeys.has(candidate.key))
-        .filter((candidate) => {
-          const hiddenForSlot = new Set(
-            hiddenTopCandidateKeys[getPhaseSlotKey(view, slot.id)] ?? []
-          );
+    if (!candidate) {
+      return acc;
+    }
 
-          return !hiddenForSlot.has(candidate.key);
-        }),
-      topOnlyNatural
-    ).slice(0, limit);
-  }
+    if (hiddenForSlot.has(candidate.key)) {
+      return acc;
+    }
 
+    if (topOnlyNatural && candidate.candidateKind !== "natural") {
+      return acc;
+    }
+
+    acc.push(candidate);
+    return acc;
+  }, []);
+
+  return rawCandidates
+    .sort((left, right) => compareCandidatesForMode(left, right, scoreMode))
+    .slice(0, limit);
+}
   function getLockedCandidateKey(
     slotId: string,
     view: TacticalView = tacticalView

@@ -16,8 +16,8 @@ import { cloneFormationSlots } from "./squadBuilderPitch";
 import { getPlayerAvailability } from "./playerAvailability";
 
 const PLAN_LIMIT = 4;
-const WITH_BALL_PLAN_WEIGHT = 0.7;
-const WITHOUT_BALL_PLAN_WEIGHT = 0.3;
+const WITH_BALL_PLAN_WEIGHT = 0.92;
+const WITHOUT_BALL_PLAN_WEIGHT = 0.08;
 
 export type TacticalPlanRecommendation = {
   id: string;
@@ -164,12 +164,7 @@ function buildPlanRecommendation(
   const withBallScore = getLineupScore(withBallSquad);
   const withoutBallScore = getLineupScore(withoutBallSquad);
 
-  const conversionPenalty =
-    candidateKinds.conversionCount * 1.25 +
-    withoutBallCandidates.filter(
-      (candidate) => candidate.candidateKind === "conversion"
-    ).length *
-      0.75;
+const conversionPenalty = candidateKinds.conversionCount * 1.25;
 
   const score = clampScore(
     withBallScore * WITH_BALL_PLAN_WEIGHT +

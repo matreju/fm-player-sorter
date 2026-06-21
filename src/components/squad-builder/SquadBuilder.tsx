@@ -32,7 +32,7 @@ import type {
 } from "../../types/squadBuilderTypes";
 
 const SQUAD_BUILDER_STATE_STORAGE_KEY =
-  "fm-player-sorter-squad-builder-state-v2";
+  "fm-player-sorter-squad-builder-state-v3"
 
 type PersistedSquadBuilderState = {
   isOpen?: boolean;

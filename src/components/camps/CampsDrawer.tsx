@@ -52,7 +52,35 @@ import {
 
 type PlayerMark = "selected" | "rejected";
 
+function getPlayerSurnameSortKey(player: CampPlayerSnapshot): string {
+  const name = player.name.trim();
+  const parts = name.split(/\s+/);
 
+  return parts.length > 1 ? parts[parts.length - 1] : name;
+}
+
+function compareCampPlayersBySurname(
+  left: CampPlayerSnapshot,
+  right: CampPlayerSnapshot
+): number {
+  const surnameCompare = getPlayerSurnameSortKey(left).localeCompare(
+    getPlayerSurnameSortKey(right),
+    "pl",
+    { sensitivity: "base" }
+  );
+
+  if (surnameCompare !== 0) {
+    return surnameCompare;
+  }
+
+  return left.name.localeCompare(right.name, "pl", { sensitivity: "base" });
+}
+
+function sortCampPlayersBySurname(
+  players: CampPlayerSnapshot[]
+): CampPlayerSnapshot[] {
+  return [...players].sort(compareCampPlayersBySurname);
+}
 function getPlayerSortValue(
   summary: CareerPlayerSummary,
   sort: CampaignPlayerSort
@@ -227,12 +255,22 @@ const [careerPlayerSortDirection, setCareerPlayerSortDirection] =
       unique.set(player.key, player);
     }
 
-    return Array.from(unique.values()).sort((left, right) =>
-      left.name.localeCompare(right.name, "pl")
-    );
+return sortCampPlayersBySurname(Array.from(unique.values()));
 }, [rows, getPlayerMark, getPlayerSelectionPosition]);
 
-  const activeCamp = camps.find((camp) => camp.id === activeCampId) ?? null;
+  const activeCampRaw = camps.find((camp) => camp.id === activeCampId) ?? null;
+
+const activeCamp = useMemo(() => {
+  if (!activeCampRaw) {
+    return null;
+  }
+
+  return {
+    ...activeCampRaw,
+    players: sortCampPlayersBySurname(activeCampRaw.players),
+  };
+}, [activeCampRaw]);
+
 const activeMatch =
   activeCamp?.matches.find((match) => match.id === activeMatchId) ?? null;
   const activeCampSummaries = useMemo(() => {
