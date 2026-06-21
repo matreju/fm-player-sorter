@@ -1,0 +1,1 @@
+export { PlayerDetailsPanel } from "./PlayerDetailsPanel";

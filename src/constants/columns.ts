@@ -1,0 +1,47 @@
+export const HIDDEN_COLUMNS = new Set([
+  "Zespół",
+  "Inf",
+  "Pozycja pob.",
+]);
+
+export const ATTRIBUTE_COLUMNS = new Set([
+  "Rzuty rożne",
+  "Dośrodkowania",
+  "Drybling",
+  "Wykańczanie akcji",
+  "Przyjęcie piłki",
+  "Rzuty wolne",
+  "Gra głową",
+  "Strzały z dystansu",
+  "Długie wrzuty",
+  "Krycie",
+  "Podania",
+  "Rzuty karne",
+  "Odbiór piłki",
+  "Technika",
+
+  "Przyspieszenie",
+  "Zwinność",
+  "Równowaga",
+  "Skoczność",
+  "Sprawność",
+  "Szybkość",
+  "Wytrzymałość",
+  "Siła",
+
+  "Agresja",
+  "Pracowitość",
+  "Przegląd sytuacji",
+  "Błyskotliwość",
+  "Przywództwo",
+  "Ustawianie się",
+  "Współpraca",
+  "Gra bez piłki",
+  "Determinacja",
+  "Przewidywanie",
+  "Waleczność",
+  "Opanowanie",
+  "Decyzje",
+  "Koncentracja",
+
+]);
