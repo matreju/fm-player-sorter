@@ -13,7 +13,7 @@ import { nationalCoreStyles as styles } from "./NationalCore.styles";
 
 type NationalCoreView = "core" | "caps" | "callups" | "captains";
 type PositionFilter = "all" | "goalkeepers" | "defenders" | "midfielders" | "attackers";
-
+const moduleDockEventName = "fm-player-sorter-open-module";
 type NationalCoreDrawerProps = {
   rows: TableRow[];
 };
@@ -384,6 +384,21 @@ function getNavMetric(
 
 export function NationalCoreDrawer({ rows }: NationalCoreDrawerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  useEffect(() => {
+  function handleOpenModule(event: Event) {
+    const module = (event as CustomEvent<{ module?: string }>).detail?.module;
+
+    if (module === "core") {
+      setIsOpen(true);
+    }
+  }
+
+  window.addEventListener(moduleDockEventName, handleOpenModule);
+
+  return () => {
+    window.removeEventListener(moduleDockEventName, handleOpenModule);
+  };
+}, []);
   const [camps, setCamps] = useState<Camp[]>([]);
   const [activeView, setActiveView] = useState<NationalCoreView>("core");
   const [positionFilter, setPositionFilter] = useState<PositionFilter>("all");
@@ -412,14 +427,6 @@ export function NationalCoreDrawer({ rows }: NationalCoreDrawerProps) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        style={styles.floatingButton}
-      >
-        TRZON
-      </button>
-
       {isOpen && (
         <div style={styles.overlay}>
           <section style={styles.drawer}>

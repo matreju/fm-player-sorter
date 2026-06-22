@@ -13,6 +13,7 @@ import { useSquadDepth } from "./hooks/useSquadDepth";
 import { getPlayerRoleAttributeInsights } from "./utils/playerRoleInsights";
 import { NationalCoreDrawer } from "./components/national-core";
 import { PlayerCardGrid } from "./components/player-cards";
+import { AppSideDock } from "./components/app-shell";
 import {
   ROLE_DEFINITIONS,
   getRolePhaseLabel,
@@ -190,7 +191,8 @@ const [compactCardMode, setCompactCardMode] = useState(false);
 const [cardSortMode, setCardSortMode] = useState<PlayerCardSortMode>("score-desc");
 const [selectedPlayerKey, setSelectedPlayerKey] = useState<string | null>(null);
 const [squadDepthOpen, setSquadDepthOpen] = useState(false);
-
+const [comparePlayerKey, setComparePlayerKey] = useState("");
+const [compareRequestId, setCompareRequestId] = useState(0);
 
 const rolePositionOptions = useMemo(() => {
   return Array.from(
@@ -558,7 +560,10 @@ const parsed = lowerCaseFileName.endsWith(".csv")
       );
     }
   }
-
+function handleComparePlayer(playerKey: string) {
+  setComparePlayerKey(playerKey);
+  setCompareRequestId((current) => current + 1);
+}
   function handleSort(column: string) {
     setSortConfig((current) => {
       if (!current || current.column !== column) {
@@ -898,25 +903,28 @@ return (
         />
       ) : (
         <PlayerCardGrid
-          rows={cardRows}
-          analysisLabel={playerCardsAnalysisLabel}
-          compact={compactCardMode}
-          getPlayerMark={getPlayerMark}
-          onTogglePlayerMark={togglePlayerMark}
-          onOpenDetails={setSelectedPlayerKey}
-        />
+  rows={cardRows}
+  analysisLabel={playerCardsAnalysisLabel}
+  compact={compactCardMode}
+  getPlayerMark={getPlayerMark}
+  onTogglePlayerMark={togglePlayerMark}
+  onOpenDetails={setSelectedPlayerKey}
+  onComparePlayer={handleComparePlayer}
+/>
       )}
     </>
   )}
 </div>
       </section>
     </div>
-                          {rows.length > 1 && (
-      <div style={styles.comparePageSection}>
-        <PlayerCompare rows={rows} />
-      </div>
-      
-    )}
+ {rows.length > 1 && (
+  <PlayerCompare
+    rows={rows}
+    requestedLeftPlayerKey={comparePlayerKey}
+    compareRequestId={compareRequestId}
+  />
+)}
+<AppSideDock />
 {rows.length > 0 && (
 <SquadBuilder
   rows={rows}

@@ -16,6 +16,7 @@ type PlayerCardGridProps = {
   getPlayerMark: (row: TableRow) => PlayerMark | null;
   onTogglePlayerMark: (row: TableRow, mark: PlayerMark) => void;
   onOpenDetails: (playerKey: string) => void;
+  onComparePlayer: (playerKey: string) => void;
 };
 
 type CardScoreMetrics = {
@@ -475,6 +476,7 @@ export function PlayerCardGrid({
   getPlayerMark,
   onTogglePlayerMark,
   onOpenDetails,
+  onComparePlayer,
 }: PlayerCardGridProps) {
   const [quickFilter, setQuickFilter] = useState<CardQuickFilter>("all");
   const [positionDepthFilter, setPositionDepthFilter] =
@@ -750,6 +752,7 @@ export function PlayerCardGrid({
   compact={compact}
   onTogglePlayerMark={onTogglePlayerMark}
   onOpenDetails={onOpenDetails}
+  onComparePlayer={onComparePlayer}
 />
           ))}
         </section>

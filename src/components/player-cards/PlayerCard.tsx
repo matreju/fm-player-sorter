@@ -12,6 +12,7 @@ type PlayerCardProps = {
   compact?: boolean;
   onTogglePlayerMark: (row: TableRow, mark: PlayerMark) => void;
   onOpenDetails: (playerKey: string) => void;
+  onComparePlayer: (playerKey: string) => void;
 };
 
 type ScoreTone = "elite" | "good" | "okay" | "low";
@@ -99,6 +100,7 @@ function PlayerCardComponent({
   compact = false,
   onTogglePlayerMark,
   onOpenDetails,
+  onComparePlayer,
 }: PlayerCardProps) {
   const summary = buildPlayerCardSummary(row);
   const isSelected = mark === "selected";
@@ -273,14 +275,23 @@ function PlayerCardComponent({
           </AppButton>
         </div>
 
-        <AppButton
-          type="button"
-          variant="secondary"
-          size="compact"
-          onClick={openDetails}
-        >
-          Szczegóły
-        </AppButton>
+<AppButton
+  type="button"
+  variant="secondary"
+  size="compact"
+  onClick={() => onComparePlayer(summary.key)}
+>
+  Porównaj
+</AppButton>
+
+<AppButton
+  type="button"
+  variant="secondary"
+  size="compact"
+  onClick={openDetails}
+>
+  Szczegóły
+</AppButton>
       </footer>
     </article>
     

@@ -7,6 +7,7 @@ type SquadBuilderDrawerShellProps = {
   onToggle: () => void;
   onClose: () => void;
   children: ReactNode;
+  showTab?: boolean;
 };
 
 export function SquadBuilderDrawerShell({
@@ -14,15 +15,11 @@ export function SquadBuilderDrawerShell({
   onToggle,
   onClose,
   children,
+  showTab = true,
 }: SquadBuilderDrawerShellProps) {
   const openButtonRef = useRef<HTMLButtonElement | null>(null);
   const drawerRef = useRef<HTMLElement | null>(null);
   const wasOpenRef = useRef(false);
-  const onCloseRef = useRef(onClose);
-
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -40,7 +37,7 @@ export function SquadBuilderDrawerShell({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        onCloseRef.current();
+        onClose();
       }
     };
 
@@ -54,20 +51,22 @@ export function SquadBuilderDrawerShell({
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   return (
     <>
-      <button
-        ref={openButtonRef}
-        type="button"
-        onClick={onToggle}
-        style={styles.squadBuilderTab}
-        aria-expanded={isOpen}
-        aria-controls="squad-builder-drawer"
-      >
-        SKŁAD
-      </button>
+      {showTab && (
+        <button
+          ref={openButtonRef}
+          type="button"
+          onClick={onToggle}
+          style={styles.squadBuilderTab}
+          aria-expanded={isOpen}
+          aria-controls="squad-builder-drawer"
+        >
+          SKŁAD
+        </button>
+      )}
 
       {isOpen && (
         <>

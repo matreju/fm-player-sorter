@@ -51,6 +51,7 @@ import {
 } from "../../utils/campCore";
 
 type PlayerMark = "selected" | "rejected";
+const moduleDockEventName = "fm-player-sorter-open-module";
 
 function getPlayerSurnameSortKey(player: CampPlayerSnapshot): string {
   const name = player.name.trim();
@@ -131,6 +132,21 @@ export function CampsDrawer({
   getPlayerSelectionPosition,
 }: CampsDrawerProps) {
     const [isOpen, setIsOpen] = useState(false);
+    useEffect(() => {
+  function handleOpenModule(event: Event) {
+    const module = (event as CustomEvent<{ module?: string }>).detail?.module;
+
+    if (module === "camps") {
+      setIsOpen(true);
+    }
+  }
+
+  window.addEventListener(moduleDockEventName, handleOpenModule);
+
+  return () => {
+    window.removeEventListener(moduleDockEventName, handleOpenModule);
+  };
+}, []);
   const [camps, setCamps] = useState<Camp[]>(() => loadCamps());
   const [campaigns, setCampaigns] = useState<Campaign[]>(() => loadCampaigns());
   const [activeCampId, setActiveCampId] = useState<string>("");
@@ -835,14 +851,6 @@ function toggleCareerPlayerSort(nextSort: CampaignPlayerSort) {
 }
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setIsOpen((current) => !current)}
-        style={styles.tab}
-      >
-        ZGRUP.
-      </button>
-
       {isOpen && (
         <>
           <div style={styles.backdrop} onClick={() => setIsOpen(false)} />
