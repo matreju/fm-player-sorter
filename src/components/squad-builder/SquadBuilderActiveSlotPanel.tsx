@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import type {
   FormationSlot,
   PitchPosition,
@@ -13,7 +14,11 @@ import {
   getRoleOptions,
 } from "../../utils/squadBuilderScoring";
 import { inferSlotLabelFromPitch } from "../../utils/squadBuilderPitch";
-import { formatRoleScore } from "../../utils/roleScoring";
+import {
+  formatRoleScore,
+  getRoleAttributeGroupMeta,
+  type RoleAttributeImportance,
+} from "../../utils/roleScoring";
 import { formatCandidateScoreForMode } from "../../utils/squadBuilderScoreMode";
 import { AppButton, CallUpButton } from "../ui";
 import { squadBuilderStyles as styles } from "./squadBuilderStyles";
@@ -21,6 +26,7 @@ import {
   getTacticalViewLabel,
   type TacticalView,
 } from "../../utils/squadBuilderTacticalView";
+import { parseAttributeValue } from "../../utils/attributeValue";
 
 type SquadBuilderActiveSlotPanelProps = {
   activeSlot: FormationSlot | null;
@@ -31,14 +37,9 @@ type SquadBuilderActiveSlotPanelProps = {
     limit?: number,
     view?: TacticalView
   ) => SlotCandidate[];
-  getLockedCandidateKey: (slotId: string, view?: TacticalView) => string;
   getCurrentPitchPosition: (slot: FormationSlot) => PitchPosition;
   onUpdateSlot: (slotId: string, patch: Partial<FormationSlot>) => void;
-  onToggleSlotCandidateLock: (
-    slotId: string,
-    candidateKey: string,
-    view?: TacticalView
-  ) => void;
+
   onHideTopCandidate: (
     slotId: string,
     candidateKey: string,
@@ -48,19 +49,177 @@ type SquadBuilderActiveSlotPanelProps = {
   onSelectPlayer?: (row: TableRow, selectionPosition: string) => void;
 };
 
+type RoleAttributePreview = {
+  name: string;
+  shortName: string;
+  valueLabel: string;
+  averageValue: number | null;
+  importance: RoleAttributeImportance;
+  groupLabel: string;
+  weightLabel: string;
+};
+
+const ATTRIBUTE_SHORT_NAMES: Record<string, string> = {
+  "Wykańczanie akcji": "Wykańcz.",
+  "Gra bez piłki": "Bez piłki",
+  "Przyjęcie piłki": "Przyjęcie",
+  "Przegląd sytuacji": "Przegląd",
+  "Odbiór piłki": "Odbiór",
+  "Ustawianie się": "Ustaw.",
+  "Dośrodkowania": "Dośr.",
+  "Pracowitość": "Praca",
+  "Błyskotliwość": "Błysk.",
+  "Koncentracja": "Koncentr.",
+  "Przewidywanie": "Przewid.",
+  "Wytrzymałość": "Wytrz.",
+  "Przyspieszenie": "Przysp.",
+  "Równowaga": "Równow.",
+  "Skoczność": "Skocz.",
+  "Współpraca": "Współpr.",
+};
+
+function getShortAttributeName(name: string): string {
+  return ATTRIBUTE_SHORT_NAMES[name] ?? name;
+}
+
+function formatAttributeNumber(value: number): string {
+  if (Number.isInteger(value)) {
+    return String(value);
+  }
+
+  return value.toFixed(1);
+}
+
+function getAttributePreviewValue(row: TableRow, attributeName: string) {
+  const parsed = parseAttributeValue(String(row[attributeName] ?? ""));
+
+  if (!parsed) {
+    return {
+      valueLabel: "-",
+      averageValue: null,
+    };
+  }
+
+  if (parsed.isRange) {
+    return {
+      valueLabel: `${formatAttributeNumber(parsed.min)}–${formatAttributeNumber(
+        parsed.max
+      )}`,
+      averageValue: parsed.average,
+    };
+  }
+
+  return {
+    valueLabel: formatAttributeNumber(parsed.average),
+    averageValue: parsed.average,
+  };
+}
+
+function getRoleAttributePreviews(candidate: SlotCandidate): RoleAttributePreview[] {
+  const role = candidate.roleResult.role;
+  const used = new Set<string>();
+  const result: RoleAttributePreview[] = [];
+
+  function addAttributes(
+    attributes: string[] | undefined,
+    importance: RoleAttributeImportance
+  ) {
+    const meta = getRoleAttributeGroupMeta(importance);
+
+    for (const attributeName of attributes ?? []) {
+      if (used.has(attributeName)) {
+        continue;
+      }
+
+      used.add(attributeName);
+
+      const value = getAttributePreviewValue(candidate.row, attributeName);
+
+      result.push({
+        name: attributeName,
+        shortName: getShortAttributeName(attributeName),
+        valueLabel: value.valueLabel,
+        averageValue: value.averageValue,
+        importance,
+        groupLabel: meta.groupLabel,
+        weightLabel: meta.weightLabel,
+      });
+    }
+  }
+
+  // Dokładnie ta sama kolejność i deduplikacja co w roleScoring.ts:
+  addAttributes(role.coreAttributes, "core");
+  addAttributes(role.keyAttributes, "key");
+  addAttributes(role.importantAttributes, "important");
+  addAttributes(role.supportAttributes, "support");
+
+  return result;
+}
+
+function groupRoleAttributes(attributes: RoleAttributePreview[]) {
+  return (["core", "key", "important", "support"] as const)
+    .map((importance) => {
+      const meta = getRoleAttributeGroupMeta(importance);
+
+      return {
+        id: importance,
+        label: meta.groupLabel,
+        weightLabel: meta.weightLabel,
+        items: attributes.filter(
+          (attribute) => attribute.importance === importance
+        ),
+      };
+    })
+    .filter((group) => group.items.length > 0);
+}
+function getRoleAttributeChipStyle(importance: RoleAttributeImportance) {
+  if (importance === "core") {
+    return styles.roleAttributeChipCore;
+  }
+
+  if (importance === "key") {
+    return styles.roleAttributeChipKey;
+  }
+
+  if (importance === "important") {
+    return styles.roleAttributeChipImportant;
+  }
+
+  return styles.roleAttributeChipSupport;
+}
+
+function getRoleAttributeValueStyle(averageValue: number | null) {
+  if (averageValue === null) {
+    return styles.roleAttributeValueUnknown;
+  }
+
+  if (averageValue >= 15) {
+    return styles.roleAttributeValueHigh;
+  }
+
+  if (averageValue >= 12) {
+    return styles.roleAttributeValueGood;
+  }
+
+  if (averageValue >= 10) {
+    return styles.roleAttributeValueOk;
+  }
+
+  return styles.roleAttributeValueLow;
+}
 export function SquadBuilderActiveSlotPanel({
   activeSlot,
   scoreMode,
   tacticalView,
   getVisibleTopCandidates,
-  getLockedCandidateKey,
   getCurrentPitchPosition,
   onUpdateSlot,
-  onToggleSlotCandidateLock,
   onHideTopCandidate,
   getPlayerMark,
   onSelectPlayer,
 }: SquadBuilderActiveSlotPanelProps) {
+  const [attributeDetailsCandidate, setAttributeDetailsCandidate] =
+  useState<SlotCandidate | null>(null);
   if (!activeSlot) {
     return <div style={styles.emptyText}>Kliknij slot na boisku.</div>;
   }
@@ -189,12 +348,11 @@ export function SquadBuilderActiveSlotPanel({
 
         <div style={styles.activeTopCards}>
           {visibleTopCandidates.map((candidate, index) => {
-            const isSelected = getPlayerMark?.(candidate.row) === "selected";
-            const isLocked =
-              getLockedCandidateKey(activeSlot.id, tacticalView) ===
-              candidate.key;
+  const isSelected = getPlayerMark?.(candidate.row) === "selected";
 
-            return (
+  const roleAttributes = getRoleAttributePreviews(candidate);
+
+  return (
               <div
                 key={candidate.key}
                 style={{
@@ -227,32 +385,38 @@ export function SquadBuilderActiveSlotPanel({
                     {candidate.position} · {candidate.club}
                   </div>
 
-                  <div style={styles.miniCandidateMeta}>
-                    {candidate.roleResult.role.name} ·{" "}
-                    {candidate.candidateKindLabel}
-                  </div>
+                 <div style={styles.miniCandidateMeta}>
+  {candidate.roleResult.role.name} ·{" "}
+  {candidate.candidateKindLabel}
+</div>
 
-                  <div style={styles.miniCandidateMeta}>
-                    {candidate.footLabel}
-                  </div>
+<div style={styles.miniCandidateMeta}>
+  {candidate.footLabel}
+</div>
+<button
+  type="button"
+  style={styles.roleAttributesOpenButton}
+  onClick={() => setAttributeDetailsCandidate(candidate)}
+>
+  <span style={styles.roleAttributesOpenButtonText}>
+    Atrybuty scoringu
+  </span>
 
-                  <div style={styles.miniCandidateDualScores}>
-                    <span>
-                      {scoreMode === "overall-ability"
-                        ? "Obecne umiejętności:"
-                        : "Wynik:"}{" "}
-                      <strong>
-                        {formatCandidateScoreForMode(candidate, scoreMode)}
-                      </strong>
-                    </span>
-                  </div>
+  <strong style={styles.roleAttributesOpenButtonCount}>
+    {roleAttributes.length}
+  </strong>
 
-                  {scoreMode === "overall-ability" && (
-                    <div style={styles.miniCandidateMeta}>
-                      Dopasowanie roli:{" "}
-                      {formatRoleScore(candidate.phaseScore ?? candidate.finalScore)}
-                    </div>
-                  )}
+  <small style={styles.roleAttributesOpenButtonHint}>
+    kliknij szczegóły
+  </small>
+</button>
+
+{scoreMode === "overall-ability" && (
+  <div style={styles.miniCandidateMeta}>
+    Dopasowanie roli:{" "}
+    {formatRoleScore(candidate.phaseScore ?? candidate.finalScore)}
+  </div>
+)}
                 </div>
 
                 <div style={styles.miniCandidateBottom}>
@@ -261,26 +425,7 @@ export function SquadBuilderActiveSlotPanel({
                   </strong>
 
                   <div style={styles.miniCandidateButtons}>
-                    <AppButton
-                      type="button"
-                      variant={isLocked ? "danger" : "neutral"}
-                      size="pillIcon"
-                      onClick={() =>
-                        onToggleSlotCandidateLock(
-                          activeSlot.id,
-                          candidate.key,
-                          tacticalView
-                        )
-                      }
-                      title={
-                        isLocked
-                          ? "Odblokuj slot"
-                          : "Zablokuj tego zawodnika w slocie"
-                      }
-                      aria-pressed={isLocked}
-                    >
-                      {isLocked ? "🔒" : "🔓"}
-                    </AppButton>
+
 
                     {onSelectPlayer && (
                       <CallUpButton
@@ -313,6 +458,113 @@ export function SquadBuilderActiveSlotPanel({
           })}
         </div>
       </section>
+      {attributeDetailsCandidate &&
+  (() => {
+    const modalAttributes = getRoleAttributePreviews(
+      attributeDetailsCandidate
+    );
+    const modalAttributeGroups = groupRoleAttributes(modalAttributes);
+
+    return (
+      <div
+        style={styles.roleAttributesModalBackdrop}
+        role="presentation"
+        onClick={() => setAttributeDetailsCandidate(null)}
+      >
+        <section
+          style={styles.roleAttributesModal}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Atrybuty scoringu: ${attributeDetailsCandidate.name}`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <header style={styles.roleAttributesModalHeader}>
+            <div>
+              <h3 style={styles.roleAttributesModalTitle}>
+                {attributeDetailsCandidate.name}
+              </h3>
+
+              <div style={styles.roleAttributesModalSubtitle}>
+                {attributeDetailsCandidate.roleResult.role.name} ·{" "}
+                {attributeDetailsCandidate.candidateKindLabel}
+              </div>
+
+              <div style={styles.roleAttributesModalSubtitle}>
+                {attributeDetailsCandidate.position} ·{" "}
+                {attributeDetailsCandidate.club} ·{" "}
+                {attributeDetailsCandidate.footLabel}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              style={styles.roleAttributesModalClose}
+              onClick={() => setAttributeDetailsCandidate(null)}
+              aria-label="Zamknij okno atrybutów"
+            >
+              ×
+            </button>
+          </header>
+
+          <div style={styles.roleAttributesModalScoreRow}>
+            <span>Wynik</span>
+            <strong>
+              {formatCandidateScoreForMode(
+                attributeDetailsCandidate,
+                scoreMode
+              )}
+            </strong>
+          </div>
+
+          <div style={styles.roleAttributesModalBody}>
+            <div style={styles.roleAttributesModalIntro}>
+              Atrybuty faktycznie używane w scoringu tej roli:{" "}
+              <strong>{modalAttributes.length}</strong>
+            </div>
+
+            <div style={styles.roleAttributeModalGroups}>
+              {modalAttributeGroups.map((group) => (
+                <div key={group.id} style={styles.roleAttributeModalGroup}>
+                  <div style={styles.roleAttributeModalGroupHeader}>
+                    <span>{group.label}</span>
+                    <small>{group.weightLabel}</small>
+                  </div>
+
+                  <div style={styles.roleAttributeModalGrid}>
+                    {group.items.map((attribute) => (
+                      <div
+                        key={`${attribute.importance}-${attribute.name}`}
+                        style={{
+                          ...styles.roleAttributeModalChip,
+                          ...getRoleAttributeChipStyle(attribute.importance),
+                        }}
+                        title={`${attribute.name} · ${attribute.groupLabel} · ${attribute.weightLabel}`}
+                      >
+                        <span style={styles.roleAttributeModalName}>
+                          {attribute.name}
+                        </span>
+
+                        <strong
+                          style={{
+                            ...styles.roleAttributeModalValue,
+                            ...getRoleAttributeValueStyle(
+                              attribute.averageValue
+                            ),
+                          }}
+                        >
+                          {attribute.valueLabel}
+                        </strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  })()}
     </>
   );
 }

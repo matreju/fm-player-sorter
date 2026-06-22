@@ -18,6 +18,11 @@ export function SquadBuilderDrawerShell({
   const openButtonRef = useRef<HTMLButtonElement | null>(null);
   const drawerRef = useRef<HTMLElement | null>(null);
   const wasOpenRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -35,7 +40,7 @@ export function SquadBuilderDrawerShell({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        onClose();
+        onCloseRef.current();
       }
     };
 
@@ -49,34 +54,34 @@ export function SquadBuilderDrawerShell({
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   return (
     <>
-<button
-  ref={openButtonRef}
-  type="button"
-  onClick={onToggle}
-  style={styles.squadBuilderTab}
-  aria-expanded={isOpen}
-  aria-controls="squad-builder-drawer"
->
-  SKŁAD
-</button>
+      <button
+        ref={openButtonRef}
+        type="button"
+        onClick={onToggle}
+        style={styles.squadBuilderTab}
+        aria-expanded={isOpen}
+        aria-controls="squad-builder-drawer"
+      >
+        SKŁAD
+      </button>
 
       {isOpen && (
         <>
           <div style={styles.squadBuilderBackdrop} onClick={onClose} />
 
-<aside
-  ref={drawerRef}
-  id="squad-builder-drawer"
-  role="dialog"
-  aria-modal="true"
-  aria-labelledby="squad-builder-title"
-  tabIndex={-1}
-  style={styles.squadBuilderDrawer}
->
+          <aside
+            ref={drawerRef}
+            id="squad-builder-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="squad-builder-title"
+            tabIndex={-1}
+            style={styles.squadBuilderDrawer}
+          >
             <div style={styles.squadBuilderDrawerHeader}>
               <div>
                 <div

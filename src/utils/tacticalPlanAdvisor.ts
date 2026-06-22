@@ -152,7 +152,6 @@ function buildPlanRecommendation(
     FORMATION_PRESETS[0];
 
   const withBallCandidates = getLineupCandidates(withBallSquad);
-  const withoutBallCandidates = getLineupCandidates(withoutBallSquad);
   const candidateKinds = countCandidateKinds(withBallCandidates);
   const injuredWarnings = getInjuryWarnings(withBallCandidates);
 

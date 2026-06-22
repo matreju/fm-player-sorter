@@ -118,25 +118,6 @@ function getBestRoleForSlot(row: TableRow, slot: FormationSlot): RoleScoreResult
   return best;
 }
 
-function getRequiredFootMinimum(requirement: FootRequirement): {
-  foot: "left" | "right" | "both" | "dominant" | "any";
-  min: number;
-} {
-  if (requirement === "left" || requirement === "left-decent") return { foot: "left", min: 9 };
-  if (requirement === "left-strong") return { foot: "left", min: 12 };
-  if (requirement === "left-high") return { foot: "left", min: 15 };
-  if (requirement === "left-dominant") return { foot: "dominant", min: 9 };
-
-  if (requirement === "right" || requirement === "right-decent") return { foot: "right", min: 9 };
-  if (requirement === "right-strong") return { foot: "right", min: 12 };
-  if (requirement === "right-high") return { foot: "right", min: 15 };
-  if (requirement === "right-dominant") return { foot: "dominant", min: 9 };
-
-  if (requirement === "both-decent") return { foot: "both", min: 9 };
-  if (requirement === "both-strong") return { foot: "both", min: 12 };
-
-  return { foot: "any", min: 0 };
-}
 
 
 function getSoftPositionPenalty(kind: CandidateKind, fitGap: number): number {
@@ -261,24 +242,41 @@ export function scorePlayerForTacticalSlot(
 ): SlotCandidate | null {
   const currentSlot = getSlotForTacticalView(slot, tacticalView);
   const currentCandidate = scorePlayerForSlot(row, currentSlot);
-  if (!currentCandidate) return null;
 
-  const withBallCandidate = scorePlayerForSlot(row, getSlotForTacticalView(slot, "with-ball"));
-  const withoutBallCandidate = scorePlayerForSlot(row, getSlotForTacticalView(slot, "without-ball"));
+  if (!currentCandidate) {
+    return null;
+  }
+
+  const withBallCandidate = scorePlayerForSlot(
+    row,
+    getSlotForTacticalView(slot, "with-ball")
+  );
+
+  const withoutBallCandidate = scorePlayerForSlot(
+    row,
+    getSlotForTacticalView(slot, "without-ball")
+  );
 
   const phaseScore = currentCandidate.finalScore;
   const withBallScore = withBallCandidate?.finalScore ?? phaseScore;
   const withoutBallScore = withoutBallCandidate?.finalScore ?? phaseScore;
-  const supportScore = tacticalView === "with-ball" ? withoutBallScore : withBallScore;
-  const finalScore = clampScore(phaseScore * 0.8 + supportScore * 0.2);
 
   return {
     ...currentCandidate,
-    finalScore,
+
+    // WAŻNE:
+    // finalScore zostaje dokładnie taki, jaki policzył scorePlayerForSlot()
+    // dla aktualnie oglądanej fazy. Nie mieszamy już 80/20 z drugą fazą.
+    finalScore: phaseScore,
     phaseScore,
+
     withBallScore,
     withoutBallScore,
-    withBallRoleName: withBallCandidate?.roleResult.role.name ?? currentCandidate.roleResult.role.name,
-    withoutBallRoleName: withoutBallCandidate?.roleResult.role.name ?? currentCandidate.roleResult.role.name,
+    withBallRoleName:
+      withBallCandidate?.roleResult.role.name ??
+      currentCandidate.roleResult.role.name,
+    withoutBallRoleName:
+      withoutBallCandidate?.roleResult.role.name ??
+      currentCandidate.roleResult.role.name,
   };
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { HIDDEN_COLUMNS } from "./constants/columns";
 import { styles } from "./styles";
 import type { SortConfig, TableRow } from "./types/table";
@@ -133,6 +133,7 @@ export default function App() {
   const [fileName, setFileName] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [minAge, setMinAge] = useState("");
 const [maxAge, setMaxAge] = useState("");
 const [footFilter, setFootFilter] = useState<FootFilter>("any");
@@ -230,8 +231,7 @@ const tableHeaders = useMemo(() => {
 }, [headers.length, visibleHeaders, compactTableMode]);
 
 const filteredRows = useMemo(() => {
-  const normalizedSearch = normalizeTextForSearch(searchTerm);
-
+const normalizedSearch = normalizeTextForSearch(deferredSearchTerm);
   const minAgeNumber = minAge.trim() ? Number(minAge) : null;
   const maxAgeNumber = maxAge.trim() ? Number(maxAge) : null;
 
@@ -259,7 +259,7 @@ const filteredRows = useMemo(() => {
 
     return matchesSearch && matchesMinAge && matchesMaxAge && matchesFoot;
   });
-}, [rows, searchTerm, visibleHeaders, minAge, maxAge, footFilter]);
+}, [rows, deferredSearchTerm, visibleHeaders, minAge, maxAge, footFilter]);
 const scoredRows = useMemo<TableRow[]>(() => {
   return filteredRows.map((row) => {
     const clubFormImpact = calculateClubFormImpact(row);
@@ -565,7 +565,21 @@ const parsed = lowerCaseFileName.endsWith(".csv")
   setFootFilter("any");
     setError("");
   }
+const handleSquadBuilderSelectPlayer = useCallback(
+  (row: TableRow, selectionPosition: string) => {
+    const isAlreadySelected = getPlayerMark(row) === "selected";
 
+    togglePlayerMark(row, "selected");
+
+    if (isAlreadySelected) {
+      setPlayerSelectionPosition(row, "");
+      return;
+    }
+
+    setPlayerSelectionPosition(row, selectionPosition);
+  },
+  [getPlayerMark, togglePlayerMark, setPlayerSelectionPosition]
+);
 return (
 <main style={styles.page} aria-labelledby="app-title">
       <div style={styles.appShell}>
@@ -659,25 +673,13 @@ return (
       
     )}
 {rows.length > 0 && (
-<SquadBuilder
-  rows={rows}
-  getPlayerMark={getPlayerMark}
-  selectedPlayersCount={selectedPlayersCount}
-  onClearCallUps={clearPlayerSelection}
-  onSelectPlayer={(row, selectionPosition) => {
-    const isAlreadySelected = getPlayerMark(row) === "selected";
-
-    togglePlayerMark(row, "selected");
-
-    if (isAlreadySelected) {
-      setPlayerSelectionPosition(row, "");
-      return;
-    }
-
-    setPlayerSelectionPosition(row, selectionPosition);
-  }}
-/>
-
+  <SquadBuilder
+    rows={rows}
+    getPlayerMark={getPlayerMark}
+    selectedPlayersCount={selectedPlayersCount}
+    onClearCallUps={clearPlayerSelection}
+    onSelectPlayer={handleSquadBuilderSelectPlayer}
+  />
 )}
     {selectedPlayer && (
       <PlayerDetailsPanel

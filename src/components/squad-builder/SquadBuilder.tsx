@@ -116,9 +116,7 @@ export function SquadBuilder({
   const initialFormationId = getValidFormationId(persistedState.formationId);
   const initialFormation = getFormationById(initialFormationId);
 
-  const [isSquadDrawerOpen, setIsSquadDrawerOpen] = useState(
-    persistedState.isOpen ?? false
-  );
+const [isSquadDrawerOpen, setIsSquadDrawerOpen] = useState(false);
 
   const [formationId, setFormationId] = useState(initialFormationId);
 
@@ -182,22 +180,20 @@ export function SquadBuilder({
 
   useEffect(() => {
     saveLocalStorageValue<PersistedSquadBuilderState>(
-      SQUAD_BUILDER_STATE_STORAGE_KEY,
-      {
-        isOpen: isSquadDrawerOpen,
-        formationId,
-        withoutBallFormationId,
-        activeSlotId,
-        tacticalView,
-        onlySelected,
-        topOnlyNatural,
-        scoreMode,
-        slots,
-        withoutBallSlotOverrides,
-      }
-    );
+  SQUAD_BUILDER_STATE_STORAGE_KEY,
+  {
+    formationId,
+    withoutBallFormationId,
+    activeSlotId,
+    tacticalView,
+    onlySelected,
+    topOnlyNatural,
+    scoreMode,
+    slots,
+    withoutBallSlotOverrides,
+  }
+);
   }, [
-    isSquadDrawerOpen,
     formationId,
     withoutBallFormationId,
     activeSlotId,
@@ -216,7 +212,6 @@ export function SquadBuilder({
     hiddenTopCount,
     lockedSlotCandidateKeys,
     getVisibleTopCandidates,
-    getLockedCandidateKey,
     toggleSlotCandidateLock,
     clearLockedSlotCandidate,
     clearLockedSlotCandidates,
@@ -422,14 +417,12 @@ export function SquadBuilder({
   scoreMode={scoreMode}
   tacticalView={tacticalView}
   getVisibleTopCandidates={getVisibleTopCandidates}
-  getLockedCandidateKey={getLockedCandidateKey}
   getCurrentPitchPosition={
     tacticalView === "with-ball"
       ? withBallDrag.getCurrentPitchPosition
       : withoutBallDrag.getCurrentPitchPosition
   }
   onUpdateSlot={updateActiveSlot}
-  onToggleSlotCandidateLock={toggleSlotCandidateLock}
   onHideTopCandidate={hideTopCandidate}
   getPlayerMark={getPlayerMark}
   onSelectPlayer={onSelectPlayer}

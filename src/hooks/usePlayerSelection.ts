@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import type { TableRow } from "../types/table";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from "react";import type { TableRow } from "../types/table";
 import { getBestRoleMatch } from "../utils/roleScoring";
 import { getPlayerKey } from "../utils/playerIdentity";
 import type { PlayerMark } from "../constants/selection";
@@ -88,76 +93,92 @@ export function usePlayerSelection({
     }).length;
   }, [playerMarks, playerSelectionPositions]);
 
-  function getPlayerMark(row: TableRow): PlayerMark | null {
-    return playerMarks[getPlayerKey(row)] ?? null;
-  }
+  const getPlayerMark = useCallback(
+    (row: TableRow): PlayerMark | null => {
+      return playerMarks[getPlayerKey(row)] ?? null;
+    },
+    [playerMarks]
+  );
 
-function getSuggestedSelectionPosition(row: TableRow): string {
-  if (isGoalkeeper(row)) {
-    return "Bramkarz";
-  }
+  const getSuggestedSelectionPosition = useCallback(
+    (row: TableRow): string => {
+      if (isGoalkeeper(row)) {
+        return "Bramkarz";
+      }
 
-  if (analysisPositionGroup !== "any") {
-    return analysisPositionGroup;
-  }
+      if (analysisPositionGroup !== "any") {
+        return analysisPositionGroup;
+      }
 
-  const bestOverallMatch = getBestRoleMatch(row);
+      const bestOverallMatch = getBestRoleMatch(row);
 
-  return bestOverallMatch?.role.positionGroup ?? "";
-}
+      return bestOverallMatch?.role.positionGroup ?? "";
+    },
+    [analysisPositionGroup]
+  );
 
-  function getPlayerSelectionPosition(row: TableRow): string {
-    return playerSelectionPositions[getPlayerKey(row)] ?? "";
-  }
+  const getPlayerSelectionPosition = useCallback(
+    (row: TableRow): string => {
+      return playerSelectionPositions[getPlayerKey(row)] ?? "";
+    },
+    [playerSelectionPositions]
+  );
 
-  function setPlayerSelectionPosition(row: TableRow, position: string) {
-    const key = getPlayerKey(row);
+  const setPlayerSelectionPosition = useCallback(
+    (row: TableRow, position: string) => {
+      const key = getPlayerKey(row);
 
-    setPlayerSelectionPositions((previous) => ({
-      ...previous,
-      [key]: position,
-    }));
-  }
+      setPlayerSelectionPositions((previous) => ({
+        ...previous,
+        [key]: position,
+      }));
+    },
+    []
+  );
 
-  function togglePlayerMark(row: TableRow, mark: PlayerMark) {
-    const key = getPlayerKey(row);
-    const currentMark = playerMarks[key] ?? null;
-    const nextMark = currentMark === mark ? null : mark;
+  const togglePlayerMark = useCallback(
+    (row: TableRow, mark: PlayerMark) => {
+      const key = getPlayerKey(row);
+      const currentMark = playerMarks[key] ?? null;
+      const nextMark = currentMark === mark ? null : mark;
 
-    setPlayerMarks((previous) => {
-      const next = { ...previous };
+      setPlayerMarks((previous) => {
+        const next = { ...previous };
 
-      if (nextMark === null) {
-        delete next[key];
+        if (nextMark === null) {
+          delete next[key];
+          return next;
+        }
+
+        next[key] = nextMark;
         return next;
-      }
+      });
 
-      next[key] = nextMark;
-      return next;
-    });
+      setPlayerSelectionPositions((previous) => {
+        const next = { ...previous };
 
-    setPlayerSelectionPositions((previous) => {
-      const next = { ...previous };
+        if (nextMark !== "selected") {
+          delete next[key];
+          return next;
+        }
 
-      if (nextMark !== "selected") {
-        delete next[key];
+        if (!next[key]) {
+          next[key] = getSuggestedSelectionPosition(row);
+        }
+
         return next;
-      }
+      });
+    },
+    [playerMarks, getSuggestedSelectionPosition]
+  );
 
-      if (!next[key]) {
-        next[key] = getSuggestedSelectionPosition(row);
-      }
-
-      return next;
-    });
-  }
-
-  function clearPlayerSelection() {
+  const clearPlayerSelection = useCallback(() => {
     setPlayerMarks({});
     setPlayerSelectionPositions({});
-  }
+  }, []);
 
-  function getMarkedCellStyle(mark: PlayerMark | null): CSSProperties {
+  const getMarkedCellStyle = useCallback(
+    (mark: PlayerMark | null): CSSProperties => {
     if (mark === "selected") {
       return {
         background: "rgba(78, 255, 119, 0.12)",
@@ -170,8 +191,10 @@ function getSuggestedSelectionPosition(row: TableRow): string {
       };
     }
 
-    return {};
-  }
+      return {};
+    },
+    []
+  );
 
   return {
     playerMarks,

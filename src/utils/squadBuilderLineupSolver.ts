@@ -12,12 +12,10 @@ import {
   getSlotFamily,
   getSlotSide,
   scorePlayerMobilityToSlot,
-  type MobilityKind,
   type PlayerMobilityProfile,
   type PositionFamily,
 } from "./squadBuilderMobility";
 import { compareCandidatesForMode } from "./squadBuilderScoreMode";
-import { getPlayerKey } from "./playerIdentity";
 
 export type BuildCandidatesBySlotOptions = {
   hiddenPlayerKeys?: Set<string>;
@@ -39,10 +37,6 @@ type LogicalScoreContext = {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
-}
-
-function clampScore(value: number): number {
-  return clamp(value, 0, 100);
 }
 
 function parseNumber(value: unknown): number | null {
@@ -67,14 +61,21 @@ function getOverallAbility(row: TableRow): number | null {
 function getOverallAbilityTieBreaker(row: TableRow): number {
   const overallAbility = getOverallAbility(row);
   if (overallAbility === null) return 0;
+
   return clamp((overallAbility - 120) * 0.035, -3.5, 5);
 }
 
-function hasFamily(profiles: PlayerMobilityProfile[], family: PositionFamily): boolean {
+function hasFamily(
+  profiles: PlayerMobilityProfile[],
+  family: PositionFamily
+): boolean {
   return profiles.some((profile) => profile.family === family);
 }
 
-function hasAnyFamily(profiles: PlayerMobilityProfile[], families: PositionFamily[]): boolean {
+function hasAnyFamily(
+  profiles: PlayerMobilityProfile[],
+  families: PositionFamily[]
+): boolean {
   return families.some((family) => hasFamily(profiles, family));
 }
 
@@ -87,19 +88,24 @@ function isWideFamily(family: PositionFamily): boolean {
   );
 }
 
-function getBestProfileFamily(profiles: PlayerMobilityProfile[]): PositionFamily | null {
-  return profiles[0]?.family ?? null;
-}
-
-function hasCompatibleWideSide(profiles: PlayerMobilityProfile[], slot: FormationSlot): boolean {
+function hasCompatibleWideSide(
+  profiles: PlayerMobilityProfile[],
+  slot: FormationSlot
+): boolean {
   const slotSide = getSlotSide(slot);
-  if (slotSide === "center") return true;
 
-  return profiles.some((profile) => profile.side === slotSide || profile.side === "center");
+  if (slotSide === "center") {
+    return true;
+  }
+
+  return profiles.some(
+    (profile) => profile.side === slotSide || profile.side === "center"
+  );
 }
 
-function isCriticalSlot(slot: FormationSlot) {
+function isCriticalSlot(slot: FormationSlot): boolean {
   const slotFamily = getSlotFamily(slot);
+
   return (
     slotFamily === "center-back" ||
     slotFamily === "wide-back" ||
@@ -108,7 +114,7 @@ function isCriticalSlot(slot: FormationSlot) {
   );
 }
 
-function getMinimumScoreForSlot(slot: FormationSlot, kind: CandidateKind) {
+function getMinimumScoreForSlot(slot: FormationSlot, kind: CandidateKind): number {
   const critical = isCriticalSlot(slot);
 
   if (kind === "natural") return critical ? 39 : 34;
@@ -117,27 +123,26 @@ function getMinimumScoreForSlot(slot: FormationSlot, kind: CandidateKind) {
   return critical ? 56 : 51;
 }
 
-function getVisibleAdjustment(kind: CandidateKind, mobilityKind: MobilityKind) {
-  if (kind === "natural") return mobilityKind === "natural" ? 0.5 : 0;
-  if (kind === "close") return 0;
-  return mobilityKind === "blocked" ? -6 : -3;
-}
-
-function getSelectionKindBonus(slot: FormationSlot, kind: CandidateKind) {
+function getSelectionKindBonus(slot: FormationSlot, kind: CandidateKind): number {
   if (kind === "natural") {
-    return 2;
+    return 1.5;
   }
 
   if (kind === "close") {
     return 0;
   }
 
-  return isCriticalSlot(slot) ? -10 : -6;
+  return isCriticalSlot(slot) ? -4 : -2;
 }
 
 function getCandidateSelectionScore(candidate: SlotCandidate): number {
-  const selectionScore = (candidate as CandidateWithSelectionScore).selectionScore;
-  if (typeof selectionScore === "number" && Number.isFinite(selectionScore)) return selectionScore;
+  const selectionScore = (candidate as CandidateWithSelectionScore)
+    .selectionScore;
+
+  if (typeof selectionScore === "number" && Number.isFinite(selectionScore)) {
+    return selectionScore;
+  }
+
   return candidate.finalScore;
 }
 
@@ -146,40 +151,24 @@ function compareCandidatesForLineup(
   right: SlotCandidate,
   scoreMode: SquadBuilderScoreMode
 ): number {
-  if (scoreMode === "overall-ability") return compareCandidatesForMode(left, right, scoreMode);
+  if (scoreMode === "overall-ability") {
+    return compareCandidatesForMode(left, right, scoreMode);
+  }
 
-  const selectionDiff = getCandidateSelectionScore(right) - getCandidateSelectionScore(left);
-  if (selectionDiff !== 0) return selectionDiff;
+  const selectionDiff =
+    getCandidateSelectionScore(right) - getCandidateSelectionScore(left);
+
+  if (selectionDiff !== 0) {
+    return selectionDiff;
+  }
 
   const finalDiff = right.finalScore - left.finalScore;
-  if (finalDiff !== 0) return finalDiff;
+
+  if (finalDiff !== 0) {
+    return finalDiff;
+  }
 
   return left.name.localeCompare(right.name, "pl");
-}
-
-function getExperimentalLabel(slot: FormationSlot, profiles: PlayerMobilityProfile[]) {
-  const family = getBestProfileFamily(profiles);
-  const slotFamily = getSlotFamily(slot);
-
-  if (!family) return "↗ Eksperyment atrybutowy";
-
-  if (family === "winger" && slotFamily === "wide-back") {
-    return "↗ Skrzydłowy cofnięty na bocznego obrońcę dzięki atrybutom";
-  }
-
-  if (family === "winger" && slotFamily === "wing-back") {
-    return "↗ Skrzydłowy cofnięty na wahadło dzięki atrybutom";
-  }
-
-  if (family === "wide-midfielder" && slotFamily === "wide-back") {
-    return "↗ Boczny pomocnik cofnięty na bocznego obrońcę";
-  }
-
-  if (family === "attacking-midfielder" && slotFamily === "central-midfielder") {
-    return "↗ OP cofnięty do środka pola";
-  }
-
-  return "↗ Eksperyment atrybutowy";
 }
 
 function shouldRejectImpossibleWideSide(
@@ -190,8 +179,13 @@ function shouldRejectImpossibleWideSide(
   const slotFamily = getSlotFamily(slot);
   const slotSide = getSlotSide(slot);
 
-  if (!isWideFamily(slotFamily) || slotSide === "center") return false;
-  if (hasCompatibleWideSide(profiles, slot)) return false;
+  if (!isWideFamily(slotFamily) || slotSide === "center") {
+    return false;
+  }
+
+  if (hasCompatibleWideSide(profiles, slot)) {
+    return false;
+  }
 
   return candidate.finalScore < 66;
 }
@@ -205,7 +199,10 @@ function shouldRejectByBasicFootballLogic(
   const slotFamily = getSlotFamily(slot);
 
   if (slotFamily === "center-back") {
-    if (hasAnyFamily(profiles, ["center-back", "defensive-midfielder"])) return false;
+    if (hasAnyFamily(profiles, ["center-back", "defensive-midfielder"])) {
+      return false;
+    }
+
     if (
       context.centerBackSlotsCount >= 3 &&
       hasAnyFamily(profiles, ["wide-back", "wing-back"]) &&
@@ -218,7 +215,13 @@ function shouldRejectByBasicFootballLogic(
   }
 
   if (slotFamily === "defensive-midfielder") {
-    if (hasAnyFamily(profiles, ["defensive-midfielder", "central-midfielder", "center-back"])) {
+    if (
+      hasAnyFamily(profiles, [
+        "defensive-midfielder",
+        "central-midfielder",
+        "center-back",
+      ])
+    ) {
       return false;
     }
 
@@ -226,17 +229,21 @@ function shouldRejectByBasicFootballLogic(
   }
 
   if (slotFamily === "striker") {
-    if (hasAnyFamily(profiles, ["striker", "attacking-midfielder", "winger"])) return false;
+    if (hasAnyFamily(profiles, ["striker", "attacking-midfielder", "winger"])) {
+      return false;
+    }
+
     return candidate.finalScore < 67;
   }
 
   return false;
 }
 
-function normalizeKind(baseKind: CandidateKind, mobilityKind: MobilityKind): CandidateKind {
-  if (baseKind === "natural" && mobilityKind === "natural") return "natural";
-  if (baseKind === "natural" && mobilityKind === "close") return "close";
-  if (baseKind === "close" && mobilityKind !== "blocked") return "close";
+function normalizeCandidateKindFromMobility(
+  mobilityKind: string
+): CandidateKind {
+  if (mobilityKind === "natural") return "natural";
+  if (mobilityKind === "close") return "close";
   return "conversion";
 }
 
@@ -246,14 +253,21 @@ export function scorePlayerForLogicalSquadSlot(
   context: LogicalScoreContext
 ): SlotCandidate | null {
   const candidate = scorePlayerForSlot(row, slot);
-  if (!candidate) return null;
 
+  if (!candidate) {
+    return null;
+  }
+
+  const overallAbility = getOverallAbility(row);
   const slotIsGoalkeeper = slot.positionGroup === "Bramkarz";
+
   if (slotIsGoalkeeper) {
     return {
       ...candidate,
-      key: getPlayerKey(row),
-      overallAbility: candidate.overallAbility ?? getOverallAbility(row),
+      overallAbility: candidate.overallAbility ?? overallAbility,
+      phaseScore: candidate.finalScore,
+
+      // Tylko do wyboru XI. Nie zmienia widocznego finalScore.
       selectionScore: candidate.finalScore + getOverallAbilityTieBreaker(row),
     } as CandidateWithSelectionScore;
   }
@@ -261,34 +275,48 @@ export function scorePlayerForLogicalSquadSlot(
   const profiles = getPlayerMobilityProfiles(row);
   const mobility = scorePlayerMobilityToSlot(row, slot);
 
-  if (shouldRejectImpossibleWideSide(profiles, slot, candidate)) return null;
-  if (shouldRejectByBasicFootballLogic(profiles, slot, candidate, context)) return null;
+  if (mobility.kind === "blocked") {
+    return null;
+  }
 
-  const kind = normalizeKind(candidate.candidateKind, mobility.kind);
-  const finalScore = clampScore(candidate.finalScore + getVisibleAdjustment(kind, mobility.kind));
-  const minimumScore = getMinimumScoreForSlot(slot, kind);
+  if (shouldRejectImpossibleWideSide(profiles, slot, candidate)) {
+    return null;
+  }
 
-  if (finalScore < minimumScore) return null;
+  if (shouldRejectByBasicFootballLogic(profiles, slot, candidate, context)) {
+    return null;
+  }
+
+  const candidateKind = normalizeCandidateKindFromMobility(mobility.kind);
+  const finalScore = candidate.finalScore;
+  const minimumScore = getMinimumScoreForSlot(slot, candidateKind);
+
+  if (finalScore < minimumScore) {
+    return null;
+  }
 
   const selectionScore =
     finalScore +
-    getSelectionKindBonus(slot, kind) +
-    getOverallAbilityTieBreaker(row) +
-    (mobility.kind === "blocked" ? -4 : clamp((mobility.score - 75) * 0.035, -3, 3));
+    getSelectionKindBonus(slot, candidateKind) +
+    getOverallAbilityTieBreaker(row);
 
   return {
     ...candidate,
-    key: getPlayerKey(row),
-    overallAbility: candidate.overallAbility ?? getOverallAbility(row),
+    overallAbility: candidate.overallAbility ?? overallAbility,
+
+    // WAŻNE:
+    // finalScore zostaje dokładnie taki, jaki policzył scorePlayerForSlot().
+    // Solver może zmienić tylko selectionScore, czyli ukryty wynik wyboru XI.
     finalScore,
     phaseScore: finalScore,
-    positionPenalty:
-      kind === "natural" ? 0 : kind === "close" ? 4 : Math.max(candidate.positionPenalty ?? 0, 8),
-    positionScore: mobility.kind === "blocked" ? candidate.positionScore : mobility.score,
-    mobilityScore: mobility.kind === "blocked" ? 35 : mobility.score,
-    sideScore: mobility.kind === "blocked" ? candidate.sideScore : mobility.score,
-    candidateKind: kind,
-    candidateKindLabel: mobility.kind === "blocked" ? getExperimentalLabel(slot, profiles) : mobility.reason,
+
+    positionScore: mobility.score,
+    mobilityScore: mobility.score,
+    sideScore: mobility.score,
+
+    candidateKind,
+    candidateKindLabel: mobility.reason,
+
     selectionScore,
   } as CandidateWithSelectionScore;
 }
@@ -302,7 +330,10 @@ export function buildCandidatesBySlot(
   const topOnlyNatural = options.topOnlyNatural ?? false;
   const scoreMode = options.scoreMode ?? "role-score";
 
-  const centerBackSlotsCount = slots.filter((slot) => getSlotFamily(slot) === "center-back").length;
+  const centerBackSlotsCount = slots.filter(
+    (slot) => getSlotFamily(slot) === "center-back"
+  ).length;
+
   const context: LogicalScoreContext = { centerBackSlotsCount };
   const result: Record<string, SlotCandidate[]> = {};
 
@@ -311,8 +342,12 @@ export function buildCandidatesBySlot(
       .map((row) => scorePlayerForLogicalSquadSlot(row, slot, context))
       .filter((candidate): candidate is SlotCandidate => candidate !== null)
       .filter((candidate) => !hiddenPlayerKeys.has(candidate.key))
-      .filter((candidate) => !topOnlyNatural || candidate.candidateKind === "natural")
-      .sort((left, right) => compareCandidatesForLineup(left, right, scoreMode));
+      .filter(
+        (candidate) => !topOnlyNatural || candidate.candidateKind === "natural"
+      )
+      .sort((left, right) =>
+        compareCandidatesForLineup(left, right, scoreMode)
+      );
   }
 
   return result;
@@ -337,25 +372,50 @@ export function solveLineup(
     scoreMode: options.scoreMode,
   });
 
-  return solveLineupFromCandidates(slots, candidatesBySlot, options.lockedSlotCandidateKeys ?? {});
+  return solveLineupFromCandidates(
+    slots,
+    candidatesBySlot,
+    options.lockedSlotCandidateKeys ?? {}
+  );
 }
 
-export function getLineupCandidates(lineup: Record<string, SlotCandidate | null>): SlotCandidate[] {
-  return Object.values(lineup).filter((candidate): candidate is SlotCandidate => candidate !== null);
+export function getLineupCandidates(
+  lineup: Record<string, SlotCandidate | null>
+): SlotCandidate[] {
+  return Object.values(lineup).filter(
+    (candidate): candidate is SlotCandidate => candidate !== null
+  );
 }
 
-export function getLineupRows(lineup: Record<string, SlotCandidate | null>): TableRow[] {
+export function getLineupRows(
+  lineup: Record<string, SlotCandidate | null>
+): TableRow[] {
   return getLineupCandidates(lineup).map((candidate) => candidate.row);
 }
 
-export function getAverageLineupScore(lineup: Record<string, SlotCandidate | null>): number {
+export function getAverageLineupScore(
+  lineup: Record<string, SlotCandidate | null>
+): number {
   const candidates = getLineupCandidates(lineup);
-  if (candidates.length === 0) return 0;
-  return candidates.reduce((sum, candidate) => sum + candidate.finalScore, 0) / candidates.length;
+
+  if (candidates.length === 0) {
+    return 0;
+  }
+
+  return (
+    candidates.reduce((sum, candidate) => sum + candidate.finalScore, 0) /
+    candidates.length
+  );
 }
 
-export function getWeakestLineupScore(lineup: Record<string, SlotCandidate | null>): number {
+export function getWeakestLineupScore(
+  lineup: Record<string, SlotCandidate | null>
+): number {
   const candidates = getLineupCandidates(lineup);
-  if (candidates.length === 0) return 0;
+
+  if (candidates.length === 0) {
+    return 0;
+  }
+
   return Math.min(...candidates.map((candidate) => candidate.finalScore));
 }

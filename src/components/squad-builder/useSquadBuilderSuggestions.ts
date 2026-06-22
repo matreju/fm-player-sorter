@@ -18,13 +18,11 @@ import {
 import {
   getSlotFamily,
   getSlotSide,
-  scorePlayerMobilityToSlot,
   type PositionFamily,
   type SlotSide,
 } from "../../utils/squadBuilderMobility";
 import type { TacticalView } from "../../utils/squadBuilderTacticalView";
 import { compareCandidatesForMode } from "../../utils/squadBuilderScoreMode";
-import { scorePlayerForSlot } from "../../utils/squadBuilderScoring";
 
 const SQUAD_BUILDER_HIDDEN_TOP_STORAGE_KEY =
   "fm-player-sorter-squad-builder-hidden-top-v4";
@@ -66,7 +64,7 @@ function getLineupCandidates(
   );
 }
 
-function getCandidateSelectionScore(candidate: SlotCandidate) {
+function getCandidateSelectionScore(candidate: SlotCandidate): number {
   const selectionScore = (candidate as CandidateWithSelectionScore)
     .selectionScore;
 
@@ -80,7 +78,7 @@ function getCandidateSelectionScore(candidate: SlotCandidate) {
 function getCandidateSelectionScoreForMode(
   candidate: SlotCandidate,
   scoreMode: SquadBuilderScoreMode
-) {
+): number {
   if (scoreMode === "overall-ability") {
     return candidate.overallAbility ?? candidate.finalScore;
   }
@@ -109,7 +107,7 @@ function withScoreModeSelectionScore(
   );
 }
 
-function sortCandidatesForMode(
+function sortCandidatesForLineup(
   candidates: SlotCandidate[],
   scoreMode: SquadBuilderScoreMode
 ): SlotCandidate[] {
@@ -125,38 +123,60 @@ function sortCandidatesForMode(
   });
 }
 
-function areCentralFamilies(left: PositionFamily, right: PositionFamily) {
-  const centralFamilies: PositionFamily[] = [
-    "defensive-midfielder",
-    "central-midfielder",
-    "attacking-midfielder",
-  ];
-
-  return centralFamilies.includes(left) && centralFamilies.includes(right);
+function sortCandidatesForDisplay(
+  candidates: SlotCandidate[],
+  scoreMode: SquadBuilderScoreMode
+): SlotCandidate[] {
+  return [...candidates].sort((left, right) =>
+    compareCandidatesForMode(left, right, scoreMode)
+  );
 }
 
-function getCentralFamilyLevel(family: PositionFamily) {
-  if (family === "defensive-midfielder") {
-    return 0;
-  }
+function filterHiddenForSlot(
+  candidates: SlotCandidate[],
+  hiddenTopCandidateKeys: Record<string, string[]>,
+  view: TacticalView,
+  slotId: string,
+  lockedCandidateKey = ""
+): SlotCandidate[] {
+  const hiddenForSlot = new Set(
+    hiddenTopCandidateKeys[getPhaseSlotKey(view, slotId)] ?? []
+  );
 
-  if (family === "central-midfielder") {
-    return 1;
-  }
+  return candidates.filter((candidate) => {
+    if (candidate.key === lockedCandidateKey) {
+      return true;
+    }
 
-  if (family === "attacking-midfielder") {
-    return 2;
-  }
-
-  return null;
+    return !hiddenForSlot.has(candidate.key);
+  });
 }
-function getSlotLane(label: string): SlotSide {
-  const normalized = label
+
+function filterOnlyNaturalIfNeeded(
+  candidates: SlotCandidate[],
+  topOnlyNatural: boolean
+): SlotCandidate[] {
+  if (!topOnlyNatural) {
+    return candidates;
+  }
+
+  return candidates.filter((candidate) => candidate.candidateKind === "natural");
+}
+
+function normalizeSlotLabel(label: string): string {
+  return label
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/Ł/g, "L")
     .replace(/ł/g, "l")
     .toUpperCase();
+}
+
+function getSlotLane(slot: FormationSlot | { slotLabel: string }): SlotSide {
+  const label =
+    "slotLabel" in slot ? slot.slotLabel : slot.label;
+
+  const normalized = normalizeSlotLabel(label);
 
   if (normalized.startsWith("L")) {
     return "left";
@@ -168,6 +188,27 @@ function getSlotLane(label: string): SlotSide {
 
   return "center";
 }
+
+function getSlotFamilySafe(slot: FormationSlot): PositionFamily {
+  if (slot.positionGroup === "Bramkarz") {
+    return "goalkeeper";
+  }
+
+  return getSlotFamily(slot);
+}
+
+function getCentralFamilyLevel(family: PositionFamily): number | null {
+  if (family === "defensive-midfielder") return 0;
+  if (family === "central-midfielder") return 1;
+  if (family === "attacking-midfielder") return 2;
+
+  return null;
+}
+
+function areCentralFamilies(left: PositionFamily, right: PositionFamily) {
+  return getCentralFamilyLevel(left) !== null && getCentralFamilyLevel(right) !== null;
+}
+
 function getTransitionSelectionAdjustment(
   candidate: SlotCandidate,
   targetSlot: FormationSlot,
@@ -179,18 +220,29 @@ function getTransitionSelectionAdjustment(
     return null;
   }
 
-  const targetSide = getSlotSide(targetSlot);
-  const targetFamily = getSlotFamily(targetSlot);
-  const sourceSide = sourceProfile.side;
   const sourceFamily = sourceProfile.family;
+  const targetFamily = getSlotFamilySafe(targetSlot);
 
-  const sourceLane = getSlotLane(sourceProfile.slotLabel);
-  const targetLane = getSlotLane(targetSlot.label);
+  const sourceSide = sourceProfile.side;
+  const targetSide = getSlotSide(targetSlot);
+
+  const sourceLane = getSlotLane({
+    slotLabel: sourceProfile.slotLabel,
+  });
+  const targetLane = getSlotLane(targetSlot);
 
   let adjustment = 0;
 
   if (sourceProfile.slotLabel === targetSlot.label) {
     adjustment += 500;
+  }
+
+  if (sourceFamily === "goalkeeper") {
+    return targetFamily === "goalkeeper" ? 1000 : null;
+  }
+
+  if (targetFamily === "goalkeeper") {
+    return null;
   }
 
   if (
@@ -209,33 +261,23 @@ function getTransitionSelectionAdjustment(
     return null;
   }
 
-  if (sourceFamily === "goalkeeper") {
-    return targetFamily === "goalkeeper" ? 1000 : null;
-  }
-
-  if (targetFamily === "goalkeeper") {
-    return null;
-  }
-
   if (sourceFamily === targetFamily) {
     adjustment += 180;
   }
 
-  if (
-    areCentralFamilies(sourceFamily, targetFamily)
-  ) {
-    const sourceCentralLevel = getCentralFamilyLevel(sourceFamily);
-    const targetCentralLevel = getCentralFamilyLevel(targetFamily);
+  if (areCentralFamilies(sourceFamily, targetFamily)) {
+    const sourceLevel = getCentralFamilyLevel(sourceFamily);
+    const targetLevel = getCentralFamilyLevel(targetFamily);
 
-    if (sourceCentralLevel === null || targetCentralLevel === null) {
+    if (sourceLevel === null || targetLevel === null) {
       return null;
     }
 
-    const levelDistance = Math.abs(sourceCentralLevel - targetCentralLevel);
+    const distance = Math.abs(sourceLevel - targetLevel);
 
-    if (levelDistance === 0) {
+    if (distance === 0) {
       adjustment += 170;
-    } else if (levelDistance === 1) {
+    } else if (distance === 1) {
       adjustment += 75;
     } else {
       return null;
@@ -374,9 +416,7 @@ function getTransitionSelectionAdjustment(
   }
 
   if (sourceLane !== "center" && targetLane !== "center") {
-    if (sourceLane === targetLane) {
-      adjustment += 90;
-    }
+    adjustment += sourceLane === targetLane ? 90 : 0;
   }
 
   if (sourceLane === "center" && targetLane !== "center") {
@@ -390,238 +430,6 @@ function getTransitionSelectionAdjustment(
   return adjustment;
 }
 
-function filterHiddenForSlot(
-  candidates: SlotCandidate[],
-  hiddenTopCandidateKeys: Record<string, string[]>,
-  view: TacticalView,
-  slotId: string,
-  lockedCandidateKey = ""
-) {
-  const hiddenForSlot = new Set(
-    hiddenTopCandidateKeys[getPhaseSlotKey(view, slotId)] ?? []
-  );
-
-  return candidates.filter((candidate) => {
-    if (candidate.key === lockedCandidateKey) {
-      return true;
-    }
-
-    return !hiddenForSlot.has(candidate.key);
-  });
-}
-
-function filterOnlyNaturalIfNeeded(
-  candidates: SlotCandidate[],
-  topOnlyNatural: boolean
-) {
-  if (!topOnlyNatural) {
-    return candidates;
-  }
-
-  return candidates.filter((candidate) => candidate.candidateKind === "natural");
-}
-
-function buildDirectCandidateForSlot(
-  row: TableRow,
-  slot: FormationSlot
-): SlotCandidate | null {
-  const candidate = scorePlayerForSlot(row, slot);
-
-  if (!candidate) {
-    return null;
-  }
-
-  if (slot.positionGroup === "Bramkarz") {
-    return candidate;
-  }
-
-  const mobility = scorePlayerMobilityToSlot(row, slot);
-
-  if (mobility.kind === "blocked") {
-    return null;
-  }
-
-  return {
-    ...candidate,
-    mobilityScore: mobility.score,
-    sideScore: mobility.score,
-    candidateKind: mobility.kind,
-    candidateKindLabel: mobility.reason,
-  };
-}
-
-function buildDirectCandidatesForSlot(
-  rows: TableRow[],
-  slot: FormationSlot
-): SlotCandidate[] {
-  return rows.reduce<SlotCandidate[]>((acc, row) => {
-    const candidate = buildDirectCandidateForSlot(row, slot);
-
-    if (candidate) {
-      acc.push(candidate);
-    }
-
-    return acc;
-  }, []);
-}
-function isCentralFamily(family: PositionFamily): boolean {
-  return (
-    family === "defensive-midfielder" ||
-    family === "central-midfielder" ||
-    family === "attacking-midfielder"
-  );
-}
-
-function getCentralFamilyLevelForTransition(family: PositionFamily): number | null {
-  if (family === "defensive-midfielder") return 0;
-  if (family === "central-midfielder") return 1;
-  if (family === "attacking-midfielder") return 2;
-  return null;
-}
-
-function getPhysicalTransitionScore(
-  sourceSlot: FormationSlot,
-  targetSlot: FormationSlot
-): number {
-  if (sourceSlot.id === targetSlot.id) {
-    return 10000;
-  }
-
-  const sourceFamily = getSlotFamily(sourceSlot);
-  const targetFamily = getSlotFamily(targetSlot);
-  const sourceSide = getSlotSide(sourceSlot);
-  const targetSide = getSlotSide(targetSlot);
-
-  if (targetFamily === "goalkeeper") {
-    return sourceFamily === "goalkeeper" ? 9000 : -9999;
-  }
-
-  if (targetFamily === "striker") {
-    if (sourceFamily === "striker") return 9000;
-    if (sourceFamily === "attacking-midfielder") return 450;
-    return -9999;
-  }
-
-  if (targetSide !== "center") {
-    if (sourceSide !== targetSide) {
-      return -9999;
-    }
-
-    if (targetFamily === "wide-midfielder") {
-      if (sourceFamily === "winger") return 900;
-      if (sourceFamily === "wide-midfielder") return 850;
-      if (sourceFamily === "wing-back") return 650;
-      if (sourceFamily === "wide-back") return 600;
-      return -9999;
-    }
-
-    if (targetFamily === "winger") {
-      if (sourceFamily === "winger") return 900;
-      if (sourceFamily === "wide-midfielder") return 760;
-      return -9999;
-    }
-
-    if (targetFamily === "wing-back") {
-      if (sourceFamily === "wide-back") return 860;
-      if (sourceFamily === "wing-back") return 840;
-      if (sourceFamily === "wide-midfielder") return 650;
-      if (sourceFamily === "winger") return 560;
-      return -9999;
-    }
-
-    if (targetFamily === "wide-back") {
-      if (sourceFamily === "wide-back") return 900;
-      if (sourceFamily === "wing-back") return 820;
-      if (sourceFamily === "wide-midfielder") return 520;
-      return -9999;
-    }
-
-    if (targetFamily === "center-back") {
-      if (sourceFamily === "center-back") return 780;
-      if (sourceFamily === "wide-back") return 500;
-      return -9999;
-    }
-  }
-
-  if (targetSide === "center") {
-    if (sourceSide !== "center") {
-      return -9999;
-    }
-
-    if (sourceFamily === targetFamily) {
-      return 900;
-    }
-
-    if (isCentralFamily(sourceFamily) && isCentralFamily(targetFamily)) {
-      const sourceLevel = getCentralFamilyLevelForTransition(sourceFamily);
-      const targetLevel = getCentralFamilyLevelForTransition(targetFamily);
-
-      if (sourceLevel === null || targetLevel === null) {
-        return -9999;
-      }
-
-      const distance = Math.abs(sourceLevel - targetLevel);
-
-      if (distance === 1) {
-        return 420;
-      }
-
-      return -9999;
-    }
-
-    if (targetFamily === "center-back" && sourceFamily === "defensive-midfielder") {
-      return 360;
-    }
-
-    if (targetFamily === "defensive-midfielder" && sourceFamily === "center-back") {
-      return 320;
-    }
-  }
-
-  return -9999;
-}
-
-function findPhysicalSourceSlotForWithoutBallSlot(
-  targetSlot: FormationSlot,
-  sourceSlots: FormationSlot[],
-  usedSourceSlotIds: Set<string>
-): FormationSlot | null {
-  const candidates = sourceSlots
-    .filter((sourceSlot) => !usedSourceSlotIds.has(sourceSlot.id))
-    .map((sourceSlot) => ({
-      sourceSlot,
-      score: getPhysicalTransitionScore(sourceSlot, targetSlot),
-    }))
-    .filter((candidate) => candidate.score > -9999)
-    .sort((left, right) => right.score - left.score);
-
-  return candidates[0]?.sourceSlot ?? null;
-}
-
-function buildMappedWithoutBallCandidate(
-  sourceCandidate: SlotCandidate,
-  targetSlot: FormationSlot
-): SlotCandidate {
-  const scoredCandidate = scorePlayerForSlot(sourceCandidate.row, targetSlot);
-
-  if (scoredCandidate) {
-    return {
-      ...scoredCandidate,
-      withBallScore: sourceCandidate.finalScore,
-      withoutBallScore: scoredCandidate.finalScore,
-      candidateKindLabel: `${sourceCandidate.roleResult.role.positionGroup} z fazy przy piłce → ${targetSlot.label}`,
-    };
-  }
-
-  return {
-    ...sourceCandidate,
-    phaseScore: sourceCandidate.finalScore,
-    withBallScore: sourceCandidate.finalScore,
-    withoutBallScore: sourceCandidate.finalScore,
-    candidateKind: "conversion",
-    candidateKindLabel: `Ten sam zawodnik z fazy przy piłce → ${targetSlot.label}`,
-  };
-}
 export function useSquadBuilderSuggestions({
   rows,
   withBallSlots,
@@ -710,36 +518,39 @@ export function useSquadBuilderSuggestions({
     return result;
   }, [withoutBallSlots, lockedSlotCandidateKeys]);
 
-const candidatesBySlotWithBall = useMemo(() => {
-  const result: Record<string, SlotCandidate[]> = {};
+  const candidatesBySlotWithBall = useMemo(() => {
+    const baseCandidates = buildCandidatesBySlot(availableRows, withBallSlots, {
+      topOnlyNatural: false,
+      scoreMode,
+    });
 
-  for (const slot of withBallSlots) {
-    const directCandidates = buildDirectCandidatesForSlot(availableRows, slot);
+    const result: Record<string, SlotCandidate[]> = {};
 
-    const visibleCandidates = filterHiddenForSlot(
-      directCandidates,
-      hiddenTopCandidateKeys,
-      "with-ball",
-      slot.id,
-      withBallLockedSlotCandidateKeys[slot.id] ?? ""
-    );
+    for (const slot of withBallSlots) {
+      const visibleCandidates = filterHiddenForSlot(
+        baseCandidates[slot.id] ?? [],
+        hiddenTopCandidateKeys,
+        "with-ball",
+        slot.id,
+        withBallLockedSlotCandidateKeys[slot.id] ?? ""
+      );
 
-    result[slot.id] = sortCandidatesForMode(
-      visibleCandidates.map((candidate) =>
-        withScoreModeSelectionScore(candidate, scoreMode)
-      ),
-      scoreMode
-    );
-  }
+      result[slot.id] = sortCandidatesForLineup(
+        visibleCandidates.map((candidate) =>
+          withScoreModeSelectionScore(candidate, scoreMode)
+        ),
+        scoreMode
+      );
+    }
 
-  return result;
-}, [
-  availableRows,
-  withBallSlots,
-  hiddenTopCandidateKeys,
-  withBallLockedSlotCandidateKeys,
-  scoreMode,
-]);
+    return result;
+  }, [
+    availableRows,
+    withBallSlots,
+    hiddenTopCandidateKeys,
+    withBallLockedSlotCandidateKeys,
+    scoreMode,
+  ]);
 
   const suggestedSquadWithBall = useMemo(() => {
     return solveLineupFromCandidates(
@@ -765,7 +576,7 @@ const candidatesBySlotWithBall = useMemo(() => {
 
       result.set(candidate.key, {
         side: getSlotSide(slot),
-        family: getSlotFamily(slot),
+        family: getSlotFamilySafe(slot),
         slotLabel: slot.label,
         slotPositionGroup: slot.positionGroup,
       });
@@ -796,31 +607,31 @@ const candidatesBySlotWithBall = useMemo(() => {
       );
 
       const adjustedCandidates = visibleForSlot.reduce<SlotCandidate[]>(
-  (acc, candidate) => {
-    const transitionAdjustment = getTransitionSelectionAdjustment(
-      candidate,
-      slot,
-      withBallProfileByPlayerKey
-    );
+        (acc, candidate) => {
+          const transitionAdjustment = getTransitionSelectionAdjustment(
+            candidate,
+            slot,
+            withBallProfileByPlayerKey
+          );
 
-    if (transitionAdjustment === null) {
-      return acc;
-    }
+          if (transitionAdjustment === null) {
+            return acc;
+          }
 
-    acc.push(
-      withScoreModeSelectionScore(
-        candidate,
-        scoreMode,
-        transitionAdjustment
-      )
-    );
+          acc.push(
+            withScoreModeSelectionScore(
+              candidate,
+              scoreMode,
+              transitionAdjustment
+            )
+          );
 
-    return acc;
-  },
-  []
-);
+          return acc;
+        },
+        []
+      );
 
-result[slot.id] = sortCandidatesForMode(adjustedCandidates, scoreMode);
+      result[slot.id] = sortCandidatesForLineup(adjustedCandidates, scoreMode);
     }
 
     return result;
@@ -833,62 +644,21 @@ result[slot.id] = sortCandidatesForMode(adjustedCandidates, scoreMode);
     scoreMode,
   ]);
 
-const candidatesBySlotWithoutBallForTop = useMemo(() => {
-  return candidatesBySlotWithoutBallForLineup;
-}, [candidatesBySlotWithoutBallForLineup]);
+  const candidatesBySlotWithoutBallForTop = useMemo(() => {
+    return candidatesBySlotWithoutBallForLineup;
+  }, [candidatesBySlotWithoutBallForLineup]);
 
-const suggestedSquadWithoutBall = useMemo(() => {
-  const result: Record<string, SlotCandidate | null> = {};
-  const usedSourceSlotIds = new Set<string>();
-
-  for (const withoutBallSlot of withoutBallSlots) {
-    const lockedKey =
-      withoutBallLockedSlotCandidateKeys[withoutBallSlot.id] ?? "";
-
-    if (lockedKey) {
-      const lockedCandidate =
-        candidatesBySlotWithoutBallForLineup[withoutBallSlot.id]?.find(
-          (candidate) => candidate.key === lockedKey
-        ) ?? null;
-
-      result[withoutBallSlot.id] = lockedCandidate;
-      continue;
-    }
-
-    const sourceSlot = findPhysicalSourceSlotForWithoutBallSlot(
-      withoutBallSlot,
-      withBallSlots,
-      usedSourceSlotIds
+  const suggestedSquadWithoutBall = useMemo(() => {
+    return solveLineupFromCandidates(
+      withoutBallSlots,
+      candidatesBySlotWithoutBallForLineup,
+      withoutBallLockedSlotCandidateKeys
     );
-
-    if (!sourceSlot) {
-      result[withoutBallSlot.id] = null;
-      continue;
-    }
-
-    const sourceCandidate = suggestedSquadWithBall[sourceSlot.id];
-
-    if (!sourceCandidate) {
-      result[withoutBallSlot.id] = null;
-      continue;
-    }
-
-    usedSourceSlotIds.add(sourceSlot.id);
-
-    result[withoutBallSlot.id] = buildMappedWithoutBallCandidate(
-      sourceCandidate,
-      withoutBallSlot
-    );
-  }
-
-  return result;
-}, [
-  withoutBallSlots,
-  withBallSlots,
-  suggestedSquadWithBall,
-  withoutBallLockedSlotCandidateKeys,
-  candidatesBySlotWithoutBallForLineup,
-]);
+  }, [
+    withoutBallSlots,
+    candidatesBySlotWithoutBallForLineup,
+    withoutBallLockedSlotCandidateKeys,
+  ]);
 
   const candidatesBySlot =
     tacticalView === "with-ball"
@@ -989,45 +759,41 @@ const suggestedSquadWithoutBall = useMemo(() => {
   function clearHiddenTopCandidates() {
     setHiddenTopCandidateKeys({});
   }
-function getVisibleTopCandidates(
-  slot: FormationSlot,
-  limit = 3,
-  view: TacticalView = tacticalView
-): SlotCandidate[] {
-  const currentSlot =
-    view === "with-ball"
-      ? withBallSlots.find((candidateSlot) => candidateSlot.id === slot.id) ?? slot
-      : withoutBallSlots.find((candidateSlot) => candidateSlot.id === slot.id) ?? slot;
 
-  const rowsForTop = view === "with-ball" ? availableRows : selectedXiRows;
+  function getVisibleTopCandidates(
+    slot: FormationSlot,
+    limit = 3,
+    view: TacticalView = tacticalView
+  ): SlotCandidate[] {
+    const sourceCandidates =
+      view === "with-ball"
+        ? candidatesBySlotWithBall[slot.id] ?? []
+        : candidatesBySlotWithoutBallForTop[slot.id] ?? [];
 
-  const hiddenForSlot = new Set(
-    hiddenTopCandidateKeys[getPhaseSlotKey(view, currentSlot.id)] ?? []
-  );
+    const sourceLineup =
+      view === "with-ball" ? suggestedSquadWithBall : suggestedSquadWithoutBall;
 
-  const rawCandidates = rowsForTop.reduce<SlotCandidate[]>((acc, row) => {
-    const candidate = scorePlayerForSlot(row, currentSlot);
+    const usedPlayerKeys = new Set(
+      getLineupCandidates(sourceLineup)
+        .filter((candidate) => sourceLineup[slot.id]?.key !== candidate.key)
+        .map((candidate) => candidate.key)
+    );
 
-    if (!candidate) {
-      return acc;
-    }
+    const hiddenForSlot = new Set(
+      hiddenTopCandidateKeys[getPhaseSlotKey(view, slot.id)] ?? []
+    );
 
-    if (hiddenForSlot.has(candidate.key)) {
-      return acc;
-    }
+    return sortCandidatesForDisplay(
+      filterOnlyNaturalIfNeeded(
+        sourceCandidates
+          .filter((candidate) => !usedPlayerKeys.has(candidate.key))
+          .filter((candidate) => !hiddenForSlot.has(candidate.key)),
+        topOnlyNatural
+      ),
+      scoreMode
+    ).slice(0, limit);
+  }
 
-    if (topOnlyNatural && candidate.candidateKind !== "natural") {
-      return acc;
-    }
-
-    acc.push(candidate);
-    return acc;
-  }, []);
-
-  return rawCandidates
-    .sort((left, right) => compareCandidatesForMode(left, right, scoreMode))
-    .slice(0, limit);
-}
   function getLockedCandidateKey(
     slotId: string,
     view: TacticalView = tacticalView

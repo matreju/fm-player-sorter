@@ -497,10 +497,37 @@ const gates = ROLE_GATES_BY_ROLE_ID[role.id] ?? [];
 }
 type ScoreMode = "min" | "average" | "max";
 
-const CORE_ATTRIBUTE_WEIGHT = 3.4;
-const KEY_ATTRIBUTE_WEIGHT = 2.2;
-const IMPORTANT_ATTRIBUTE_WEIGHT = 1.0;
-const SUPPORT_ATTRIBUTE_WEIGHT = 0.45;
+export type RoleAttributeImportance = "core" | "key" | "important" | "support";
+
+export const ROLE_ATTRIBUTE_WEIGHTS: Record<RoleAttributeImportance, number> = {
+  core: 3.0,
+  key: 2.1,
+  important: 1.2,
+  support: 0.65,
+};
+
+export const ROLE_ATTRIBUTE_GROUP_LABELS: Record<RoleAttributeImportance, string> = {
+  core: "Rdzeń roli",
+  key: "Kluczowe",
+  important: "Ważne",
+  support: "Pomocnicze",
+};
+
+export function getRoleAttributeGroupMeta(importance: RoleAttributeImportance) {
+  const weight = ROLE_ATTRIBUTE_WEIGHTS[importance];
+
+  return {
+    importance,
+    groupLabel: ROLE_ATTRIBUTE_GROUP_LABELS[importance],
+    weight,
+    weightLabel: `waga ${weight.toFixed(1)}`,
+  };
+}
+
+const CORE_ATTRIBUTE_WEIGHT = ROLE_ATTRIBUTE_WEIGHTS.core;
+const KEY_ATTRIBUTE_WEIGHT = ROLE_ATTRIBUTE_WEIGHTS.key;
+const IMPORTANT_ATTRIBUTE_WEIGHT = ROLE_ATTRIBUTE_WEIGHTS.important;
+const SUPPORT_ATTRIBUTE_WEIGHT = ROLE_ATTRIBUTE_WEIGHTS.support;
 const roleScoreDetailsCache = new WeakMap<
   TableRow,
   Map<string, RoleScoreResult | null>

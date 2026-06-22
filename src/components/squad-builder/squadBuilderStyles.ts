@@ -376,15 +376,16 @@ activeTopCards: {
 },
 
 activeTopMiniCard: {
-  minWidth: 0,
-  minHeight: 132,
+  minWidth:0,
+  minHeight: 170,
   display: "grid",
-  gridTemplateRows: "18px minmax(0, 1fr) auto",
-  gap: 4,
-  padding: 8,
-  border: "1px solid #2f3a4e",
-  borderRadius: 9,
-  background: "#0f172a",
+  gridTemplateRows: "auto 1fr auto",
+  gap: 7,
+  padding: "30px 12px 12px",
+  border: "1px solid #263041",
+  borderRadius: 10,
+  background: "#111827",
+  position: "relative",
   overflow: "hidden",
 },
 miniCandidateRank: {
@@ -402,17 +403,15 @@ miniCandidateRank: {
 },
 miniCandidateMain: {
   minWidth: 0,
-  textAlign: "center",
   display: "flex",
   flexDirection: "column",
-  justifyContent: "flex-start",
-  gap: 3,
-  overflow: "hidden",
+  gap: 4,
+  textAlign: "left",
 },
 miniCandidateName: {
   display: "block",
   color: "#f8fafc",
-  fontSize: 14,
+  fontSize: 13,
   lineHeight: 1.15,
   whiteSpace: "normal",
   overflow: "hidden",
@@ -942,6 +941,327 @@ planCardSide: {
 planScore: {
   color: "#86efac",
   fontSize: 22,
+  fontWeight: 950,
+  lineHeight: 1,
+},roleAttributesBox: {
+  marginTop: 7,
+  padding: "7px 8px",
+  border: "1px solid rgba(51, 65, 85, 0.95)",
+  borderRadius: 9,
+  background: "rgba(15, 23, 42, 0.72)",
+},
+
+roleAttributesHeader: {
+  marginBottom: 6,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  color: "#93c5fd",
+  fontSize: 9,
+  lineHeight: 1,
+  fontWeight: 950,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+},
+
+roleAttributeGroups: {
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+},
+
+roleAttributeGroup: {
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+},
+
+roleAttributeGroupHeader: {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  color: "#cbd5e1",
+  fontSize: 9,
+  fontWeight: 900,
+  lineHeight: 1,
+},
+
+roleAttributeGrid: {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: 4,
+},
+
+roleAttributeChip: {
+  minWidth: 0,
+  minHeight: 23,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 4,
+  padding: "3px 5px",
+  borderRadius: 6,
+  border: "1px solid rgba(51, 65, 85, 0.9)",
+  background: "rgba(2, 6, 23, 0.44)",
+},
+
+roleAttributeChipCore: {
+  borderColor: "rgba(250, 204, 21, 0.75)",
+  background: "rgba(250, 204, 21, 0.1)",
+},
+
+roleAttributeChipKey: {
+  borderColor: "rgba(96, 165, 250, 0.62)",
+  background: "rgba(37, 99, 235, 0.12)",
+},
+
+roleAttributeChipImportant: {
+  borderColor: "rgba(148, 163, 184, 0.48)",
+  background: "rgba(15, 23, 42, 0.86)",
+},
+
+roleAttributeChipSupport: {
+  borderColor: "rgba(71, 85, 105, 0.72)",
+  background: "rgba(15, 23, 42, 0.55)",
+},
+
+roleAttributeName: {
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  color: "#dbeafe",
+  fontSize: 9,
+  fontWeight: 850,
+},
+
+roleAttributeValue: {
+  flexShrink: 0,
+  fontSize: 11,
+  fontWeight: 950,
+  lineHeight: 1,
+},
+
+roleAttributeValueHigh: {
+  color: "#86efac",
+},
+
+roleAttributeValueGood: {
+  color: "#fde68a",
+},
+
+roleAttributeValueOk: {
+  color: "#bfdbfe",
+},
+
+roleAttributeValueLow: {
+  color: "#fca5a5",
+},
+
+roleAttributeValueUnknown: {
+  color: "#64748b",
+},
+roleAttributesOpenButton: {
+  width: "100%",
+  marginTop: 7,
+  minHeight: 34,
+  display: "grid",
+  gridTemplateColumns: "1fr auto",
+  gridTemplateRows: "auto auto",
+  alignItems: "center",
+  gap: "2px 8px",
+  padding: "7px 9px",
+  borderRadius: 9,
+  border: "1px solid rgba(96, 165, 250, 0.55)",
+  background: "rgba(15, 23, 42, 0.82)",
+  color: "#dbeafe",
+  cursor: "pointer",
+  textAlign: "left",
+},
+
+roleAttributesOpenButtonText: {
+  minWidth: 0,
+  color: "#93c5fd",
+  fontSize: 10,
+  fontWeight: 950,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+},
+
+roleAttributesOpenButtonCount: {
+  gridRow: "1 / span 2",
+  gridColumn: 2,
+  minWidth: 30,
+  minHeight: 24,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 999,
+  background: "rgba(37, 99, 235, 0.22)",
+  color: "#86efac",
+  fontSize: 14,
+  fontWeight: 950,
+},
+
+roleAttributesOpenButtonHint: {
+  minWidth: 0,
+  color: "#94a3b8",
+  fontSize: 10,
+  fontWeight: 750,
+},
+
+roleAttributesModalBackdrop: {
+  position: "fixed",
+  inset: 0,
+  zIndex: 1000,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 20,
+  background: "rgba(2, 6, 23, 0.72)",
+  backdropFilter: "blur(4px)",
+},
+
+roleAttributesModal: {
+  width: "min(860px, calc(100vw - 32px))",
+  maxHeight: "min(760px, calc(100vh - 32px))",
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+  borderRadius: 16,
+  border: "1px solid rgba(96, 165, 250, 0.45)",
+  background: "#0f172a",
+  boxShadow: "0 24px 80px rgba(0, 0, 0, 0.55)",
+},
+
+roleAttributesModalHeader: {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: 16,
+  padding: "18px 20px 14px",
+  borderBottom: "1px solid rgba(51, 65, 85, 0.9)",
+  background: "linear-gradient(135deg, rgba(14, 116, 144, 0.2), rgba(15, 23, 42, 0.95))",
+},
+
+roleAttributesModalTitle: {
+  margin: 0,
+  color: "#f8fafc",
+  fontSize: 22,
+  lineHeight: 1.1,
+  fontWeight: 950,
+},
+
+roleAttributesModalSubtitle: {
+  marginTop: 5,
+  color: "#bfdbfe",
+  fontSize: 13,
+  lineHeight: 1.25,
+  fontWeight: 750,
+},
+
+roleAttributesModalClose: {
+  width: 36,
+  height: 36,
+  flexShrink: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 10,
+  border: "1px solid rgba(148, 163, 184, 0.35)",
+  background: "rgba(15, 23, 42, 0.9)",
+  color: "#f8fafc",
+  fontSize: 24,
+  lineHeight: 1,
+  fontWeight: 800,
+  cursor: "pointer",
+},
+
+roleAttributesModalScoreRow: {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  padding: "10px 20px",
+  borderBottom: "1px solid rgba(51, 65, 85, 0.72)",
+  color: "#bfdbfe",
+  fontSize: 13,
+  fontWeight: 900,
+},
+
+roleAttributesModalBody: {
+  minHeight: 0,
+  overflow: "auto",
+  padding: 20,
+},
+
+roleAttributesModalIntro: {
+  marginBottom: 14,
+  color: "#cbd5e1",
+  fontSize: 13,
+  lineHeight: 1.35,
+  fontWeight: 750,
+},
+
+roleAttributeModalGroups: {
+  display: "flex",
+  flexDirection: "column",
+  gap: 16,
+},
+
+roleAttributeModalGroup: {
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+},
+
+roleAttributeModalGroupHeader: {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  paddingBottom: 6,
+  borderBottom: "1px solid rgba(51, 65, 85, 0.8)",
+  color: "#dbeafe",
+  fontSize: 14,
+  fontWeight: 950,
+},
+
+roleAttributeModalGrid: {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: 8,
+},
+
+roleAttributeModalChip: {
+  minWidth: 0,
+  minHeight: 38,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  padding: "8px 10px",
+  borderRadius: 10,
+  border: "1px solid rgba(51, 65, 85, 0.9)",
+  background: "rgba(2, 6, 23, 0.44)",
+},
+
+roleAttributeModalName: {
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  color: "#e2e8f0",
+  fontSize: 13,
+  fontWeight: 850,
+},
+
+roleAttributeModalValue: {
+  flexShrink: 0,
+  color: "#f8fafc",
+  fontSize: 17,
   fontWeight: 950,
   lineHeight: 1,
 },
