@@ -22,25 +22,49 @@ export function useSquadDepth({
   playerSelectionPositions,
 }: UseSquadDepthArgs) {
   const selectedPlayersWithoutPositionCount = useMemo(() => {
-    return Object.entries(playerMarks).filter(([key, mark]) => {
-      return (
+    let count = 0;
+
+    for (const [key, mark] of Object.entries(playerMarks)) {
+      if (
         mark === "selected" &&
         (playerSelectionPositions[key] ?? "").trim() === ""
-      );
-    }).length;
+      ) {
+        count += 1;
+      }
+    }
+
+    return count;
   }, [playerMarks, playerSelectionPositions]);
 
   const squadDepthByPosition = useMemo<SquadDepthItem[]>(() => {
+    const playersByPosition = new Map<string, TableRow[]>();
+
+    for (const position of SELECTION_POSITION_OPTIONS) {
+      playersByPosition.set(position, []);
+    }
+
+    for (const row of rows) {
+      const key = getPlayerKey(row);
+
+      if (playerMarks[key] !== "selected") {
+        continue;
+      }
+
+      const position = playerSelectionPositions[key];
+
+      if (!position) {
+        continue;
+      }
+
+      if (!playersByPosition.has(position)) {
+        playersByPosition.set(position, []);
+      }
+
+      playersByPosition.get(position)?.push(row);
+    }
+
     return SELECTION_POSITION_OPTIONS.map((position) => {
-      const players = rows.filter((row) => {
-        const key = getPlayerKey(row);
-
-        return (
-          playerMarks[key] === "selected" &&
-          playerSelectionPositions[key] === position
-        );
-      });
-
+      const players = playersByPosition.get(position) ?? [];
       const target = SQUAD_POSITION_TARGETS[position];
 
       let status: SquadDepthItem["status"] = "ok";

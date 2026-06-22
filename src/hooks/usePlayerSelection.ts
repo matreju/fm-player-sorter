@@ -2,17 +2,39 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useState,
+  useReducer,
   type CSSProperties,
-} from "react";import type { TableRow } from "../types/table";
-import { getBestRoleMatch } from "../utils/roleScoring";
-import { getPlayerKey } from "../utils/playerIdentity";
+} from "react";
 import type { PlayerMark } from "../constants/selection";
+import type { TableRow } from "../types/table";
 import { isGoalkeeper } from "../utils/playerPositionType";
+import { getPlayerKey } from "../utils/playerIdentity";
+import { getBestRoleMatch } from "../utils/roleScoring";
 
 const PLAYER_MARKS_STORAGE_KEY = "fm-player-sorter-player-marks";
 const PLAYER_SELECTION_POSITIONS_STORAGE_KEY =
   "fm-player-sorter-player-selection-positions";
+
+type PlayerSelectionState = {
+  playerMarks: Record<string, PlayerMark>;
+  playerSelectionPositions: Record<string, string>;
+};
+
+type PlayerSelectionAction =
+  | {
+      type: "toggle-mark";
+      key: string;
+      mark: PlayerMark;
+      suggestedPosition: string;
+    }
+  | {
+      type: "set-position";
+      key: string;
+      position: string;
+    }
+  | {
+      type: "clear";
+    };
 
 function loadPlayerMarksFromStorage(): Record<string, PlayerMark> {
   try {
@@ -51,6 +73,69 @@ function loadPlayerSelectionPositionsFromStorage(): Record<string, string> {
   }
 }
 
+function createInitialPlayerSelectionState(): PlayerSelectionState {
+  return {
+    playerMarks: loadPlayerMarksFromStorage(),
+    playerSelectionPositions: loadPlayerSelectionPositionsFromStorage(),
+  };
+}
+
+function playerSelectionReducer(
+  state: PlayerSelectionState,
+  action: PlayerSelectionAction
+): PlayerSelectionState {
+  if (action.type === "clear") {
+    return {
+      playerMarks: {},
+      playerSelectionPositions: {},
+    };
+  }
+
+  if (action.type === "set-position") {
+    const nextPositions = { ...state.playerSelectionPositions };
+
+    if (action.position.trim() === "") {
+      delete nextPositions[action.key];
+    } else {
+      nextPositions[action.key] = action.position;
+    }
+
+    return {
+      ...state,
+      playerSelectionPositions: nextPositions,
+    };
+  }
+
+  const currentMark = state.playerMarks[action.key] ?? null;
+  const nextMark = currentMark === action.mark ? null : action.mark;
+
+  const nextMarks = { ...state.playerMarks };
+  const nextPositions = { ...state.playerSelectionPositions };
+
+  if (nextMark === null) {
+    delete nextMarks[action.key];
+    delete nextPositions[action.key];
+
+    return {
+      playerMarks: nextMarks,
+      playerSelectionPositions: nextPositions,
+    };
+  }
+
+  nextMarks[action.key] = nextMark;
+
+  if (nextMark !== "selected") {
+    delete nextPositions[action.key];
+  } else if (!nextPositions[action.key]) {
+    nextPositions[action.key] = action.suggestedPosition;
+  }
+
+  return {
+    playerMarks: nextMarks,
+    playerSelectionPositions: nextPositions,
+  };
+}
+
 type UsePlayerSelectionArgs = {
   analysisPositionGroup: string;
 };
@@ -58,13 +143,13 @@ type UsePlayerSelectionArgs = {
 export function usePlayerSelection({
   analysisPositionGroup,
 }: UsePlayerSelectionArgs) {
-  const [playerMarks, setPlayerMarks] = useState<Record<string, PlayerMark>>(
-    () => loadPlayerMarksFromStorage()
+  const [selectionState, dispatchSelection] = useReducer(
+    playerSelectionReducer,
+    null,
+    createInitialPlayerSelectionState
   );
 
-  const [playerSelectionPositions, setPlayerSelectionPositions] = useState<
-    Record<string, string>
-  >(() => loadPlayerSelectionPositionsFromStorage());
+  const { playerMarks, playerSelectionPositions } = selectionState;
 
   useEffect(() => {
     localStorage.setItem(PLAYER_MARKS_STORAGE_KEY, JSON.stringify(playerMarks));
@@ -126,70 +211,46 @@ export function usePlayerSelection({
 
   const setPlayerSelectionPosition = useCallback(
     (row: TableRow, position: string) => {
-      const key = getPlayerKey(row);
-
-      setPlayerSelectionPositions((previous) => ({
-        ...previous,
-        [key]: position,
-      }));
+      dispatchSelection({
+        type: "set-position",
+        key: getPlayerKey(row),
+        position,
+      });
     },
     []
   );
 
   const togglePlayerMark = useCallback(
     (row: TableRow, mark: PlayerMark) => {
-      const key = getPlayerKey(row);
-      const currentMark = playerMarks[key] ?? null;
-      const nextMark = currentMark === mark ? null : mark;
-
-      setPlayerMarks((previous) => {
-        const next = { ...previous };
-
-        if (nextMark === null) {
-          delete next[key];
-          return next;
-        }
-
-        next[key] = nextMark;
-        return next;
-      });
-
-      setPlayerSelectionPositions((previous) => {
-        const next = { ...previous };
-
-        if (nextMark !== "selected") {
-          delete next[key];
-          return next;
-        }
-
-        if (!next[key]) {
-          next[key] = getSuggestedSelectionPosition(row);
-        }
-
-        return next;
+      dispatchSelection({
+        type: "toggle-mark",
+        key: getPlayerKey(row),
+        mark,
+        suggestedPosition: getSuggestedSelectionPosition(row),
       });
     },
-    [playerMarks, getSuggestedSelectionPosition]
+    [getSuggestedSelectionPosition]
   );
 
   const clearPlayerSelection = useCallback(() => {
-    setPlayerMarks({});
-    setPlayerSelectionPositions({});
+    dispatchSelection({
+      type: "clear",
+    });
   }, []);
 
   const getMarkedCellStyle = useCallback(
     (mark: PlayerMark | null): CSSProperties => {
-    if (mark === "selected") {
-      return {
-        background: "rgba(78, 255, 119, 0.12)",
-      };
-    }
+      if (mark === "selected") {
+        return {
+          background: "rgba(78, 255, 119, 0.12)",
+        };
+      }
 
-    if (mark === "rejected") {
-      return {
-        background: "rgba(255, 93, 93, 0.12)",
-      };
-    }
+      if (mark === "rejected") {
+        return {
+          background: "rgba(255, 93, 93, 0.12)",
+        };
+      }
 
       return {};
     },

@@ -10,11 +10,9 @@ import type {
   SlotCandidate,
   SquadBuilderScoreMode,
 } from "../../types/squadBuilderTypes";
-import { formatCandidateScoreForMode } from "../../utils/squadBuilderScoreMode";
 import { formatRoleScore } from "../../utils/roleScoring";
 import { squadBuilderStyles as styles } from "./squadBuilderStyles";
 import type { TacticalView } from "../../utils/squadBuilderTacticalView";
-
 
 const GOALKEEPER_SLOT: FormationSlot = {
   id: "GK",
@@ -31,9 +29,6 @@ function hasGoalkeeperSlot(slots: FormationSlot[]): boolean {
     (slot) => slot.id === "GK" || slot.positionGroup === "Bramkarz"
   );
 }
-function getPhaseSlotKey(view: TacticalView, slotId: string) {
-  return `${view}:${slotId}`;
-}
 
 type SquadBuilderPitchProps = {
   withBallPitchRef: RefObject<HTMLDivElement | null>;
@@ -47,7 +42,6 @@ type SquadBuilderPitchProps = {
   suggestedSquadWithBall: Record<string, SlotCandidate | null>;
   suggestedSquadWithoutBall: Record<string, SlotCandidate | null>;
   scoreMode: SquadBuilderScoreMode;
-  lockedSlotCandidateKeys: Record<string, string>;
 
   withBallDraggingSlotId: string | null;
   withoutBallDraggingSlotId: string | null;
@@ -97,11 +91,6 @@ type SquadBuilderPitchProps = {
   ) => void;
 
   onTacticalViewChange: (view: TacticalView) => void;
-  onToggleSlotCandidateLock: (
-    slotId: string,
-    candidateKey: string,
-    view?: TacticalView
-  ) => void;
   renderActiveSlotPanel: () => ReactNode;
 };
 
@@ -114,7 +103,6 @@ export function SquadBuilderPitch({
   tacticalView,
   suggestedSquadWithBall,
   suggestedSquadWithoutBall,
-  lockedSlotCandidateKeys,
   withBallDraggingSlotId,
   withoutBallDraggingSlotId,
   getCurrentWithBallPitchPosition,
@@ -130,7 +118,6 @@ export function SquadBuilderPitch({
   onWithBallSlotClick,
   onWithoutBallSlotClick,
   onTacticalViewChange,
-  onToggleSlotCandidateLock,
   renderActiveSlotPanel,
 }: SquadBuilderPitchProps) {
   function renderPitchBoard(
@@ -173,6 +160,10 @@ export function SquadBuilderPitch({
     const onSlotClick =
       view === "with-ball" ? onWithBallSlotClick : onWithoutBallSlotClick;
 
+    const slotsWithGoalkeeper = hasGoalkeeperSlot(slots)
+      ? slots
+      : [...slots, GOALKEEPER_SLOT];
+
     return (
       <section
         style={{
@@ -195,14 +186,10 @@ export function SquadBuilderPitch({
           <div style={styles.pitchBoxTop} />
           <div style={styles.pitchBoxBottom} />
 
-          {slots.map((slot) => {
+          {slotsWithGoalkeeper.map((slot) => {
             const candidate = suggestedSquadForView[slot.id] ?? null;
             const position = getCurrentPitchPosition(slot);
             const isActive = isCurrentView && activeSlotId === slot.id;
-            const lockKey = getPhaseSlotKey(view, slot.id);
-            const isLocked =
-              candidate !== null &&
-              lockedSlotCandidateKeys[lockKey] === candidate.key;
 
             return (
               <button
@@ -252,37 +239,6 @@ export function SquadBuilderPitch({
                       )} · ${candidate.roleResult.role.name}`
                     : slot.positionGroup}
                 </span>
-
-                {candidate && (
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    title={isLocked ? "Odblokuj slot" : "Zablokuj zawodnika w slocie"}
-                    aria-label={
-                      isLocked
-                        ? `Odblokuj zawodnika ${candidate.name} w slocie ${slot.label}`
-                        : `Zablokuj zawodnika ${candidate.name} w slocie ${slot.label}`
-                    }
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onToggleSlotCandidateLock(slot.id, candidate.key, view);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter" && event.key !== " ") return;
-
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onToggleSlotCandidateLock(slot.id, candidate.key, view);
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    style={{
-                      ...styles.pitchLockButton,
-                      ...(isLocked ? styles.pitchLockButtonLocked : {}),
-                    }}
-                  >
-                    {isLocked ? "🔒" : "🔓"}
-                  </span>
-                )}
               </button>
             );
           })}

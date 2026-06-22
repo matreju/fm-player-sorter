@@ -27,8 +27,6 @@ import { compareCandidatesForMode } from "../../utils/squadBuilderScoreMode";
 const SQUAD_BUILDER_HIDDEN_TOP_STORAGE_KEY =
   "fm-player-sorter-squad-builder-hidden-top-v4";
 
-const SQUAD_BUILDER_LOCKED_SLOTS_STORAGE_KEY =
-  "fm-player-sorter-squad-builder-locked-slots-v4";
 
 type UseSquadBuilderSuggestionsParams = {
   rows: TableRow[];
@@ -136,22 +134,14 @@ function filterHiddenForSlot(
   candidates: SlotCandidate[],
   hiddenTopCandidateKeys: Record<string, string[]>,
   view: TacticalView,
-  slotId: string,
-  lockedCandidateKey = ""
+  slotId: string
 ): SlotCandidate[] {
   const hiddenForSlot = new Set(
     hiddenTopCandidateKeys[getPhaseSlotKey(view, slotId)] ?? []
   );
 
-  return candidates.filter((candidate) => {
-    if (candidate.key === lockedCandidateKey) {
-      return true;
-    }
-
-    return !hiddenForSlot.has(candidate.key);
-  });
+  return candidates.filter((candidate) => !hiddenForSlot.has(candidate.key));
 }
-
 function filterOnlyNaturalIfNeeded(
   candidates: SlotCandidate[],
   topOnlyNatural: boolean
@@ -449,15 +439,6 @@ export function useSquadBuilderSuggestions({
     )
   );
 
-  const [lockedSlotCandidateKeys, setLockedSlotCandidateKeys] = useState<
-    Record<string, string>
-  >(() =>
-    loadLocalStorageValue<Record<string, string>>(
-      SQUAD_BUILDER_LOCKED_SLOTS_STORAGE_KEY,
-      {}
-    )
-  );
-
   useEffect(() => {
     saveLocalStorageValue(
       SQUAD_BUILDER_HIDDEN_TOP_STORAGE_KEY,
@@ -465,12 +446,6 @@ export function useSquadBuilderSuggestions({
     );
   }, [hiddenTopCandidateKeys]);
 
-  useEffect(() => {
-    saveLocalStorageValue(
-      SQUAD_BUILDER_LOCKED_SLOTS_STORAGE_KEY,
-      lockedSlotCandidateKeys
-    );
-  }, [lockedSlotCandidateKeys]);
 
   const availableRows = useMemo(() => {
     return rows.filter((row) => {
@@ -488,78 +463,35 @@ export function useSquadBuilderSuggestions({
     });
   }, [rows, getPlayerMark, onlySelected]);
 
-  const withBallLockedSlotCandidateKeys = useMemo(() => {
-    const result: Record<string, string> = {};
-
-    for (const slot of withBallSlots) {
-      const lockedKey =
-        lockedSlotCandidateKeys[getPhaseSlotKey("with-ball", slot.id)];
-
-      if (lockedKey) {
-        result[slot.id] = lockedKey;
-      }
-    }
-
-    return result;
-  }, [withBallSlots, lockedSlotCandidateKeys]);
-
-  const withoutBallLockedSlotCandidateKeys = useMemo(() => {
-    const result: Record<string, string> = {};
-
-    for (const slot of withoutBallSlots) {
-      const lockedKey =
-        lockedSlotCandidateKeys[getPhaseSlotKey("without-ball", slot.id)];
-
-      if (lockedKey) {
-        result[slot.id] = lockedKey;
-      }
-    }
-
-    return result;
-  }, [withoutBallSlots, lockedSlotCandidateKeys]);
-
-  const candidatesBySlotWithBall = useMemo(() => {
-    const baseCandidates = buildCandidatesBySlot(availableRows, withBallSlots, {
-      topOnlyNatural: false,
-      scoreMode,
-    });
-
-    const result: Record<string, SlotCandidate[]> = {};
-
-    for (const slot of withBallSlots) {
-      const visibleCandidates = filterHiddenForSlot(
-        baseCandidates[slot.id] ?? [],
-        hiddenTopCandidateKeys,
-        "with-ball",
-        slot.id,
-        withBallLockedSlotCandidateKeys[slot.id] ?? ""
-      );
-
-      result[slot.id] = sortCandidatesForLineup(
-        visibleCandidates.map((candidate) =>
-          withScoreModeSelectionScore(candidate, scoreMode)
-        ),
-        scoreMode
-      );
-    }
-
-    return result;
-  }, [
-    availableRows,
-    withBallSlots,
-    hiddenTopCandidateKeys,
-    withBallLockedSlotCandidateKeys,
+const candidatesBySlotWithBall = useMemo(() => {
+  const baseCandidates = buildCandidatesBySlot(availableRows, withBallSlots, {
+    topOnlyNatural: false,
     scoreMode,
-  ]);
+  });
 
-  const suggestedSquadWithBall = useMemo(() => {
-    return solveLineupFromCandidates(
-      withBallSlots,
-      candidatesBySlotWithBall,
-      withBallLockedSlotCandidateKeys
+  const result: Record<string, SlotCandidate[]> = {};
+
+  for (const slot of withBallSlots) {
+    const visibleCandidates = filterHiddenForSlot(
+      baseCandidates[slot.id] ?? [],
+      hiddenTopCandidateKeys,
+      "with-ball",
+      slot.id
     );
-  }, [withBallSlots, candidatesBySlotWithBall, withBallLockedSlotCandidateKeys]);
 
+    result[slot.id] = sortCandidatesForLineup(
+      visibleCandidates.map((candidate) =>
+        withScoreModeSelectionScore(candidate, scoreMode)
+      ),
+      scoreMode
+    );
+  }
+
+  return result;
+}, [availableRows, withBallSlots, hiddenTopCandidateKeys, scoreMode]);
+const suggestedSquadWithBall = useMemo(() => {
+  return solveLineupFromCandidates(withBallSlots, candidatesBySlotWithBall);
+}, [withBallSlots, candidatesBySlotWithBall]);
   const selectedXiRows = useMemo(() => {
     return getLineupRows(suggestedSquadWithBall);
   }, [suggestedSquadWithBall]);
@@ -585,81 +517,72 @@ export function useSquadBuilderSuggestions({
     return result;
   }, [withBallSlots, suggestedSquadWithBall]);
 
-  const candidatesBySlotWithoutBallForLineup = useMemo(() => {
-    const baseCandidates = buildCandidatesBySlot(
-      selectedXiRows,
-      withoutBallSlots,
-      {
-        topOnlyNatural: false,
-        scoreMode,
-      }
-    );
-
-    const result: Record<string, SlotCandidate[]> = {};
-
-    for (const slot of withoutBallSlots) {
-      const visibleForSlot = filterHiddenForSlot(
-        baseCandidates[slot.id] ?? [],
-        hiddenTopCandidateKeys,
-        "without-ball",
-        slot.id,
-        withoutBallLockedSlotCandidateKeys[slot.id] ?? ""
-      );
-
-      const adjustedCandidates = visibleForSlot.reduce<SlotCandidate[]>(
-        (acc, candidate) => {
-          const transitionAdjustment = getTransitionSelectionAdjustment(
-            candidate,
-            slot,
-            withBallProfileByPlayerKey
-          );
-
-          if (transitionAdjustment === null) {
-            return acc;
-          }
-
-          acc.push(
-            withScoreModeSelectionScore(
-              candidate,
-              scoreMode,
-              transitionAdjustment
-            )
-          );
-
-          return acc;
-        },
-        []
-      );
-
-      result[slot.id] = sortCandidatesForLineup(adjustedCandidates, scoreMode);
-    }
-
-    return result;
-  }, [
+const candidatesBySlotWithoutBallForLineup = useMemo(() => {
+  const baseCandidates = buildCandidatesBySlot(
     selectedXiRows,
     withoutBallSlots,
-    hiddenTopCandidateKeys,
-    withoutBallLockedSlotCandidateKeys,
-    withBallProfileByPlayerKey,
-    scoreMode,
-  ]);
+    {
+      topOnlyNatural: false,
+      scoreMode,
+    }
+  );
 
-  const candidatesBySlotWithoutBallForTop = useMemo(() => {
-    return candidatesBySlotWithoutBallForLineup;
-  }, [candidatesBySlotWithoutBallForLineup]);
+  const result: Record<string, SlotCandidate[]> = {};
 
-  const suggestedSquadWithoutBall = useMemo(() => {
-    return solveLineupFromCandidates(
-      withoutBallSlots,
-      candidatesBySlotWithoutBallForLineup,
-      withoutBallLockedSlotCandidateKeys
+  for (const slot of withoutBallSlots) {
+    const visibleForSlot = filterHiddenForSlot(
+      baseCandidates[slot.id] ?? [],
+      hiddenTopCandidateKeys,
+      "without-ball",
+      slot.id
     );
-  }, [
-    withoutBallSlots,
-    candidatesBySlotWithoutBallForLineup,
-    withoutBallLockedSlotCandidateKeys,
-  ]);
 
+    const adjustedCandidates = visibleForSlot.reduce<SlotCandidate[]>(
+  (acc, candidate) => {
+    const transitionAdjustment = getTransitionSelectionAdjustment(
+      candidate,
+      slot,
+      withBallProfileByPlayerKey
+    );
+
+    if (transitionAdjustment === null) {
+      return acc;
+    }
+
+    acc.push(
+      withScoreModeSelectionScore(
+        candidate,
+        scoreMode,
+        transitionAdjustment
+      )
+    );
+
+    return acc;
+  },
+  []
+);
+
+    result[slot.id] = sortCandidatesForLineup(adjustedCandidates, scoreMode);
+  }
+
+  return result;
+}, [
+  selectedXiRows,
+  withoutBallSlots,
+  hiddenTopCandidateKeys,
+  withBallProfileByPlayerKey,
+  scoreMode,
+]);
+const candidatesBySlotWithoutBallForTop = useMemo(() => {
+  return candidatesBySlotWithoutBallForLineup;
+}, [candidatesBySlotWithoutBallForLineup]);
+
+const suggestedSquadWithoutBall = useMemo(() => {
+  return solveLineupFromCandidates(
+    withoutBallSlots,
+    candidatesBySlotWithoutBallForLineup
+  );
+}, [withoutBallSlots, candidatesBySlotWithoutBallForLineup]);
   const candidatesBySlot =
     tacticalView === "with-ball"
       ? candidatesBySlotWithBall
@@ -693,47 +616,7 @@ export function useSquadBuilderSuggestions({
     return hiddenLists.reduce((sum, hiddenKeys) => sum + hiddenKeys.length, 0);
   }, [hiddenTopCandidateKeys]);
 
-  function toggleSlotCandidateLock(
-    slotId: string,
-    candidateKey: string,
-    view: TacticalView = tacticalView
-  ) {
-    const lockKey = getPhaseSlotKey(view, slotId);
 
-    setLockedSlotCandidateKeys((current) => {
-      if (current[lockKey] === candidateKey) {
-        const next = { ...current };
-        delete next[lockKey];
-        return next;
-      }
-
-      return {
-        ...current,
-        [lockKey]: candidateKey,
-      };
-    });
-  }
-
-  function clearLockedSlotCandidate(
-    slotId: string,
-    view: TacticalView = tacticalView
-  ) {
-    const lockKey = getPhaseSlotKey(view, slotId);
-
-    setLockedSlotCandidateKeys((current) => {
-      if (!current[lockKey]) {
-        return current;
-      }
-
-      const next = { ...current };
-      delete next[lockKey];
-      return next;
-    });
-  }
-
-  function clearLockedSlotCandidates() {
-    setLockedSlotCandidateKeys({});
-  }
 
   function hideTopCandidate(
     slotId: string,
@@ -760,72 +643,59 @@ export function useSquadBuilderSuggestions({
     setHiddenTopCandidateKeys({});
   }
 
-  function getVisibleTopCandidates(
-    slot: FormationSlot,
-    limit = 3,
-    view: TacticalView = tacticalView
-  ): SlotCandidate[] {
-    const sourceCandidates =
-      view === "with-ball"
-        ? candidatesBySlotWithBall[slot.id] ?? []
-        : candidatesBySlotWithoutBallForTop[slot.id] ?? [];
+function getVisibleTopCandidates(
+  slot: FormationSlot,
+  limit = 3,
+  view: TacticalView = tacticalView
+) {
+  const sourceCandidates =
+    view === "with-ball"
+      ? candidatesBySlotWithBall[slot.id] ?? []
+      : candidatesBySlotWithoutBallForTop[slot.id] ?? [];
 
-    const sourceLineup =
-      view === "with-ball" ? suggestedSquadWithBall : suggestedSquadWithoutBall;
+  const sourceLineup =
+    view === "with-ball" ? suggestedSquadWithBall : suggestedSquadWithoutBall;
 
-    const usedPlayerKeys = new Set(
-      getLineupCandidates(sourceLineup)
-        .filter((candidate) => sourceLineup[slot.id]?.key !== candidate.key)
-        .map((candidate) => candidate.key)
-    );
+  const usedPlayerKeys = new Set(
+    getLineupCandidates(sourceLineup)
+      .filter((candidate) => sourceLineup[slot.id]?.key !== candidate.key)
+      .map((candidate) => candidate.key)
+  );
 
-    const hiddenForSlot = new Set(
-      hiddenTopCandidateKeys[getPhaseSlotKey(view, slot.id)] ?? []
-    );
+  const hiddenForSlot = new Set(
+    hiddenTopCandidateKeys[getPhaseSlotKey(view, slot.id)] ?? []
+  );
 
-    return sortCandidatesForDisplay(
-      filterOnlyNaturalIfNeeded(
-        sourceCandidates
-          .filter((candidate) => !usedPlayerKeys.has(candidate.key))
-          .filter((candidate) => !hiddenForSlot.has(candidate.key)),
-        topOnlyNatural
-      ),
-      scoreMode
-    ).slice(0, limit);
-  }
+  return sortCandidatesForDisplay(
+    filterOnlyNaturalIfNeeded(
+      sourceCandidates
+        .filter((candidate) => !usedPlayerKeys.has(candidate.key))
+        .filter((candidate) => !hiddenForSlot.has(candidate.key)),
+      topOnlyNatural
+    ),
+    scoreMode
+  ).slice(0, limit);
+}
 
-  function getLockedCandidateKey(
-    slotId: string,
-    view: TacticalView = tacticalView
-  ) {
-    return lockedSlotCandidateKeys[getPhaseSlotKey(view, slotId)] ?? "";
-  }
+return {
+  availableRows,
 
-  return {
-    availableRows,
+  candidatesBySlot,
+  candidatesBySlotWithBall,
+  candidatesBySlotWithoutBall: candidatesBySlotWithoutBallForTop,
 
-    candidatesBySlot,
-    candidatesBySlotWithBall,
-    candidatesBySlotWithoutBall: candidatesBySlotWithoutBallForTop,
+  suggestedSquad,
+  suggestedSquadWithBall,
+  suggestedSquadWithoutBall,
 
-    suggestedSquad,
-    suggestedSquadWithBall,
-    suggestedSquadWithoutBall,
+  assignedSlotByPlayerKey,
 
-    assignedSlotByPlayerKey,
+  hiddenTopCount,
+  hiddenTopCandidateKeys,
 
-    hiddenTopCount,
-    hiddenTopCandidateKeys,
-    lockedSlotCandidateKeys,
+  getVisibleTopCandidates,
 
-    getVisibleTopCandidates,
-    getLockedCandidateKey,
-
-    toggleSlotCandidateLock,
-    clearLockedSlotCandidate,
-    clearLockedSlotCandidates,
-
-    hideTopCandidate,
-    clearHiddenTopCandidates,
-  };
+  hideTopCandidate,
+  clearHiddenTopCandidates,
+};
 }

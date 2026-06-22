@@ -1,6 +1,7 @@
 import type { RoleDefinition, RoleImportance } from "../constants/roles";
 import type { TableRow } from "../types/table";
 import { parseAttributeValue } from "./attributeValue";
+import { ROLE_ATTRIBUTE_WEIGHTS } from "./roleScoring";
 
 export type PlayerRoleAttributeInsight = {
   attribute: string;
@@ -9,13 +10,6 @@ export type PlayerRoleAttributeInsight = {
   importance: RoleImportance;
   weight: number;
   weightedScore: number;
-};
-
-const ROLE_IMPORTANCE_WEIGHTS: Record<RoleImportance, number> = {
-  core: 3.4,
-  key: 2.2,
-  important: 1.0,
-  support: 0.45,
 };
 
 function getRoleAttributeList(role: RoleDefinition) {
@@ -60,7 +54,7 @@ export function getPlayerRoleAttributeInsights(
       }
 
       const value = parsed.average;
-      const weight = ROLE_IMPORTANCE_WEIGHTS[importance];
+      const weight = ROLE_ATTRIBUTE_WEIGHTS[importance];
 
       return {
         attribute,

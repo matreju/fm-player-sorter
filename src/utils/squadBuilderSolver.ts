@@ -42,42 +42,13 @@ function sortCandidatesForSolver(candidates: SlotCandidate[]): SlotCandidate[] {
 
 export function solveSquad(
   slots: FormationSlot[],
-  candidatesBySlot: Record<string, SlotCandidate[]>,
-  lockedCandidateKeysBySlot: Record<string, string> = {}
+  candidatesBySlot: Record<string, SlotCandidate[]>
 ): Record<string, SlotCandidate | null> {
-  const baseResult: Record<string, SlotCandidate | null> = {};
-  const used = new Set<string>();
-  const lockedSlotIds = new Set<string>();
-
-  for (const slot of slots) {
-    const lockedCandidateKey = lockedCandidateKeysBySlot[slot.id];
-
-    if (!lockedCandidateKey) {
-      continue;
-    }
-
-    const lockedCandidate =
-      candidatesBySlot[slot.id]?.find(
-        (candidate) => candidate.key === lockedCandidateKey
-      ) ?? null;
-
-    if (!lockedCandidate || used.has(lockedCandidate.key)) {
-      continue;
-    }
-
-    baseResult[slot.id] = lockedCandidate;
-    used.add(lockedCandidate.key);
-    lockedSlotIds.add(slot.id);
-  }
-
   const freeSlots = slots
-    .filter((slot) => !lockedSlotIds.has(slot.id))
     .map((slot, originalIndex) => {
       const candidates = sortCandidatesForSolver(
         candidatesBySlot[slot.id] ?? []
-      )
-        .filter((candidate) => !used.has(candidate.key))
-        .slice(0, MAX_CANDIDATES_PER_SLOT);
+      ).slice(0, MAX_CANDIDATES_PER_SLOT);
 
       return {
         slot,
@@ -206,12 +177,9 @@ export function solveSquad(
     delete currentResult[slot.id];
   }
 
-  search(0, { ...baseResult }, new Set(used), 0, 0, used.size);
+  search(0, {}, new Set<string>(), 0, 0, 0);
 
-  const result: Record<string, SlotCandidate | null> = {
-    ...baseResult,
-    ...bestResult,
-  };
+  const result: Record<string, SlotCandidate | null> = { ...bestResult };
 
   for (const slot of slots) {
     if (!(slot.id in result)) {

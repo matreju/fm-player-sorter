@@ -23,9 +23,7 @@ export type BuildCandidatesBySlotOptions = {
   scoreMode?: SquadBuilderScoreMode;
 };
 
-type SolveLineupOptions = BuildCandidatesBySlotOptions & {
-  lockedSlotCandidateKeys?: Record<string, string>;
-};
+type SolveLineupOptions = BuildCandidatesBySlotOptions;
 
 type CandidateWithSelectionScore = SlotCandidate & {
   selectionScore?: number;
@@ -355,12 +353,10 @@ export function buildCandidatesBySlot(
 
 export function solveLineupFromCandidates(
   slots: FormationSlot[],
-  candidatesBySlot: Record<string, SlotCandidate[]>,
-  lockedSlotCandidateKeys: Record<string, string> = {}
+  candidatesBySlot: Record<string, SlotCandidate[]>
 ): Record<string, SlotCandidate | null> {
-  return solveSquad(slots, candidatesBySlot, lockedSlotCandidateKeys);
+  return solveSquad(slots, candidatesBySlot);
 }
-
 export function solveLineup(
   slots: FormationSlot[],
   rows: TableRow[],
@@ -372,11 +368,7 @@ export function solveLineup(
     scoreMode: options.scoreMode,
   });
 
-  return solveLineupFromCandidates(
-    slots,
-    candidatesBySlot,
-    options.lockedSlotCandidateKeys ?? {}
-  );
+return solveLineupFromCandidates(slots, candidatesBySlot);
 }
 
 export function getLineupCandidates(

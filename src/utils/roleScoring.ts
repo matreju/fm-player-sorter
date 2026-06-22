@@ -1,6 +1,7 @@
 import {
   ROLE_DEFINITIONS,
   type RoleDefinition,
+  type RoleImportance,
   type RolePhase,
 } from "../constants/roles";
 import type { TableRow } from "../types/table";
@@ -513,14 +514,14 @@ export const ROLE_ATTRIBUTE_GROUP_LABELS: Record<RoleAttributeImportance, string
   support: "Pomocnicze",
 };
 
-export function getRoleAttributeGroupMeta(importance: RoleAttributeImportance) {
+export function getRoleAttributeGroupMeta(importance: RoleImportance) {
   const weight = ROLE_ATTRIBUTE_WEIGHTS[importance];
 
   return {
     importance,
     groupLabel: ROLE_ATTRIBUTE_GROUP_LABELS[importance],
     weight,
-    weightLabel: `waga ${weight.toFixed(1)}`,
+    weightLabel: `waga ${weight}`,
   };
 }
 

@@ -12,6 +12,7 @@ import { MainToolbar } from "./components/main-toolbar";
 import { useSquadDepth } from "./hooks/useSquadDepth";
 import { getPlayerRoleAttributeInsights } from "./utils/playerRoleInsights";
 import { NationalCoreDrawer } from "./components/national-core";
+import { PlayerCardGrid } from "./components/player-cards";
 import {
   ROLE_DEFINITIONS,
   getRolePhaseLabel,
@@ -70,6 +71,17 @@ import {
 import { normalizeTextForSearch } from "./utils/textSearch";
 import type { FormationSlot, TacticalView } from "./types/squadBuilderTypes";
 import { scorePlayerForSlot } from "./utils/squadBuilderScoring";
+
+type PlayerViewMode = "table" | "cards";
+
+type PlayerCardSortMode =
+  | "current"
+  | "score-desc"
+  | "score-asc"
+  | "name-asc"
+  | "name-desc"
+  | "form-desc"
+  | "club-asc";
 
 function getPrimaryAnalysisPhase(
   analysisPhase: RolePhaseFilter,
@@ -173,6 +185,9 @@ const {
 
 
 const [compactTableMode, setCompactTableMode] = useState(true);
+const [playerViewMode, setPlayerViewMode] = useState<PlayerViewMode>("table");
+const [compactCardMode, setCompactCardMode] = useState(false);
+const [cardSortMode, setCardSortMode] = useState<PlayerCardSortMode>("score-desc");
 const [selectedPlayerKey, setSelectedPlayerKey] = useState<string | null>(null);
 const [squadDepthOpen, setSquadDepthOpen] = useState(false);
 
@@ -352,10 +367,30 @@ const scoredRows = useMemo<TableRow[]>(() => {
   analysisRoleId,
   rows,
 ]);
-const analyzedRows = useMemo<TableRow[]>(() => {
+const roleFilteredRows = useMemo<TableRow[]>(() => {
   const minimumScore = getSortableNumber(minRoleScore) ?? 0;
 
+  if (!onlyRoleMatches) {
+    return scoredRows;
+  }
+
   return scoredRows.filter((row) => {
+    const score = getSortableNumber(row[ROLE_SCORE_COLUMN] ?? "");
+
+    if (score === null) {
+      return false;
+    }
+
+    return score >= minimumScore;
+  });
+}, [scoredRows, minRoleScore, onlyRoleMatches]);
+
+const analyzedRows = useMemo<TableRow[]>(() => {
+  if (!showOnlySelectedPlayers && !hideMarkedPlayers) {
+    return roleFilteredRows;
+  }
+
+  return roleFilteredRows.filter((row) => {
     const mark = getPlayerMark(row);
 
     if (showOnlySelectedPlayers) {
@@ -367,31 +402,19 @@ const analyzedRows = useMemo<TableRow[]>(() => {
     }
 
     if (hideMarkedPlayers) {
-      if (mark === "selected" || mark === "rejected") {
-        return false;
-      }
+      return mark !== "selected" && mark !== "rejected";
     }
 
-    if (!onlyRoleMatches) {
-      return true;
-    }
-
-    const score = getSortableNumber(row[ROLE_SCORE_COLUMN] ?? "");
-
-    if (score === null) {
-      return false;
-    }
-
-    return score >= minimumScore;
+    return true;
   });
 }, [
-  scoredRows,
-  minRoleScore,
-  onlyRoleMatches,
+  roleFilteredRows,
   showOnlySelectedPlayers,
   hideMarkedPlayers,
   playerMarks,
   playerSelectionPositions,
+  getPlayerMark,
+  getPlayerSelectionPosition,
 ]);
 const sortedRows = useMemo(() => {
   if (showOnlySelectedPlayers) {
@@ -565,6 +588,7 @@ const parsed = lowerCaseFileName.endsWith(".csv")
   setFootFilter("any");
     setError("");
   }
+  
 const handleSquadBuilderSelectPlayer = useCallback(
   (row: TableRow, selectionPosition: string) => {
     const isAlreadySelected = getPlayerMark(row) === "selected";
@@ -580,6 +604,76 @@ const handleSquadBuilderSelectPlayer = useCallback(
   },
   [getPlayerMark, togglePlayerMark, setPlayerSelectionPosition]
 );
+const playerCardsAnalysisLabel = useMemo(() => {
+  const positionLabel =
+    analysisPositionGroup === "any" ? "Wszyscy" : analysisPositionGroup;
+
+  const phaseLabel =
+    analysisPhase === "with-ball"
+      ? "Przy piłce"
+      : analysisPhase === "without-ball"
+        ? "Bez piłki"
+        : "Dowolna faza";
+
+  const roleLabel =
+    analysisRoleId === "any"
+      ? "Dowolna rola"
+      : availableAnalysisRoles.find((role) => role.id === analysisRoleId)
+          ?.name ?? "Wybrana rola";
+
+  return `${positionLabel} · ${phaseLabel} · ${roleLabel}`;
+}, [
+  analysisPositionGroup,
+  analysisPhase,
+  analysisRoleId,
+  availableAnalysisRoles,
+]);
+
+const cardRows = useMemo(() => {
+  const rowsForCards = [...sortedRows];
+
+  if (cardSortMode === "current") {
+    return rowsForCards;
+  }
+
+  if (cardSortMode === "score-desc") {
+    return rowsForCards.sort((a, b) =>
+      compareValues(b[ROLE_SCORE_COLUMN], a[ROLE_SCORE_COLUMN], "asc")
+    );
+  }
+
+  if (cardSortMode === "score-asc") {
+    return rowsForCards.sort((a, b) =>
+      compareValues(a[ROLE_SCORE_COLUMN], b[ROLE_SCORE_COLUMN], "asc")
+    );
+  }
+
+  if (cardSortMode === "name-asc") {
+    return rowsForCards.sort((a, b) =>
+      compareValues(a["Nazwisko"], b["Nazwisko"], "asc")
+    );
+  }
+
+  if (cardSortMode === "name-desc") {
+    return rowsForCards.sort((a, b) =>
+      compareValues(a["Nazwisko"], b["Nazwisko"], "desc")
+    );
+  }
+
+  if (cardSortMode === "form-desc") {
+    return rowsForCards.sort((a, b) =>
+      compareValues(b[CLUB_FORM_COLUMN], a[CLUB_FORM_COLUMN], "asc")
+    );
+  }
+
+  if (cardSortMode === "club-asc") {
+    return rowsForCards.sort((a, b) =>
+      compareValues(a["Klub"], b["Klub"], "asc")
+    );
+  }
+
+  return rowsForCards;
+}, [sortedRows, cardSortMode]);
 return (
 <main style={styles.page} aria-labelledby="app-title">
       <div style={styles.appShell}>
@@ -648,20 +742,171 @@ return (
 
 <div style={styles.tableArea}>
   {rows.length > 0 && (
-    <PlayerTable
-      tableHeaders={tableHeaders}
-      sortedRows={sortedRows}
-      sortConfig={sortConfig}
-      selectedPlayerKey={selectedPlayerKey}
-      playerMarkColumn={PLAYER_MARK_COLUMN}
-      getPlayerMark={getPlayerMark}
-      getPlayerSelectionPosition={getPlayerSelectionPosition}
-      onTogglePlayerMark={togglePlayerMark}
-      onSetPlayerSelectionPosition={setPlayerSelectionPosition}
-      onSort={handleSort}
-      onSelectPlayer={setSelectedPlayerKey}
-      getMarkedCellStyle={getMarkedCellStyle}
-    />
+    <>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 10,
+          padding: "10px 12px",
+          borderBottom: "1px solid #1f2937",
+          background: "#0f172a",
+        }}
+      >
+        <div
+          style={{
+            minWidth: 0,
+            color: "#94a3b8",
+            fontSize: 12,
+            fontWeight: 800,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+          title={playerCardsAnalysisLabel}
+        >
+          Analiza: <strong style={{ color: "#bfdbfe" }}>{playerCardsAnalysisLabel}</strong>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexShrink: 0,
+          }}
+        >
+          {playerViewMode === "cards" && (
+            <>
+              <select
+                value={cardSortMode}
+                onChange={(event) =>
+                  setCardSortMode(event.target.value as PlayerCardSortMode)
+                }
+                style={{
+                  height: 32,
+                  minWidth: 180,
+                  padding: "0 10px",
+                  borderRadius: 999,
+                  border: "1px solid #334155",
+                  background: "#0b1020",
+                  color: "#e5edff",
+                  fontWeight: 850,
+                }}
+                title="Sortowanie kafelków"
+              >
+                <option value="score-desc">Sortuj: wynik malejąco</option>
+                <option value="score-asc">Sortuj: wynik rosnąco</option>
+                <option value="name-asc">Sortuj: nazwisko A-Z</option>
+                <option value="name-desc">Sortuj: nazwisko Z-A</option>
+                <option value="form-desc">Sortuj: forma klubu</option>
+                <option value="club-asc">Sortuj: klub A-Z</option>
+                <option value="current">Sortuj: jak tabela</option>
+              </select>
+
+              <label
+                style={{
+                  height: 32,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 7,
+                  padding: "0 10px",
+                  borderRadius: 999,
+                  border: "1px solid #334155",
+                  background: "rgba(15, 23, 42, 0.85)",
+                  color: "#cbd5e1",
+                  fontWeight: 900,
+                  cursor: "pointer",
+                  userSelect: "none",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={compactCardMode}
+                  onChange={(event) =>
+                    setCompactCardMode(event.target.checked)
+                  }
+                />
+                Kompaktowe
+              </label>
+            </>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setPlayerViewMode("table")}
+            style={{
+              height: 32,
+              padding: "0 13px",
+              borderRadius: 999,
+              border:
+                playerViewMode === "table"
+                  ? "1px solid #38bdf8"
+                  : "1px solid #334155",
+              background:
+                playerViewMode === "table"
+                  ? "rgba(56, 189, 248, 0.16)"
+                  : "rgba(15, 23, 42, 0.85)",
+              color: playerViewMode === "table" ? "#bae6fd" : "#cbd5e1",
+              fontWeight: 900,
+              cursor: "pointer",
+            }}
+          >
+            Tabela
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPlayerViewMode("cards")}
+            style={{
+              height: 32,
+              padding: "0 13px",
+              borderRadius: 999,
+              border:
+                playerViewMode === "cards"
+                  ? "1px solid #38bdf8"
+                  : "1px solid #334155",
+              background:
+                playerViewMode === "cards"
+                  ? "rgba(56, 189, 248, 0.16)"
+                  : "rgba(15, 23, 42, 0.85)",
+              color: playerViewMode === "cards" ? "#bae6fd" : "#cbd5e1",
+              fontWeight: 900,
+              cursor: "pointer",
+            }}
+          >
+            Kafelki
+          </button>
+        </div>
+      </div>
+
+      {playerViewMode === "table" ? (
+        <PlayerTable
+          tableHeaders={tableHeaders}
+          sortedRows={sortedRows}
+          sortConfig={sortConfig}
+          selectedPlayerKey={selectedPlayerKey}
+          playerMarkColumn={PLAYER_MARK_COLUMN}
+          getPlayerMark={getPlayerMark}
+          getPlayerSelectionPosition={getPlayerSelectionPosition}
+          onTogglePlayerMark={togglePlayerMark}
+          onSetPlayerSelectionPosition={setPlayerSelectionPosition}
+          onSort={handleSort}
+          onSelectPlayer={setSelectedPlayerKey}
+          getMarkedCellStyle={getMarkedCellStyle}
+        />
+      ) : (
+        <PlayerCardGrid
+          rows={cardRows}
+          analysisLabel={playerCardsAnalysisLabel}
+          compact={compactCardMode}
+          getPlayerMark={getPlayerMark}
+          onTogglePlayerMark={togglePlayerMark}
+          onOpenDetails={setSelectedPlayerKey}
+        />
+      )}
+    </>
   )}
 </div>
       </section>
@@ -673,13 +918,13 @@ return (
       
     )}
 {rows.length > 0 && (
-  <SquadBuilder
-    rows={rows}
-    getPlayerMark={getPlayerMark}
-    selectedPlayersCount={selectedPlayersCount}
-    onClearCallUps={clearPlayerSelection}
-    onSelectPlayer={handleSquadBuilderSelectPlayer}
-  />
+<SquadBuilder
+  rows={rows}
+  getPlayerMark={getPlayerMark}
+  selectedPlayersCount={selectedPlayersCount}
+  onClearCallUps={clearPlayerSelection}
+  onSelectPlayer={handleSquadBuilderSelectPlayer}
+/>
 )}
     {selectedPlayer && (
       <PlayerDetailsPanel
