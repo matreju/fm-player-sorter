@@ -60,7 +60,6 @@ export function SquadBuilderDrawerShell({
           ref={openButtonRef}
           type="button"
           onClick={onToggle}
-          style={styles.squadBuilderTab}
           aria-expanded={isOpen}
           aria-controls="squad-builder-drawer"
         >

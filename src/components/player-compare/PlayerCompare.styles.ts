@@ -2,38 +2,61 @@ import type { CSSProperties } from "react";
 
 export const playerCompareStyles: Record<string, CSSProperties> = {
   wrapper: {
-    marginTop: 16,
-    marginBottom: 18,
-    padding: 14,
-    border: "1px solid #2a2f3a",
+    display: "grid",
+    gap: 10,
+    padding: 0,
+    color: "#e5edf8",
+  },
+
+  compareHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: "10px 12px",
+    border: "1px solid #29364d",
     borderRadius: 14,
-    background: "#11141b",
+    background:
+      "linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(17, 24, 39, 0.94))",
   },
 
   title: {
-    margin: "0 0 10px",
-    fontSize: 20,
-    color: "#f2f4f8",
+    margin: 0,
+    fontSize: 22,
+    lineHeight: 1.1,
+    fontWeight: 950,
+    color: "#f8fafc",
+    letterSpacing: "-0.03em",
+  },
+
+  headerSubtitle: {
+    marginTop: 4,
+    color: "#aebbd0",
+    fontSize: 12,
+    lineHeight: 1.35,
+    fontWeight: 750,
   },
 
   playerSelectors: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
+    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+    gap: 8,
     alignItems: "end",
-    marginBottom: 10,
   },
 
   playerSelectField: {
     minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 5,
   },
 
   playerSelectLabel: {
-    color: "#dbeafe",
-    fontSize: 11,
-    fontWeight: 900,
+    color: "#93c5fd",
+    fontSize: 10,
+    fontWeight: 950,
     textTransform: "uppercase",
-    letterSpacing: "0.04em",
+    letterSpacing: "0.06em",
   },
 
   label: {
@@ -47,14 +70,16 @@ export const playerCompareStyles: Record<string, CSSProperties> = {
   select: {
     width: "100%",
     minWidth: 0,
-    height: 40,
-    padding: "0 12px",
+    height: 32,
+    padding: "0 10px",
     borderRadius: 10,
     border: "1px solid #334155",
-    background: "#0b1220",
+    background: "#0b1120",
     color: "#f8fafc",
-    fontWeight: 800,
+    fontWeight: 850,
+    fontSize: 12,
     lineHeight: 1.2,
+    outline: "none",
   },
 
   compareActions: {
@@ -62,19 +87,17 @@ export const playerCompareStyles: Record<string, CSSProperties> = {
     gap: 8,
     alignItems: "center",
     justifyContent: "flex-end",
-    marginTop: -2,
-    marginBottom: 10,
+    marginTop: 0,
   },
 
   compareRoleDock: {
     display: "grid",
-    gridTemplateColumns: "180px 180px minmax(240px, 1fr)",
-    gap: 10,
+    gridTemplateColumns: "170px 160px minmax(220px, 1fr)",
+    gap: 8,
     alignItems: "end",
-    marginBottom: 10,
     padding: 10,
     border: "1px solid #26334a",
-    borderRadius: 12,
+    borderRadius: 13,
     background: "#101827",
   },
 
@@ -83,61 +106,48 @@ export const playerCompareStyles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    color: "#8ea2ff",
+    color: "#93c5fd",
     fontSize: 12,
     fontWeight: 850,
   },
 
-  roleToolbar: {
-    display: "grid",
-    gridTemplateColumns: "220px 220px minmax(260px, 1fr)",
-    gap: 16,
-    alignItems: "end",
-    marginBottom: 16,
-  },
-
   roleControlField: {
     minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 5,
   },
 
   roleControlFieldWide: {
     minWidth: 0,
-  },
-
-  roleLegend: {
     display: "flex",
-    gap: 18,
-    alignItems: "center",
-    color: "#b9bfce",
-    fontSize: 12,
-    paddingBottom: 8,
-    gridColumn: "1 / -1",
+    flexDirection: "column",
+    gap: 5,
   },
 
   phaseInfo: {
-    color: "#8ea2ff",
-    fontWeight: 800,
+    color: "#bfdbfe",
+    fontWeight: 850,
   },
 
   playerCards: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 48px minmax(0, 1fr)",
-    gap: 10,
+    gridTemplateColumns: "minmax(0, 1fr) 44px minmax(0, 1fr)",
+    gap: 8,
     alignItems: "stretch",
-    marginBottom: 10,
   },
 
   playerCard: {
     minWidth: 0,
-    minHeight: 170,
-    padding: 11,
-    border: "1px solid #2d3340",
+    minHeight: 142,
+    padding: 10,
+    border: "1px solid #29364d",
     borderRadius: 14,
-    background: "#171b24",
-    textAlign: "left",
+    background:
+      "linear-gradient(135deg, rgba(17, 24, 39, 0.98), rgba(15, 23, 42, 0.96))",
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 210px",
-    gap: 10,
+    gridTemplateColumns: "minmax(0, 1fr) 170px",
+    gap: 8,
     alignItems: "center",
   },
 
@@ -147,31 +157,37 @@ export const playerCompareStyles: Record<string, CSSProperties> = {
     flexDirection: "column",
     alignItems: "flex-start",
     justifyContent: "center",
-    gap: 6,
+    gap: 5,
   },
 
   playerName: {
     color: "#ffffff",
-    fontSize: 18,
+    fontSize: 17,
     lineHeight: 1.1,
     fontWeight: 950,
     textAlign: "left",
     width: "100%",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
 
   playerInfo: {
     color: "#93c5fd",
     marginTop: 0,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 800,
     textAlign: "left",
     width: "100%",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
 
   heightInfo: {
     marginTop: 0,
     color: "#bfdbfe",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 850,
     textAlign: "left",
     width: "100%",
@@ -181,7 +197,7 @@ export const playerCompareStyles: Record<string, CSSProperties> = {
     marginTop: 2,
     display: "flex",
     justifyContent: "flex-start",
-    gap: 6,
+    gap: 5,
     flexWrap: "wrap",
     textAlign: "left",
     width: "100%",
@@ -191,23 +207,57 @@ export const playerCompareStyles: Record<string, CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "4px 8px",
+    padding: "3px 7px",
     borderRadius: 999,
     border: "1px solid rgba(184, 190, 202, 0.25)",
     background: "rgba(184, 190, 202, 0.05)",
     color: "#b8beca",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 900,
     whiteSpace: "nowrap",
   },
 
+  roleScorePill: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 2,
+    padding: "4px 8px",
+    borderRadius: 999,
+    border: "1px solid rgba(56, 189, 248, 0.38)",
+    background: "rgba(14, 116, 144, 0.16)",
+    color: "#dbeafe",
+    fontSize: 11,
+    fontWeight: 900,
+  },
+
+  roleScoreMeta: {
+    color: "#94a3b8",
+    fontSize: 10,
+    fontWeight: 750,
+  },
+
+  roleScoreRange: {
+    marginTop: 2,
+    color: "#aeb6c7",
+    fontSize: 10,
+    fontWeight: 700,
+  },
+
+  roleScoreUncertainty: {
+    marginTop: 1,
+    color: "#8f98aa",
+    fontSize: 10,
+    fontWeight: 700,
+  },
+
   compareCompactRadarShell: {
-    width: 200,
+    width: 166,
     maxWidth: "100%",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: 5,
+    padding: 4,
     border: "1px solid rgba(51, 65, 85, 0.72)",
     borderRadius: 12,
     background: "rgba(2, 6, 23, 0.22)",
@@ -225,167 +275,160 @@ export const playerCompareStyles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    color: "#f2f4f8",
-    fontWeight: 900,
-    fontSize: 16,
-    border: "1px solid #2d3340",
+    color: "#f8fafc",
+    fontWeight: 950,
+    fontSize: 14,
+    border: "1px solid #29364d",
     borderRadius: 12,
-    background: "#171b24",
+    background:
+      "linear-gradient(135deg, rgba(14, 116, 144, 0.26), rgba(15, 23, 42, 0.96))",
   },
 
-  roleScorePanel: {
+  quickCompareGrid: {
     display: "grid",
-    gridTemplateColumns: "160px 1fr 160px",
-    gap: 12,
-    alignItems: "center",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 8,
+  },
+
+  quickCompareCard: {
+    minWidth: 0,
     padding: 10,
-    marginBottom: 12,
-    border: "1px solid #2d3340",
-    borderRadius: 12,
-    background: "#171b24",
+    border: "1px solid #29364d",
+    borderRadius: 13,
+    background: "#111827",
   },
 
-  roleScoreCard: {
-    textAlign: "center",
+  quickCompareLabel: {
+    color: "#93c5fd",
+    fontSize: 10,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
   },
 
-  roleScoreName: {
-    color: "#b9bfce",
-    fontSize: 11,
-    marginBottom: 4,
-    whiteSpace: "nowrap",
+  quickCompareWinner: {
+    marginTop: 5,
+    color: "#f8fafc",
+    fontSize: 13,
+    lineHeight: 1.15,
+    fontWeight: 950,
     overflow: "hidden",
     textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
 
-  roleScoreValue: {
-    color: "#ffffff",
-    fontSize: 22,
-    fontWeight: 900,
-  },
-
-  roleScoreRange: {
-    marginTop: 4,
-    color: "#aeb6c7",
-    fontSize: 10,
-    fontWeight: 700,
-  },
-
-  roleScoreUncertainty: {
-    marginTop: 2,
-    color: "#8f98aa",
-    fontSize: 10,
-    fontWeight: 700,
-  },
-
-  roleScoreBarBox: {
+  quickCompareValues: {
+    marginTop: 5,
     display: "flex",
-    flexDirection: "column",
-    gap: 7,
+    justifyContent: "space-between",
+    gap: 8,
+    color: "#aebbd0",
+    fontSize: 11,
+    fontWeight: 800,
   },
 
-  roleScoreTitle: {
-    color: "#f2f4f8",
-    fontSize: 12,
-    fontWeight: 800,
-    textAlign: "center",
+  quickCompareBar: {
+    marginTop: 7,
   },
 
   compareSectionTogglePanel: {
-    marginBottom: 10,
-    padding: 10,
-    border: "1px solid #26334a",
-    borderRadius: 12,
-    background: "#101827",
+    border: "1px solid #29364d",
+    borderRadius: 14,
+    background: "#111827",
+    overflow: "hidden",
   },
 
   compareSectionToggleHeader: {
     display: "flex",
-    alignItems: "center",
     justifyContent: "space-between",
+    alignItems: "center",
     gap: 12,
+    padding: "10px 12px",
+    borderBottom: "1px solid #253149",
+    background:
+      "linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(17, 24, 39, 0.96))",
   },
 
   compareSectionToggleTitle: {
     color: "#f8fafc",
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 950,
   },
 
   compareSectionToggleText: {
-    color: "#94a3b8",
-    fontSize: 12,
-    fontWeight: 750,
+    marginTop: 3,
+    color: "#aebbd0",
+    fontSize: 11,
     lineHeight: 1.3,
+    fontWeight: 750,
   },
 
   compareSectionToggleButton: {
-    height: 32,
-    padding: "0 12px",
-    borderRadius: 999,
-    border: "1px solid #334155",
-    background: "#0b1220",
-    color: "#bfdbfe",
+    flexShrink: 0,
+    minHeight: 30,
+    padding: "0 11px",
+    borderRadius: 10,
+    border: "1px solid rgba(56, 189, 248, 0.42)",
+    background: "rgba(14, 116, 144, 0.18)",
+    color: "#dbeafe",
     fontSize: 12,
     fontWeight: 900,
     cursor: "pointer",
   },
 
   compareSectionToggleButtonActive: {
-    borderColor: "#38bdf8",
-    background: "rgba(56, 189, 248, 0.14)",
-    color: "#bae6fd",
+    borderColor: "rgba(148, 163, 184, 0.45)",
+    background: "rgba(30, 41, 59, 0.8)",
+    color: "#cbd5e1",
   },
 
   compareBody: {
     display: "grid",
-    gridTemplateColumns: "minmax(340px, 420px) minmax(0, 1fr)",
-    gap: 12,
+    gridTemplateColumns: "minmax(0, 0.95fr) minmax(420px, 1.05fr)",
+    gap: 10,
     alignItems: "start",
-    marginTop: 12,
   },
 
   compareBodySummaryOnly: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr)",
-    gap: 12,
+    gridTemplateColumns: "1fr",
+    gap: 10,
     alignItems: "start",
-    marginTop: 12,
   },
 
   compareLeftPanel: {
     display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: 10,
     minWidth: 0,
   },
 
   compareMiniBox: {
     padding: 10,
-    border: "1px solid #2a2f3a",
-    borderRadius: 12,
-    background: "#151922",
+    border: "1px solid #29364d",
+    borderRadius: 13,
+    background: "#111827",
     minWidth: 0,
   },
 
   compareBoxTitle: {
     margin: "0 0 8px",
-    fontSize: 15,
-    color: "#f2f4f8",
+    fontSize: 14,
+    fontWeight: 950,
+    color: "#f8fafc",
     textAlign: "left",
   },
 
   sectionVsList: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
-    gap: 8,
+    gap: 7,
   },
 
   sectionVsCard: {
-    minWidth: 0,
     padding: "8px 9px",
-    border: "1px solid #252b36",
+    border: "1px solid #253149",
     borderRadius: 10,
-    background: "#10141d",
+    background: "#0f172a",
   },
 
   sectionVsTop: {
@@ -401,7 +444,7 @@ export const playerCompareStyles: Record<string, CSSProperties> = {
 
   sectionVsMiddle: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 48px minmax(0, 1fr)",
+    gridTemplateColumns: "1fr 48px 1fr",
     gap: 7,
     alignItems: "center",
   },
@@ -434,7 +477,7 @@ export const playerCompareStyles: Record<string, CSSProperties> = {
     alignItems: "center",
     minHeight: 26,
     borderRadius: 999,
-    fontWeight: 900,
+    fontWeight: 950,
     fontSize: 11,
   },
 
@@ -458,31 +501,29 @@ export const playerCompareStyles: Record<string, CSSProperties> = {
 
   leftValueBig: {
     color: "#6eb6ff",
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: 950,
     lineHeight: 1,
   },
 
   rightValueBig: {
     color: "#9aff8f",
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: 950,
     lineHeight: 1,
   },
 
   differenceCardsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 8,
+    gap: 7,
   },
 
   differenceBigCard: {
     position: "relative",
-    minWidth: 0,
     padding: "24px 9px 9px",
-    border: "1px solid #252b36",
+    border: "1px solid #253149",
     borderRadius: 10,
-    background: "#10141d",
+    background: "#0f172a",
     overflow: "hidden",
   },
 
@@ -490,31 +531,25 @@ export const playerCompareStyles: Record<string, CSSProperties> = {
     position: "absolute",
     top: 7,
     right: 7,
-    maxWidth: "55%",
-    padding: "3px 7px",
+    padding: "2px 6px",
     borderRadius: 999,
     background: "#20283a",
     color: "#aeb6c7",
     fontSize: 9,
-    fontWeight: 800,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
+    fontWeight: 850,
   },
 
   differenceAttributeName: {
     textAlign: "center",
     color: "#ffffff",
-    fontSize: 14,
-    lineHeight: 1.15,
+    fontSize: 13,
     fontWeight: 950,
     marginBottom: 8,
-    minHeight: 18,
   },
 
   differencePlayersRow: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 44px minmax(0, 1fr)",
+    gridTemplateColumns: "1fr 44px 1fr",
     gap: 7,
     alignItems: "center",
   },
@@ -564,68 +599,35 @@ export const playerCompareStyles: Record<string, CSSProperties> = {
   },
 
   differenceWinnerText: {
-    marginTop: 7,
-    paddingTop: 7,
-    borderTop: "1px solid #252b36",
+    marginTop: 6,
+    paddingTop: 6,
+    borderTop: "1px solid #253149",
     color: "#8b95a7",
     fontSize: 10,
     textAlign: "center",
   },
 
-  differenceSubtext: {
-    marginTop: 3,
-    color: "#8b95a7",
-    fontSize: 10,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-
-  sectionCompactList: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
-    gap: 8,
-  },
-
-  sectionCompactRow: {
-    display: "grid",
-    gap: 5,
-    padding: "8px 9px",
-    border: "1px solid #252b36",
-    borderRadius: 10,
-    background: "#10141d",
-  },
-
-  sectionCompactHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10,
-    color: "#dbe4f0",
-    fontSize: 11,
-    fontWeight: 850,
-  },
-
   verdictCompactList: {
     display: "grid",
-    gap: 4,
+    gap: 3,
   },
 
   verdictRow: {
     display: "flex",
     justifyContent: "space-between",
-    gap: 12,
+    gap: 10,
     padding: "6px 0",
-    borderBottom: "1px solid #252b36",
+    borderBottom: "1px solid #253149",
     color: "#dbe4f0",
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: 800,
   },
 
   fullAttributesPanel: {
     padding: 10,
-    border: "1px solid #2a2f3a",
-    borderRadius: 12,
-    background: "#151922",
+    border: "1px solid #29364d",
+    borderRadius: 13,
+    background: "#111827",
     minWidth: 0,
   },
 
@@ -640,92 +642,98 @@ export const playerCompareStyles: Record<string, CSSProperties> = {
   fullAttributesLegend: {
     display: "flex",
     alignItems: "center",
-    gap: 8,
+    gap: 7,
     color: "#aeb6c7",
-    fontSize: 12,
+    fontSize: 11,
     flexWrap: "wrap",
   },
 
   leftLegendDot: {
-    width: 9,
-    height: 9,
+    width: 8,
+    height: 8,
     borderRadius: 999,
     background: "#6eb6ff",
     display: "inline-block",
   },
 
   rightLegendDot: {
-    width: 9,
-    height: 9,
+    width: 8,
+    height: 8,
     borderRadius: 999,
     background: "#9aff8f",
     display: "inline-block",
   },
 
-  compareHeader: {
+  fullAttributesScroll: {
     display: "grid",
-    gridTemplateColumns: "155px 58px minmax(180px, 1fr) 58px 58px",
-    gap: 8,
-    padding: "8px 8px",
-    color: "#8f98aa",
-    fontSize: 12,
-    fontWeight: 800,
-    textTransform: "uppercase",
-    borderBottom: "1px solid #2a2f3a",
+    gap: 10,
+    maxHeight: 620,
+    overflow: "auto",
+    paddingRight: 4,
   },
 
   groupBox: {
-    marginTop: 14,
+    minWidth: 0,
+    border: "1px solid #253149",
+    borderRadius: 12,
+    background: "#0f172a",
+    overflow: "hidden",
   },
 
   groupTitle: {
-    color: "#f2f4f8",
-    fontSize: 16,
-    margin: "0 0 7px",
+    margin: 0,
+    padding: "8px 10px",
+    borderBottom: "1px solid #253149",
+    color: "#f8fafc",
+    fontSize: 13,
+    fontWeight: 950,
+    background: "rgba(15, 23, 42, 0.72)",
   },
 
   attributeRow: {
     display: "grid",
-    gridTemplateColumns: "155px 58px minmax(180px, 1fr) 58px 58px",
+    gridTemplateColumns: "minmax(140px, 1fr) 42px minmax(120px, 1fr) 42px 58px",
     alignItems: "center",
-    gap: 8,
-    padding: "7px 8px",
-    borderBottom: "1px solid #222631",
-    borderLeft: "3px solid transparent",
-    borderRadius: 4,
+    gap: 7,
+    padding: "6px 8px",
+    borderBottom: "1px solid #253149",
+    color: "#dbe4f0",
+    fontSize: 11,
+    fontWeight: 800,
   },
 
   attributeName: {
-    color: "#dce2ef",
-    fontSize: 13,
+    minWidth: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
 
   valueLeft: {
     color: "#6eb6ff",
-    fontWeight: 900,
     textAlign: "center",
+    fontWeight: 950,
   },
 
   valueRight: {
     color: "#9aff8f",
-    fontWeight: 900,
     textAlign: "center",
+    fontWeight: 950,
   },
 
   balanceTrack: {
     position: "relative",
-    height: 13,
+    height: 7,
     borderRadius: 999,
-    background: "#252b36",
     overflow: "hidden",
-    border: "1px solid #343b4a",
+    background: "#253149",
   },
 
   balanceCenterLine: {
     position: "absolute",
-    left: "50%",
     top: 0,
     bottom: 0,
+    left: "50%",
     width: 2,
     background: "#eef2ff",
     opacity: 0.75,
@@ -746,8 +754,8 @@ export const playerCompareStyles: Record<string, CSSProperties> = {
     borderRadius: 999,
     padding: "3px 6px",
     textAlign: "center",
-    fontWeight: 900,
-    fontSize: 12,
+    fontWeight: 950,
+    fontSize: 10,
   },
 
   diffRight: {
@@ -756,8 +764,8 @@ export const playerCompareStyles: Record<string, CSSProperties> = {
     borderRadius: 999,
     padding: "3px 6px",
     textAlign: "center",
-    fontWeight: 900,
-    fontSize: 12,
+    fontWeight: 950,
+    fontSize: 10,
   },
 
   diffNeutral: {
@@ -766,25 +774,23 @@ export const playerCompareStyles: Record<string, CSSProperties> = {
     borderRadius: 999,
     padding: "3px 6px",
     textAlign: "center",
-    fontWeight: 800,
-    fontSize: 12,
+    fontWeight: 850,
+    fontSize: 10,
   },
 
   sectionSummaryRow: {
     display: "grid",
-    gridTemplateColumns: "155px 58px minmax(180px, 1fr) 58px 58px",
+    gridTemplateColumns: "minmax(140px, 1fr) 42px minmax(120px, 1fr) 42px 58px",
     alignItems: "center",
-    gap: 8,
-    padding: "8px 8px",
-    marginTop: 5,
-    borderRadius: 6,
-    border: "1px solid #343b4a",
-    background: "#181d27",
+    gap: 7,
+    padding: "7px 8px",
+    borderTop: "1px solid #334155",
+    background: "rgba(30, 41, 59, 0.5)",
   },
 
   sectionSummaryName: {
     color: "#ffffff",
-    fontSize: 13,
-    fontWeight: 900,
+    fontSize: 11,
+    fontWeight: 950,
   },
 };

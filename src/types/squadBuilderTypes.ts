@@ -44,6 +44,7 @@ export type FormationSlot = {
   positionGroup: string;
   phase: TacticalView;
   roleId: string;
+  excludedRoleId?: string;
   footRequirement: FootRequirement;
 
   /** Opcjonalne pola legacy po prototypie dwóch faz. Zostają dla kompatybilności. */
@@ -61,7 +62,22 @@ export type FormationPreset = {
   name: string;
   slots: FormationSlot[];
 };
+export type SlotCandidateScoreBreakdown = {
+  roleScore: number;
+  formBoost: number;
+  overallAbilityBoost: number;
+  reliabilityBoost: number;
+  positionPenalty: number;
+  finalScore: number;
+};
 
+export type SlotCandidateRankingBreakdown = {
+  baseScore: number;
+  naturalSelectionAdjustment: number;
+  callUpPositionAdjustment: number;
+  tacticalTransitionAdjustment: number;
+  selectionScore: number;
+};
 export type SlotCandidate = {
   row: TableRow;
   key: string;
@@ -78,7 +94,11 @@ export type SlotCandidate = {
    * OU / Obecne umiejętności z importu FM, zakres zwykle 0–200.
    */
   overallAbility?: number | null;
-
+  campaignCallUps?: number;
+campaignPositionCallUps?: number;
+campaignMatches?: number;
+campaignMinutes?: number;
+campaignAvgRating?: number | null;
   positionPenalty?: number;
   positionScore?: number;
   mobilityScore?: number;
@@ -97,6 +117,14 @@ export type SlotCandidate = {
   isInjured?: boolean;
   availabilityLabel?: string;
     availabilityTone?: string;
+
+    scoreBreakdown?: SlotCandidateScoreBreakdown;
+rankingBreakdown?: SlotCandidateRankingBreakdown;
+selectionScore?: number;
+isUsedInOtherSlot?: boolean;
+usedInOtherSlotId?: string;
+usedInOtherSlotLabel?: string;
+potentialRankInSlot?: number;
 };
 
 export type Lineup = Record<string, SlotCandidate | null>;
@@ -111,13 +139,18 @@ export type SquadPlan = {
   withBall: TacticalLineup;
   withoutBall: TacticalLineup;
 };
-export type SquadBuilderScoreMode = "role-score" | "overall-ability";
-export type PlayerMark = "selected" | "rejected";
+export type SquadBuilderScoreMode =
+  | "role-score"
+  | "overall-ability"
+  | "campaign-callups";
+  export type PlayerMark = "selected" | "rejected";
 
 export type SquadBuilderProps = {
   rows: TableRow[];
+  playerMarks?: Record<string, PlayerMark>;
   getPlayerMark?: (row: TableRow) => PlayerMark | null;
   onSelectPlayer?: (row: TableRow, selectionPosition: string) => void;
   onClearCallUps?: () => void;
   selectedPlayersCount?: number;
+  selectedPositionByPlayerKey?: Record<string, string>;
 };

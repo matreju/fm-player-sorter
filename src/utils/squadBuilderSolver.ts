@@ -36,15 +36,45 @@ function sortCandidatesForSolver(candidates: SlotCandidate[]): SlotCandidate[] {
       return finalScoreDiff;
     }
 
-    return left.name.localeCompare(right.name, "pl");
+    const nameDiff = left.name.localeCompare(right.name, "pl");
+
+    if (nameDiff !== 0) {
+      return nameDiff;
+    }
+
+    return left.key.localeCompare(right.key, "pl");
   });
+}
+
+function isGoalkeeperSlot(slot: FormationSlot): boolean {
+  return slot.id === "GK" || slot.positionGroup === "Bramkarz";
 }
 
 export function solveSquad(
   slots: FormationSlot[],
   candidatesBySlot: Record<string, SlotCandidate[]>
 ): Record<string, SlotCandidate | null> {
+  const fixedResult: Record<string, SlotCandidate | null> = {};
+  const fixedUsed = new Set<string>();
+
+  for (const slot of slots) {
+    if (!isGoalkeeperSlot(slot)) {
+      continue;
+    }
+
+    const goalkeeperCandidate = sortCandidatesForSolver(
+      candidatesBySlot[slot.id] ?? []
+    ).find((candidate) => !fixedUsed.has(candidate.key));
+
+    fixedResult[slot.id] = goalkeeperCandidate ?? null;
+
+    if (goalkeeperCandidate) {
+      fixedUsed.add(goalkeeperCandidate.key);
+    }
+  }
+
   const freeSlots = slots
+    .filter((slot) => !isGoalkeeperSlot(slot))
     .map((slot, originalIndex) => {
       const candidates = sortCandidatesForSolver(
         candidatesBySlot[slot.id] ?? []
@@ -91,10 +121,21 @@ export function solveSquad(
     visibleScore: number,
     filledCount: number
   ) {
+    if (filledCount > bestFilledCount) {
+      bestFilledCount = filledCount;
+      bestSolveScore = solveScore;
+      bestVisibleScore = visibleScore;
+      bestResult = { ...currentResult };
+      return;
+    }
+
+    if (filledCount !== bestFilledCount) {
+      return;
+    }
+
     if (solveScore > bestSolveScore) {
       bestSolveScore = solveScore;
       bestVisibleScore = visibleScore;
-      bestFilledCount = filledCount;
       bestResult = { ...currentResult };
       return;
     }
@@ -103,14 +144,7 @@ export function solveSquad(
       return;
     }
 
-    if (filledCount > bestFilledCount) {
-      bestVisibleScore = visibleScore;
-      bestFilledCount = filledCount;
-      bestResult = { ...currentResult };
-      return;
-    }
-
-    if (filledCount === bestFilledCount && visibleScore > bestVisibleScore) {
+    if (visibleScore > bestVisibleScore) {
       bestVisibleScore = visibleScore;
       bestResult = { ...currentResult };
     }
@@ -131,7 +165,16 @@ export function solveSquad(
       return;
     }
 
-    if (solveScore + optimisticRemainingScores[index] < bestSolveScore) {
+    if (
+      filledCount + (freeSlots.length - index) < bestFilledCount
+    ) {
+      return;
+    }
+
+    if (
+      filledCount === bestFilledCount &&
+      solveScore + optimisticRemainingScores[index] < bestSolveScore
+    ) {
       return;
     }
 
@@ -177,7 +220,25 @@ export function solveSquad(
     delete currentResult[slot.id];
   }
 
-  search(0, {}, new Set<string>(), 0, 0, 0);
+  const initialFilledCount = Array.from(fixedUsed).length;
+  const initialSolveScore = Object.values(fixedResult).reduce(
+    (sum, candidate) =>
+      candidate ? sum + getCandidateSolveScore(candidate) : sum,
+    0
+  );
+  const initialVisibleScore = Object.values(fixedResult).reduce(
+    (sum, candidate) => (candidate ? sum + candidate.finalScore : sum),
+    0
+  );
+
+  search(
+    0,
+    { ...fixedResult },
+    new Set<string>(fixedUsed),
+    initialSolveScore,
+    initialVisibleScore,
+    initialFilledCount
+  );
 
   const result: Record<string, SlotCandidate | null> = { ...bestResult };
 

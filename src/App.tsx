@@ -14,6 +14,15 @@ import { getPlayerRoleAttributeInsights } from "./utils/playerRoleInsights";
 import { NationalCoreDrawer } from "./components/national-core";
 import { PlayerCardGrid } from "./components/player-cards";
 import { AppSideDock } from "./components/app-shell";
+import { ImportChangesDrawer } from "./components/import-changes";
+import {
+  buildImportChangeReport,
+  clearStoredImportChangeReport,
+  loadStoredImportChangeReport,
+  saveStoredImportChangeReport,
+  type ImportChangeReport,
+} from "./utils/importChangeReport";
+import { openAppModule } from "./utils/moduleDock";
 import {
   ROLE_DEFINITIONS,
   getRolePhaseLabel,
@@ -70,7 +79,11 @@ import {
   insertRoleAnalysisColumns,
 } from "./constants/appColumns";
 import { normalizeTextForSearch } from "./utils/textSearch";
-import type { FormationSlot, TacticalView } from "./types/squadBuilderTypes";
+import type {
+  FormationSlot,
+  SlotCandidate,
+  TacticalView,
+} from "./types/squadBuilderTypes";
 import { scorePlayerForSlot } from "./utils/squadBuilderScoring";
 
 type PlayerViewMode = "table" | "cards";
@@ -118,7 +131,9 @@ function makeTableAnalysisSlot(
     footRequirement: "any",
   };
 }
-
+function getCandidateRoleScore(candidate: SlotCandidate): number {
+  return candidate.roleScore ?? candidate.roleResult.score ?? candidate.finalScore;
+}
 function getBestOverallTableCandidate(row: TableRow, phase: TacticalView) {
   let bestCandidate: ReturnType<typeof scorePlayerForSlot> = null;
 
@@ -132,9 +147,12 @@ function getBestOverallTableCandidate(row: TableRow, phase: TacticalView) {
       continue;
     }
 
-    if (!bestCandidate || candidate.finalScore > bestCandidate.finalScore) {
-      bestCandidate = candidate;
-    }
+    if (
+  !bestCandidate ||
+  getCandidateRoleScore(candidate) > getCandidateRoleScore(bestCandidate)
+) {
+  bestCandidate = candidate;
+}
   }
 
   return bestCandidate;
@@ -143,6 +161,8 @@ export default function App() {
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<TableRow[]>([]);
   const [error, setError] = useState("");
+  const [importChangeReport, setImportChangeReport] =
+  useState<ImportChangeReport | null>(null);
   const [fileName, setFileName] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -217,17 +237,21 @@ const availableAnalysisRoles = useMemo(() => {
   });
 }, [analysisPositionGroup, analysisPhase]);
 
-  useEffect(() => {
-    const saved = loadStoredTable();
+useEffect(() => {
+  const saved = loadStoredTable();
 
-    if (!saved) {
-      return;
-    }
-
+  if (saved) {
     setHeaders(saved.headers);
     setRows(saved.rows);
     setFileName(saved.fileName || "zapisany plik");
-  }, []);
+  }
+
+  const savedImportChangeReport = loadStoredImportChangeReport();
+
+  if (savedImportChangeReport) {
+    setImportChangeReport(savedImportChangeReport);
+  }
+}, []);
 
   const visibleHeaders = useMemo(() => {
     return headers.filter((header) => !HIDDEN_COLUMNS.has(header));
@@ -319,8 +343,8 @@ const scoredRows = useMemo<TableRow[]>(() => {
       ...row,
 
       [ROLE_SCORE_COLUMN]: selectedCandidate
-        ? formatRoleScore(selectedCandidate.finalScore)
-        : "-",
+  ? formatRoleScore(getCandidateRoleScore(selectedCandidate))
+  : "-",
 
       [CLUB_FORM_COLUMN]: formatClubFormImpact(clubFormImpact),
 
@@ -358,8 +382,8 @@ const scoredRows = useMemo<TableRow[]>(() => {
         : "-",
 
       [OVERALL_SCORE_COLUMN]: bestOverallCandidate
-        ? formatRoleScore(bestOverallCandidate.finalScore)
-        : "-",
+  ? formatRoleScore(getCandidateRoleScore(bestOverallCandidate))
+  : "-",
     };
   });
 }, [
@@ -536,14 +560,40 @@ const parsed = lowerCaseFileName.endsWith(".csv")
   ? parseCsvTable(text)
   : parseHtmlTable(text);
 
-      setHeaders(parsed.headers);
-      setRows(parsed.rows);
+const previousRows = rows;
+const previousFileName = fileName || "poprzedni import";
 
-      saveStoredTable({
-        headers: parsed.headers,
-        rows: parsed.rows,
-        fileName: file.name,
-      });
+const nextImportChangeReport =
+  previousRows.length > 0
+    ? buildImportChangeReport({
+        previousRows,
+        currentRows: parsed.rows,
+        previousFileName,
+        currentFileName: file.name,
+      })
+    : null;
+
+setHeaders(parsed.headers);
+setRows(parsed.rows);
+
+saveStoredTable({
+  headers: parsed.headers,
+  rows: parsed.rows,
+  fileName: file.name,
+});
+
+if (nextImportChangeReport) {
+  setImportChangeReport(nextImportChangeReport);
+  saveStoredImportChangeReport(nextImportChangeReport);
+
+  if (
+    nextImportChangeReport.newCount > 0 ||
+    nextImportChangeReport.removedCount > 0 ||
+    nextImportChangeReport.changedCount > 0
+  ) {
+    openAppModule("changes");
+  }
+}
     } catch (err) {
       setHeaders([]);
       setRows([]);
@@ -582,9 +632,12 @@ function handleComparePlayer(playerKey: string) {
 
   function handleClearData() {
     clearStoredTable();
+  clearStoredImportChangeReport();
 
     setHeaders([]);
     setRows([]);
+      setImportChangeReport(null);
+
     setFileName("");
     setSortConfig(null);
     setSearchTerm("");
@@ -928,6 +981,8 @@ return (
 {rows.length > 0 && (
 <SquadBuilder
   rows={rows}
+  playerMarks={playerMarks}
+  selectedPositionByPlayerKey={playerSelectionPositions}
   getPlayerMark={getPlayerMark}
   selectedPlayersCount={selectedPlayersCount}
   onClearCallUps={clearPlayerSelection}
@@ -960,6 +1015,13 @@ return (
   getPlayerSelectionPosition={getPlayerSelectionPosition}
 />
 <NationalCoreDrawer rows={rows} />
+<ImportChangesDrawer
+  report={importChangeReport}
+  onClear={() => {
+    clearStoredImportChangeReport();
+    setImportChangeReport(null);
+  }}
+/>
     <SquadDepthDrawer
       selectedPlayersCount={selectedPlayersCount}
       selectedPlayersWithPositionCount={selectedPlayersWithPositionCount}

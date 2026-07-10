@@ -38,8 +38,8 @@ export function SquadBuilderPlanSuggestionsModal({
             </h3>
 
             <div style={styles.planModalSubtitle}>
-              Generator szuka najlepszej formacji przy piłce, a potem ustawia tę
-              samą XI bez piłki możliwie najlogiczniej.
+              Generator pokazuje różne formacje przy piłce, a dla każdej dobiera
+              najlepszy wariant bez piłki dla tej samej XI.
             </div>
           </div>
 

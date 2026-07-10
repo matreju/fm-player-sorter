@@ -657,13 +657,676 @@ const [showFullAttributes, setShowFullAttributes] = useState(false);
   }
 
   if (!leftPlayer || !rightPlayer) {
-    return (
-      <section style={styles.wrapper}>
-        <h2 style={styles.title}>Porównanie zawodników</h2>
-        <div style={compareTypeInfoStyle}>Brakuje zawodników do porównania.</div>
-      </section>
-    );
-  }
+  return (
+    <section style={styles.wrapper}>
+      <div style={styles.compareHeader}>
+        <div>
+          <h2 style={styles.title}>Porównanie zawodników</h2>
+
+          <div style={styles.headerSubtitle}>
+            Szybki raport H2H: wybór roli, profil sekcji, największe różnice,
+            radary i opcjonalny Moneyball.
+          </div>
+        </div>
+
+        <div style={styles.compareActions}>
+          <AppButton
+            type="button"
+            variant="secondary"
+            size="compact"
+            onClick={swapComparedPlayers}
+            disabled={!leftPlayer || !rightPlayer}
+          >
+            Zamień
+          </AppButton>
+
+          <AppButton
+            type="button"
+            variant="neutral"
+            size="compact"
+            onClick={resetComparison}
+          >
+            Reset
+          </AppButton>
+        </div>
+      </div>
+
+      <div style={styles.playerSelectors}>
+        <AppSelectField
+          label="Zawodnik po lewej"
+          value={leftPlayerIndex}
+          options={playerOptions.map((option) => ({
+            value: String(option.index),
+            label: option.label,
+          }))}
+          onChange={setLeftPlayerIndex}
+          fieldStyle={styles.playerSelectField}
+          labelStyle={styles.playerSelectLabel}
+          selectStyle={styles.select}
+        />
+
+        <AppSelectField
+          label="Zawodnik po prawej"
+          value={rightPlayerIndex}
+          options={rightPlayerOptions.map((option) => ({
+            value: String(option.index),
+            label: option.label,
+          }))}
+          onChange={setRightPlayerIndex}
+          fieldStyle={styles.playerSelectField}
+          labelStyle={styles.playerSelectLabel}
+          selectStyle={styles.select}
+        />
+      </div>
+
+      <div style={compareTypeInfoStyle}>
+        Porównujesz: <strong>{getPlayerTypeLabel(leftPlayer)}</strong>. Lista po
+        prawej pokazuje tylko zgodnych zawodników. Opcje są sortowane po
+        pozycjach.
+      </div>
+
+      <div style={styles.compareRoleDock}>
+        <AppSelectField
+          label="Pozycja roli"
+          value={selectedPositionGroup}
+          options={positionGroupOptions.map((positionGroup) => ({
+            value: positionGroup,
+            label: positionGroup,
+          }))}
+          onChange={(value) => {
+            setSelectedPositionGroup(value);
+            setSelectedRoleId("none");
+          }}
+          fieldStyle={styles.roleControlField}
+          labelStyle={styles.playerSelectLabel}
+          selectStyle={styles.select}
+        />
+
+        <AppSelectField
+          label="Faza"
+          value={selectedPhase}
+          options={COMPARE_PHASE_OPTIONS}
+          onChange={(value) => {
+            setSelectedPhase(value as RolePhase);
+            setSelectedRoleId("none");
+          }}
+          fieldStyle={styles.roleControlField}
+          labelStyle={styles.playerSelectLabel}
+          selectStyle={styles.select}
+        />
+
+        <AppSelectField
+          label="Rola"
+          value={selectedRoleId}
+          options={[
+            { value: "none", label: "Nie oceniaj roli" },
+            ...availableRoles.map((role) => ({
+              value: role.id,
+              label: role.name,
+            })),
+          ]}
+          onChange={setSelectedRoleId}
+          fieldStyle={styles.roleControlFieldWide}
+          labelStyle={styles.playerSelectLabel}
+          selectStyle={styles.select}
+        />
+
+        <div style={styles.compareRoleDockLegend}>
+          <span>
+            Analiza roli:{" "}
+            <strong style={styles.phaseInfo}>
+              {selectedRole
+                ? `${selectedRole.name} · ${getRolePhaseLabel(selectedRole.phase)}`
+                : "wybierz konkretną rolę, żeby porównać dopasowanie"}
+            </strong>
+          </span>
+        </div>
+      </div>
+
+      <div style={styles.playerCards}>
+        <article style={styles.playerCard}>
+          <div style={styles.playerCardInfoColumn}>
+            <div style={styles.playerName}>{getPlayerName(leftPlayer)}</div>
+            <div style={styles.playerInfo}>{getPlayerInfo(leftPlayer)}</div>
+            <div style={styles.heightInfo}>
+              Wzrost: {getPlayerHeight(leftPlayer)}
+            </div>
+
+            <div style={styles.footInfo}>
+              <span style={getFootStyle(getPlayerFoot(leftPlayer, "Lewa noga"))}>
+                Lewa: {getPlayerFoot(leftPlayer, "Lewa noga")}
+              </span>
+
+              <span style={getFootStyle(getPlayerFoot(leftPlayer, "Prawa noga"))}>
+                Prawa: {getPlayerFoot(leftPlayer, "Prawa noga")}
+              </span>
+            </div>
+
+            <div style={styles.roleScorePill}>
+              Rola:{" "}
+              <strong>
+                {selectedRole ? `${formatNumber(leftRoleScore)} / 100` : "—"}
+              </strong>
+            </div>
+
+            {selectedRole && (
+              <>
+                <div style={styles.roleScoreRange}>
+                  Zakres: {formatRoleScoreRange(leftRoleScoreResult)}
+                </div>
+
+                <div style={styles.roleScoreUncertainty}>
+                  Niepewność: {formatRoleUncertainty(leftRoleScoreResult)}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div style={styles.compareCompactRadarShell}>
+            <div style={styles.compareMiniRadar}>
+              <PlayerAttributeRadar
+                player={leftPlayer}
+                showHeader={false}
+                showAxisList={false}
+                compact
+              />
+            </div>
+          </div>
+        </article>
+
+        <div style={styles.vsBox}>VS</div>
+
+        <article style={styles.playerCard}>
+          <div style={styles.playerCardInfoColumn}>
+            <div style={styles.playerName}>{getPlayerName(rightPlayer)}</div>
+            <div style={styles.playerInfo}>{getPlayerInfo(rightPlayer)}</div>
+            <div style={styles.heightInfo}>
+              Wzrost: {getPlayerHeight(rightPlayer)}
+            </div>
+
+            <div style={styles.footInfo}>
+              <span style={getFootStyle(getPlayerFoot(rightPlayer, "Lewa noga"))}>
+                Lewa: {getPlayerFoot(rightPlayer, "Lewa noga")}
+              </span>
+
+              <span style={getFootStyle(getPlayerFoot(rightPlayer, "Prawa noga"))}>
+                Prawa: {getPlayerFoot(rightPlayer, "Prawa noga")}
+              </span>
+            </div>
+
+            <div style={styles.roleScorePill}>
+              Rola:{" "}
+              <strong>
+                {selectedRole ? `${formatNumber(rightRoleScore)} / 100` : "—"}
+              </strong>
+            </div>
+
+            {selectedRole && (
+              <>
+                <div style={styles.roleScoreRange}>
+                  Zakres: {formatRoleScoreRange(rightRoleScoreResult)}
+                </div>
+
+                <div style={styles.roleScoreUncertainty}>
+                  Niepewność: {formatRoleUncertainty(rightRoleScoreResult)}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div style={styles.compareCompactRadarShell}>
+            <div style={styles.compareMiniRadar}>
+              <PlayerAttributeRadar
+                player={rightPlayer}
+                showHeader={false}
+                showAxisList={false}
+                compact
+              />
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <div style={styles.quickCompareGrid}>
+        <div style={styles.quickCompareCard}>
+          <div style={styles.quickCompareLabel}>Dopasowanie do roli</div>
+          <div style={styles.quickCompareWinner}>
+            {selectedRole
+              ? getWinnerLabel(leftPlayer, rightPlayer, leftRoleScore, rightRoleScore)
+              : "Wybierz rolę"}
+          </div>
+
+          <div style={styles.quickCompareValues}>
+            <span>{formatNumber(leftRoleScore)}</span>
+            <span>{formatNumber(rightRoleScore)}</span>
+          </div>
+
+          <div style={styles.quickCompareBar}>
+            <BalanceBar
+              leftValue={leftRoleScore}
+              rightValue={rightRoleScore}
+              scaleMaxDiff={100}
+            />
+          </div>
+        </div>
+
+        <div style={styles.quickCompareCard}>
+          <div style={styles.quickCompareLabel}>
+            {isGoalkeeper(leftPlayer) ? "Bramkarsko" : "Technicznie"}
+          </div>
+          <div style={styles.quickCompareWinner}>
+            {getWinnerLabel(
+              leftPlayer,
+              rightPlayer,
+              technicalComparison?.leftAverage ?? null,
+              technicalComparison?.rightAverage ?? null
+            )}
+          </div>
+
+          <div style={styles.quickCompareValues}>
+            <span>{formatNumber(technicalComparison?.leftAverage ?? null)}</span>
+            <span>{formatNumber(technicalComparison?.rightAverage ?? null)}</span>
+          </div>
+
+          <div style={styles.quickCompareBar}>
+            <BalanceBar
+              leftValue={technicalComparison?.leftAverage ?? null}
+              rightValue={technicalComparison?.rightAverage ?? null}
+            />
+          </div>
+        </div>
+
+        <div style={styles.quickCompareCard}>
+          <div style={styles.quickCompareLabel}>Mentalnie</div>
+          <div style={styles.quickCompareWinner}>
+            {getWinnerLabel(
+              leftPlayer,
+              rightPlayer,
+              mentalComparison?.leftAverage ?? null,
+              mentalComparison?.rightAverage ?? null
+            )}
+          </div>
+
+          <div style={styles.quickCompareValues}>
+            <span>{formatNumber(mentalComparison?.leftAverage ?? null)}</span>
+            <span>{formatNumber(mentalComparison?.rightAverage ?? null)}</span>
+          </div>
+
+          <div style={styles.quickCompareBar}>
+            <BalanceBar
+              leftValue={mentalComparison?.leftAverage ?? null}
+              rightValue={mentalComparison?.rightAverage ?? null}
+            />
+          </div>
+        </div>
+
+        <div style={styles.quickCompareCard}>
+          <div style={styles.quickCompareLabel}>Fizycznie</div>
+          <div style={styles.quickCompareWinner}>
+            {getWinnerLabel(
+              leftPlayer,
+              rightPlayer,
+              physicalComparison?.leftAverage ?? null,
+              physicalComparison?.rightAverage ?? null
+            )}
+          </div>
+
+          <div style={styles.quickCompareValues}>
+            <span>{formatNumber(physicalComparison?.leftAverage ?? null)}</span>
+            <span>{formatNumber(physicalComparison?.rightAverage ?? null)}</span>
+          </div>
+
+          <div style={styles.quickCompareBar}>
+            <BalanceBar
+              leftValue={physicalComparison?.leftAverage ?? null}
+              rightValue={physicalComparison?.rightAverage ?? null}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div style={styles.compareSectionTogglePanel}>
+        <div style={styles.compareSectionToggleHeader}>
+          <div>
+            <strong style={styles.compareSectionToggleTitle}>
+              Moneyball H2H
+            </strong>
+
+            <div style={styles.compareSectionToggleText}>
+              Porównanie statystyk klubowych. Przydatne, ale ciężkie, więc
+              domyślnie zwinięte.
+            </div>
+          </div>
+
+          <button
+            type="button"
+            style={{
+              ...styles.compareSectionToggleButton,
+              ...(showMoneyballH2H
+                ? styles.compareSectionToggleButtonActive
+                : {}),
+            }}
+            onClick={() => setShowMoneyballH2H((current) => !current)}
+          >
+            {showMoneyballH2H ? "Ukryj Moneyball" : "Pokaż Moneyball"}
+          </button>
+        </div>
+
+        {showMoneyballH2H && (
+          <MoneyballCompare
+            leftPlayer={leftPlayer}
+            rightPlayer={rightPlayer}
+            rows={rows}
+          />
+        )}
+      </div>
+
+      <div style={styles.compareSectionTogglePanel}>
+        <div style={styles.compareSectionToggleHeader}>
+          <div>
+            <strong style={styles.compareSectionToggleTitle}>
+              Pełne atrybuty
+            </strong>
+
+            <div style={styles.compareSectionToggleText}>
+              Szczegółowa tabela wszystkich atrybutów. Domyślnie schowana, bo
+              jest długa.
+            </div>
+          </div>
+
+          <button
+            type="button"
+            style={{
+              ...styles.compareSectionToggleButton,
+              ...(showFullAttributes
+                ? styles.compareSectionToggleButtonActive
+                : {}),
+            }}
+            onClick={() => setShowFullAttributes((current) => !current)}
+          >
+            {showFullAttributes ? "Ukryj atrybuty" : "Pokaż pełne atrybuty"}
+          </button>
+        </div>
+      </div>
+
+      <div
+        style={
+          showFullAttributes ? styles.compareBody : styles.compareBodySummaryOnly
+        }
+      >
+        <div style={styles.compareLeftPanel}>
+          <div style={styles.compareMiniBox}>
+            <h3 style={styles.compareBoxTitle}>Profil sekcji</h3>
+
+            <div style={styles.sectionVsList}>
+              {sectionComparisons.map((section) => {
+                const leftValue = section.leftAverage ?? 0;
+                const rightValue = section.rightAverage ?? 0;
+                const difference = leftValue - rightValue;
+
+                const winner =
+                  Math.abs(difference) < 0.1
+                    ? "Remis"
+                    : difference > 0
+                      ? getPlayerName(leftPlayer)
+                      : getPlayerName(rightPlayer);
+
+                return (
+                  <div key={section.name} style={styles.sectionVsCard}>
+                    <div style={styles.sectionVsTop}>
+                      <strong>{section.name}</strong>
+                      <span>{winner}</span>
+                    </div>
+
+                    <div style={styles.sectionVsMiddle}>
+                      <div style={styles.sectionVsPlayer}>
+                        <span>{getPlayerName(leftPlayer)}</span>
+                        <strong style={styles.leftValueBig}>
+                          {formatNumber(section.leftAverage)}
+                        </strong>
+                      </div>
+
+                      <div
+                        style={{
+                          ...styles.sectionVsDiff,
+                          ...(difference > 0
+                            ? styles.sectionVsDiffLeft
+                            : difference < 0
+                              ? styles.sectionVsDiffRight
+                              : styles.sectionVsDiffNeutral),
+                        }}
+                      >
+                        {Math.abs(difference) < 0.1
+                          ? "0.0"
+                          : `+${formatNumber(Math.abs(difference))}`}
+                      </div>
+
+                      <div style={styles.sectionVsPlayerRight}>
+                        <span>{getPlayerName(rightPlayer)}</span>
+                        <strong style={styles.rightValueBig}>
+                          {formatNumber(section.rightAverage)}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={styles.compareMiniBox}>
+            <h3 style={styles.compareBoxTitle}>Największe różnice</h3>
+
+            <div style={styles.differenceCardsGrid}>
+              {biggestAttributeDifferences.slice(0, 4).map((item) => {
+                const leftBetter = item.leftValue > item.rightValue;
+                const betterPlayer = leftBetter
+                  ? getPlayerName(leftPlayer)
+                  : getPlayerName(rightPlayer);
+                const difference = Math.abs(item.leftValue - item.rightValue);
+
+                return (
+                  <div key={item.attribute} style={styles.differenceBigCard}>
+                    <div style={styles.differenceCategoryPill}>
+                      {item.groupName}
+                    </div>
+
+                    <div style={styles.differenceAttributeName}>
+                      {item.attribute}
+                    </div>
+
+                    <div style={styles.differencePlayersRow}>
+                      <div style={styles.differencePlayerSide}>
+                        <span>{getPlayerName(leftPlayer)}</span>
+                        <strong style={styles.leftValueBig}>
+                          {item.leftValue}
+                        </strong>
+                      </div>
+
+                      <div
+                        style={{
+                          ...styles.differenceDelta,
+                          ...(leftBetter
+                            ? styles.differenceDeltaLeft
+                            : styles.differenceDeltaRight),
+                        }}
+                      >
+                        +{difference}
+                      </div>
+
+                      <div style={styles.differencePlayerSideRight}>
+                        <span>{getPlayerName(rightPlayer)}</span>
+                        <strong style={styles.rightValueBig}>
+                          {item.rightValue}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div style={styles.differenceWinnerText}>
+                      Przewaga: <strong>{betterPlayer}</strong>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={styles.compareMiniBox}>
+            <h3 style={styles.compareBoxTitle}>Wniosek</h3>
+
+            <div style={styles.verdictCompactList}>
+              <div style={styles.verdictRow}>
+                <span>Dopasowanie do roli</span>
+                <strong>
+                  {selectedRole
+                    ? getWinnerLabel(
+                        leftPlayer,
+                        rightPlayer,
+                        leftRoleScore,
+                        rightRoleScore
+                      )
+                    : "Wybierz rolę"}
+                </strong>
+              </div>
+
+              <div style={styles.verdictRow}>
+                <span>
+                  {isGoalkeeper(leftPlayer) ? "Bramkarsko" : "Technicznie"}
+                </span>
+                <strong>
+                  {getWinnerLabel(
+                    leftPlayer,
+                    rightPlayer,
+                    technicalComparison?.leftAverage ?? null,
+                    technicalComparison?.rightAverage ?? null
+                  )}
+                </strong>
+              </div>
+
+              <div style={styles.verdictRow}>
+                <span>Mentalnie</span>
+                <strong>
+                  {getWinnerLabel(
+                    leftPlayer,
+                    rightPlayer,
+                    mentalComparison?.leftAverage ?? null,
+                    mentalComparison?.rightAverage ?? null
+                  )}
+                </strong>
+              </div>
+
+              <div style={styles.verdictRow}>
+                <span>Fizycznie</span>
+                <strong>
+                  {getWinnerLabel(
+                    leftPlayer,
+                    rightPlayer,
+                    physicalComparison?.leftAverage ?? null,
+                    physicalComparison?.rightAverage ?? null
+                  )}
+                </strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {showFullAttributes && (
+          <div style={styles.fullAttributesPanel}>
+            <div style={styles.fullAttributesHeader}>
+              <h3 style={styles.compareBoxTitle}>Pełne atrybuty</h3>
+
+              <div style={styles.fullAttributesLegend}>
+                <span style={styles.leftLegendDot} /> {getPlayerName(leftPlayer)}
+                <span style={styles.rightLegendDot} />{" "}
+                {getPlayerName(rightPlayer)}
+              </div>
+            </div>
+
+            <div style={styles.fullAttributesScroll}>
+              {attributeGroups.map((group) => {
+                const leftAverage = averageAttributes(
+                  leftPlayer,
+                  group.attributes
+                );
+                const rightAverage = averageAttributes(
+                  rightPlayer,
+                  group.attributes
+                );
+
+                return (
+                  <div key={group.name} style={styles.groupBox}>
+                    <h3 style={styles.groupTitle}>{group.name}</h3>
+
+                    {group.attributes.map((attribute) => {
+                      const leftValue = getNumericValue(leftPlayer, attribute);
+                      const rightValue = getNumericValue(rightPlayer, attribute);
+                      const roleImportance = getRoleAttributeImportance(
+                        selectedRole,
+                        attribute
+                      );
+
+                      return (
+                        <div
+                          key={attribute}
+                          style={getAttributeRowStyle(roleImportance)}
+                        >
+                          <div style={styles.attributeName}>{attribute}</div>
+
+                          <div style={styles.valueLeft}>
+                            {getDisplayValue(leftPlayer, attribute)}
+                          </div>
+
+                          <BalanceBar
+                            leftValue={leftValue}
+                            rightValue={rightValue}
+                          />
+
+                          <div style={styles.valueRight}>
+                            {getDisplayValue(rightPlayer, attribute)}
+                          </div>
+
+                          <div style={getDiffStyle(leftValue, rightValue)}>
+                            {getDiffText(leftValue, rightValue)}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    <div style={styles.sectionSummaryRow}>
+                      <div style={styles.sectionSummaryName}>
+                        Średnia sekcji
+                      </div>
+
+                      <div style={styles.valueLeft}>
+                        {formatNumber(leftAverage)}
+                      </div>
+
+                      <BalanceBar
+                        leftValue={leftAverage}
+                        rightValue={rightAverage}
+                        scaleMaxDiff={20}
+                      />
+
+                      <div style={styles.valueRight}>
+                        {formatNumber(rightAverage)}
+                      </div>
+
+                      <div style={getDiffStyle(leftAverage, rightAverage)}>
+                        {leftAverage !== null && rightAverage !== null
+                          ? getDiffText(leftAverage, rightAverage)
+                          : "—"}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
 
   return (
     <section style={styles.wrapper}>

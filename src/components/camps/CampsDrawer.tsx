@@ -8,7 +8,7 @@ import type {
   CampPlayerSnapshot,
   CampType,
 } from "../../types/camp";
-
+import { useModuleDrawer } from "../../hooks/useModuleDrawer";
 import type { TableRow } from "../../types/table";
 import { loadCamps, saveCamps } from "../../utils/campStorage";
 import { loadCampaigns, saveCampaigns } from "../../utils/campaignStorage";
@@ -45,14 +45,16 @@ import {
   createPlayerSnapshot,
   getDefaultCampName,
   hasSharedIdentity,
+  isCampPlayerActive,
   isValidCampPlayer,
   makeId,
   migrateCampsToUniqueIds,
 } from "../../utils/campCore";
 
 type PlayerMark = "selected" | "rejected";
-const moduleDockEventName = "fm-player-sorter-open-module";
-
+function getDefaultMatchTypeForCamp(campType: CampType): CampMatchType {
+  return campType;
+}
 function getPlayerSurnameSortKey(player: CampPlayerSnapshot): string {
   const name = player.name.trim();
   const parts = name.split(/\s+/);
@@ -131,22 +133,7 @@ export function CampsDrawer({
   getPlayerMark,
   getPlayerSelectionPosition,
 }: CampsDrawerProps) {
-    const [isOpen, setIsOpen] = useState(false);
-    useEffect(() => {
-  function handleOpenModule(event: Event) {
-    const module = (event as CustomEvent<{ module?: string }>).detail?.module;
-
-    if (module === "camps") {
-      setIsOpen(true);
-    }
-  }
-
-  window.addEventListener(moduleDockEventName, handleOpenModule);
-
-  return () => {
-    window.removeEventListener(moduleDockEventName, handleOpenModule);
-  };
-}, []);
+  const { isOpen, close } = useModuleDrawer("camps");
   const [camps, setCamps] = useState<Camp[]>(() => loadCamps());
   const [campaigns, setCampaigns] = useState<Campaign[]>(() => loadCampaigns());
   const [activeCampId, setActiveCampId] = useState<string>("");
@@ -289,6 +276,13 @@ const activeCamp = useMemo(() => {
 
 const activeMatch =
   activeCamp?.matches.find((match) => match.id === activeMatchId) ?? null;
+  useEffect(() => {
+  if (!activeCamp) {
+    return;
+  }
+
+  setMatchType(getDefaultMatchTypeForCamp(activeCamp.type));
+}, [activeCamp?.id, activeCamp?.type]);
   const activeCampSummaries = useMemo(() => {
   if (!activeCamp) {
     return [];
@@ -591,6 +585,10 @@ function assignActiveCampToCampaign(nextCampaignId: string) {
     campaignId: nextCampaignId || undefined,
   }));
 }
+function handleCampTypeChange(nextCampType: CampType) {
+  setCampType(nextCampType);
+  setMatchType(getDefaultMatchTypeForCamp(nextCampType));
+}
   function createCampFromSelectedPlayers() {
     if (selectedPlayers.length === 0) {
       alert("Najpierw powołaj zawodników w tabeli.");
@@ -611,9 +609,10 @@ function assignActiveCampToCampaign(nextCampaignId: string) {
     setCamps((current) => [nextCamp, ...current]);
 setActiveCampId(nextCamp.id);
 setActiveMatchId("");
+setMatchType(getDefaultMatchTypeForCamp(nextCamp.type));
 setCampName(getDefaultCampName());
-    setDateFrom("");
-    setDateTo("");
+setDateFrom("");
+setDateTo("");
   }
 
   function deleteCamp(campId: string) {
@@ -652,24 +651,47 @@ function addCurrentSelectedPlayersToActiveCamp() {
   }
 
 const currentSnapshots = selectedPlayers.filter(isValidCampPlayer);
+const playersToAdd = currentSnapshots.filter((currentPlayer) => {
+  return !activeCamp.players.some((campPlayer) =>
+    hasSharedIdentity(currentPlayer, campPlayer)
+  );
+});
 
-  const playersToAdd = currentSnapshots.filter((currentPlayer) => {
-    return !activeCamp.players.some((campPlayer) =>
-      hasSharedIdentity(currentPlayer, campPlayer)
-    );
-  });
+const releasedPlayersToRestore = currentSnapshots.filter((currentPlayer) => {
+  return activeCamp.players.some(
+    (campPlayer) =>
+      hasSharedIdentity(currentPlayer, campPlayer) &&
+      campPlayer.status === "released"
+  );
+});
 
-  if (playersToAdd.length === 0) {
-    alert(
-      `Brak nowych powołanych do dodania.\n\nAktualnie powołani w tabeli: ${currentSnapshots.length}\nW tym zgrupowaniu: ${activeCamp.players.length}`
-    );
-    return;
-  }
+if (playersToAdd.length === 0 && releasedPlayersToRestore.length === 0) {
+  alert(
+    `Brak nowych powołanych do dodania.\n\nAktualnie powołani w tabeli: ${currentSnapshots.length}\nW tym zgrupowaniu: ${activeCamp.players.length}`
+  );
+  return;
+}
 
   updateCamp(activeCamp.id, (camp) => ({
     ...camp,
-    players: [...camp.players, ...playersToAdd],
-    matches: camp.matches.map((match) => {
+players: [
+  ...camp.players.map((campPlayer) => {
+    const shouldRestore = releasedPlayersToRestore.some((currentPlayer) =>
+      hasSharedIdentity(currentPlayer, campPlayer)
+    );
+
+    if (!shouldRestore) {
+      return campPlayer;
+    }
+
+    return {
+      ...campPlayer,
+      status: "active" as const,
+      releasedAt: undefined,
+    };
+  }),
+  ...playersToAdd,
+],    matches: camp.matches.map((match) => {
       const appearanceKeys = new Set(
         (match.appearances ?? []).map((appearance) => appearance.playerKey)
       );
@@ -686,11 +708,9 @@ const currentSnapshots = selectedPlayers.filter(isValidCampPlayer);
     }),
   }));
 
-  alert(
-    `Dodano nowych zawodników: ${playersToAdd.length}\n\n${playersToAdd
-      .map((player) => player.name)
-      .join(", ")}`
-  );
+alert(
+  `Dodano nowych zawodników: ${playersToAdd.length}\nPrzywrócono do aktywnej kadry: ${releasedPlayersToRestore.length}`
+);
 }
 function removePlayerFromActiveCamp(playerKey: string) {
   if (!activeCamp) {
@@ -703,10 +723,9 @@ function removePlayerFromActiveCamp(playerKey: string) {
     return;
   }
 
-  const confirmed = confirm(
-    `Usunąć ze zgrupowania zawodnika: ${player.name}?\n\nJeśli miał wpisane występy w meczach, one też zostaną usunięte.`
-  );
-
+const confirmed = confirm(
+  `Usunąć ze zgrupowania zawodnika: ${player.name}?\n\nTo jest techniczne usunięcie błędnego powołania. Jeśli zawodnik był realnie na zgrupowaniu, użyj „Odeślij z kadry”, żeby zachować historię i statystyki.\n\nPo usunięciu jego występy z meczów też zostaną skasowane.`
+);
   if (!confirmed) {
     return;
   }
@@ -722,7 +741,61 @@ function removePlayerFromActiveCamp(playerKey: string) {
     })),
   }));
 }
+function releasePlayerFromActiveCamp(playerKey: string) {
+  if (!activeCamp) {
+    return;
+  }
 
+  const player = activeCamp.players.find((item) => item.key === playerKey);
+
+  if (!player) {
+    return;
+  }
+
+  const confirmed = confirm(
+    `Odesłać z aktywnej kadry: ${player.name}?\n\nZawodnik zostanie w historii zgrupowania i zachowa dotychczasowe występy/statystyki. Nie będzie domyślnie dodawany do kolejnych meczów.`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  updateCamp(activeCamp.id, (camp) => ({
+    ...camp,
+    players: camp.players.map((item) => {
+      if (item.key !== playerKey) {
+        return item;
+      }
+
+      return {
+        ...item,
+        status: "released",
+        releasedAt: new Date().toISOString(),
+      };
+    }),
+  }));
+}
+
+function restorePlayerToActiveCamp(playerKey: string) {
+  if (!activeCamp) {
+    return;
+  }
+
+  updateCamp(activeCamp.id, (camp) => ({
+    ...camp,
+    players: camp.players.map((item) => {
+      if (item.key !== playerKey) {
+        return item;
+      }
+
+      return {
+        ...item,
+        status: "active",
+        releasedAt: undefined,
+      };
+    }),
+  }));
+}
 function createMatchForActiveCamp() {
   if (!activeCamp) {
     return;
@@ -733,22 +806,29 @@ function createMatchForActiveCamp() {
     return;
   }
 
-  const nextMatch: CampMatch = {
-    id: makeId(),
-    opponent: matchOpponent.trim(),
-    date: matchDate,
-    type: matchType,
-    teamGoals,
-    opponentGoals,
-    appearances: activeCamp.players.map((player) => ({
-      playerKey: player.key,
-      played: false,
-      minutes: "",
-      goals: "",
-      assists: "",
-      rating: "",
-    })),
-  };
+  const activeMatchPlayers = activeCamp.players.filter(isCampPlayerActive);
+
+if (activeMatchPlayers.length === 0) {
+  alert("Brak aktywnych zawodników do dodania do meczu.");
+  return;
+}
+
+const nextMatch: CampMatch = {
+  id: makeId(),
+  opponent: matchOpponent.trim(),
+  date: matchDate,
+  type: matchType,
+  teamGoals,
+  opponentGoals,
+  appearances: activeMatchPlayers.map((player) => ({
+    playerKey: player.key,
+    played: false,
+    minutes: "",
+    goals: "",
+    assists: "",
+    rating: "",
+  })),
+};
 
 updateCamp(activeCamp.id, (camp) => ({
   ...camp,
@@ -758,10 +838,10 @@ updateCamp(activeCamp.id, (camp) => ({
 setActiveMatchId(nextMatch.id);
 
 setMatchOpponent("");
-  setMatchDate("");
-  setMatchType("friendly");
-  setTeamGoals("");
-  setOpponentGoals("");
+setMatchDate("");
+setMatchType(getDefaultMatchTypeForCamp(activeCamp.type));
+setTeamGoals("");
+setOpponentGoals("");
 }
 
 function deleteMatch(campId: string, matchId: string) {
@@ -780,12 +860,37 @@ function deleteMatch(campId: string, matchId: string) {
     setActiveMatchId("");
   }
 }
+function updateMatchMeta(
+  campId: string,
+  matchId: string,
+  patch: Partial<
+    Pick<
+      CampMatch,
+      "opponent" | "date" | "type" | "teamGoals" | "opponentGoals"
+    >
+  >
+) {
+  updateCamp(campId, (camp) => ({
+    ...camp,
+    matches: camp.matches.map((match) => {
+      if (match.id !== matchId) {
+        return match;
+      }
+
+      return {
+        ...match,
+        ...patch,
+      };
+    }),
+  }));
+}
 function updateMatchAppearance(
   campId: string,
   matchId: string,
   playerKey: string,
   patch: Partial<CampMatchAppearance>
 ) {
+  
   updateCamp(campId, (camp) => ({
     ...camp,
     matches: camp.matches.map((match) => {
@@ -853,7 +958,7 @@ function toggleCareerPlayerSort(nextSort: CampaignPlayerSort) {
     <>
       {isOpen && (
         <>
-          <div style={styles.backdrop} onClick={() => setIsOpen(false)} />
+          <div style={styles.backdrop} onClick={() => close()} />
 
           <aside style={styles.drawer}>
             <header style={styles.header}>
@@ -866,7 +971,7 @@ function toggleCareerPlayerSort(nextSort: CampaignPlayerSort) {
 
               <button
                 type="button"
-                onClick={() => setIsOpen(false)}
+                onClick={() => close()}
                 style={styles.closeButton}
               >
                 ✕
@@ -881,7 +986,7 @@ function toggleCareerPlayerSort(nextSort: CampaignPlayerSort) {
   dateTo={dateTo}
   selectedPlayersCount={selectedPlayers.length}
   onCampNameChange={setCampName}
-  onCampTypeChange={setCampType}
+onCampTypeChange={handleCampTypeChange}
   onDateFromChange={setDateFrom}
   onDateToChange={setDateTo}
   onOpenCampaigns={() => setIsCampaignsOpen(true)}
@@ -938,12 +1043,15 @@ function toggleCareerPlayerSort(nextSort: CampaignPlayerSort) {
   onTeamGoalsChange={setTeamGoals}
   onOpponentGoalsChange={setOpponentGoals}
   onCreateMatch={createMatchForActiveCamp}
-onSelectMatch={toggleActiveMatch}
+  onSelectMatch={toggleActiveMatch}
   onDeleteMatch={deleteMatch}
+  onUpdateMatch={updateMatchMeta}
   onUpdateAppearance={updateMatchAppearance}
 />
 <CampPlayersGrid
   players={activeCamp.players}
+  onReleasePlayer={releasePlayerFromActiveCamp}
+  onRestorePlayer={restorePlayerToActiveCamp}
   onRemovePlayer={removePlayerFromActiveCamp}
 />
                     </>

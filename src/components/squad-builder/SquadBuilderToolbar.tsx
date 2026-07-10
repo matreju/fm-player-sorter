@@ -1,5 +1,4 @@
-import type { FormationSlot } from "../../types/squadBuilderTypes";
-import { FORMATION_PRESETS } from "../../constants/squadBuilderFormations";
+import type { FormationPreset, FormationSlot } from "../../types/squadBuilderTypes";
 import { AppButton, AppCheckbox, AppSelectField } from "../ui";
 import { squadBuilderStyles as styles } from "./squadBuilderStyles";
 import type { TacticalView } from "../../utils/squadBuilderTacticalView";
@@ -11,6 +10,7 @@ type SquadBuilderToolbarProps = {
   availableRowsCount: number;
   slotsCount: number;
 
+  formationOptions: FormationPreset[];
   formationId: string;
   withoutBallFormationId: string;
   onlySelected: boolean;
@@ -30,6 +30,10 @@ type SquadBuilderToolbarProps = {
   onClearCallUps?: () => void;
   onResetFormationLayout: () => void;
   onOpenPlanSuggestions: () => void;
+
+  activeFormationIsCustom: boolean;
+  onSaveCustomFormation: () => void;
+  onDeleteCustomFormation: () => void;
 };
 
 export function SquadBuilderToolbar({
@@ -56,6 +60,10 @@ export function SquadBuilderToolbar({
   onClearCallUps,
   onResetFormationLayout,
   onOpenPlanSuggestions,
+    formationOptions,
+  activeFormationIsCustom,
+  onSaveCustomFormation,
+  onDeleteCustomFormation,
 }: SquadBuilderToolbarProps) {
   return (
     <div style={styles.pitchHeader}>
@@ -63,10 +71,10 @@ export function SquadBuilderToolbar({
         <AppSelectField
           label="Przy piłce"
           value={formationId}
-          options={FORMATION_PRESETS.map((preset) => ({
-            value: preset.id,
-            label: preset.name,
-          }))}
+          options={formationOptions.map((preset) => ({
+  value: preset.id,
+  label: "isCustom" in preset && preset.isCustom ? `★ ${preset.name}` : preset.name,
+}))}
           onChange={onFormationChange}
           ariaLabel="Wybierz formację przy piłce"
           fieldStyle={styles.compactField}
@@ -76,10 +84,10 @@ export function SquadBuilderToolbar({
         <AppSelectField
           label="Bez piłki"
           value={withoutBallFormationId}
-          options={FORMATION_PRESETS.map((preset) => ({
-            value: preset.id,
-            label: preset.name,
-          }))}
+         options={formationOptions.map((preset) => ({
+  value: preset.id,
+  label: "isCustom" in preset && preset.isCustom ? `★ ${preset.name}` : preset.name,
+}))}
           onChange={onWithoutBallFormationChange}
           ariaLabel="Wybierz formację bez piłki"
           fieldStyle={styles.compactField}
@@ -137,7 +145,24 @@ export function SquadBuilderToolbar({
         >
           Reset układu
         </AppButton>
+<AppButton
+  type="button"
+  variant="secondary"
+  size="compact"
+  onClick={onSaveCustomFormation}
+>
+  Zapisz formację
+</AppButton>
 
+<AppButton
+  type="button"
+  variant="danger"
+  size="compact"
+  onClick={onDeleteCustomFormation}
+  disabled={!activeFormationIsCustom}
+>
+  Usuń własną
+</AppButton>
         <AppButton
           type="button"
           variant="success"

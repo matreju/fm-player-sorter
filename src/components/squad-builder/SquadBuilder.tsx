@@ -1,35 +1,44 @@
 import { useEffect, useState } from "react";
 import type { SquadBuilderProps } from "../../types/squadBuilderTypes";
+import { useModuleDrawer } from "../../hooks/useModuleDrawer";
 import { SquadBuilderDrawerShell } from "./SquadBuilderDrawerShell";
 import { SquadBuilderContent } from "./SquadBuilderContent";
 
-const moduleDockEventName = "fm-player-sorter-open-module";
 export function SquadBuilder(props: SquadBuilderProps) {
-  const [isSquadDrawerOpen, setIsSquadDrawerOpen] = useState(false);
+  const { isOpen, toggle, close } = useModuleDrawer("squad");
+  const [shouldMountContent, setShouldMountContent] = useState(false);
+
   useEffect(() => {
-  function handleOpenModule(event: Event) {
-    const module = (event as CustomEvent<{ module?: string }>).detail?.module;
-
-    if (module === "squad") {
-      setIsSquadDrawerOpen(true);
+    if (isOpen) {
+      setShouldMountContent(true);
+      return;
     }
-  }
 
-  window.addEventListener(moduleDockEventName, handleOpenModule);
+    if (shouldMountContent) {
+      return;
+    }
 
-  return () => {
-    window.removeEventListener(moduleDockEventName, handleOpenModule);
-  };
-}, []);
+    if (props.rows.length === 0) {
+      return;
+    }
+
+    const preloadTimer = window.setTimeout(() => {
+      setShouldMountContent(true);
+    }, 900);
+
+    return () => {
+      window.clearTimeout(preloadTimer);
+    };
+  }, [isOpen, props.rows.length, shouldMountContent]);
 
   return (
-<SquadBuilderDrawerShell
-  isOpen={isSquadDrawerOpen}
-  onToggle={() => setIsSquadDrawerOpen((current) => !current)}
-  onClose={() => setIsSquadDrawerOpen(false)}
-  showTab={false}
->
-      {isSquadDrawerOpen ? <SquadBuilderContent {...props} /> : null}
+    <SquadBuilderDrawerShell
+      isOpen={isOpen}
+      onToggle={toggle}
+      onClose={close}
+      showTab={false}
+    >
+      {shouldMountContent ? <SquadBuilderContent {...props} /> : null}
     </SquadBuilderDrawerShell>
   );
 }

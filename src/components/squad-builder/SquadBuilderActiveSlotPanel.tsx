@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type {
   FormationSlot,
   PitchPosition,
@@ -19,7 +19,6 @@ import {
   getRoleAttributeGroupMeta,
   type RoleAttributeImportance,
 } from "../../utils/roleScoring";
-import { formatCandidateScoreForMode } from "../../utils/squadBuilderScoreMode";
 import { AppButton, CallUpButton } from "../ui";
 import { squadBuilderStyles as styles } from "./squadBuilderStyles";
 import {
@@ -39,12 +38,13 @@ type SquadBuilderActiveSlotPanelProps = {
   ) => SlotCandidate[];
   getCurrentPitchPosition: (slot: FormationSlot) => PitchPosition;
   onUpdateSlot: (slotId: string, patch: Partial<FormationSlot>) => void;
-
+onForceCandidateOnSlot?: (slotId: string, candidateKey: string) => void;
   onHideTopCandidate: (
     slotId: string,
     candidateKey: string,
     view?: TacticalView
   ) => void;
+  onHideTopCandidateEverywhere: (candidateKey: string) => void;
   getPlayerMark?: (row: TableRow) => PlayerMark | null;
   onSelectPlayer?: (row: TableRow, selectionPosition: string) => void;
 };
@@ -59,6 +59,13 @@ type RoleAttributePreview = {
   weightLabel: string;
 };
 
+type ScoreBreakdownItem = {
+  label: string;
+  value: number;
+  displayValue: string;
+  tone: "neutral" | "signed" | "total";
+};
+
 const ATTRIBUTE_SHORT_NAMES: Record<string, string> = {
   "Wykańczanie akcji": "Wykańcz.",
   "Gra bez piłki": "Bez piłki",
@@ -66,16 +73,16 @@ const ATTRIBUTE_SHORT_NAMES: Record<string, string> = {
   "Przegląd sytuacji": "Przegląd",
   "Odbiór piłki": "Odbiór",
   "Ustawianie się": "Ustaw.",
-  "Dośrodkowania": "Dośr.",
-  "Pracowitość": "Praca",
-  "Błyskotliwość": "Błysk.",
-  "Koncentracja": "Koncentr.",
-  "Przewidywanie": "Przewid.",
-  "Wytrzymałość": "Wytrz.",
-  "Przyspieszenie": "Przysp.",
-  "Równowaga": "Równow.",
-  "Skoczność": "Skocz.",
-  "Współpraca": "Współpr.",
+  Dośrodkowania: "Dośr.",
+  Pracowitość: "Praca",
+  Błyskotliwość: "Błysk.",
+  Koncentracja: "Koncentr.",
+  Przewidywanie: "Przewid.",
+  Wytrzymałość: "Wytrz.",
+  Przyspieszenie: "Przysp.",
+  Równowaga: "Równow.",
+  Skoczność: "Skocz.",
+  Współpraca: "Współpr.",
 };
 
 function getShortAttributeName(name: string): string {
@@ -101,11 +108,13 @@ function getAttributePreviewValue(row: TableRow, attributeName: string) {
   }
 
   if (parsed.isRange) {
+    const cautiousValue = parsed.min + (parsed.average - parsed.min) * 0.35;
+
     return {
       valueLabel: `${formatAttributeNumber(parsed.min)}–${formatAttributeNumber(
         parsed.max
       )}`,
-      averageValue: parsed.average,
+      averageValue: cautiousValue,
     };
   }
 
@@ -115,7 +124,9 @@ function getAttributePreviewValue(row: TableRow, attributeName: string) {
   };
 }
 
-function getRoleAttributePreviews(candidate: SlotCandidate): RoleAttributePreview[] {
+function getRoleAttributePreviews(
+  candidate: SlotCandidate
+): RoleAttributePreview[] {
   const role = candidate.roleResult.role;
   const used = new Set<string>();
   const result: RoleAttributePreview[] = [];
@@ -147,7 +158,6 @@ function getRoleAttributePreviews(candidate: SlotCandidate): RoleAttributePrevie
     }
   }
 
-  // Dokładnie ta sama kolejność i deduplikacja co w roleScoring.ts:
   addAttributes(role.coreAttributes, "core");
   addAttributes(role.keyAttributes, "key");
   addAttributes(role.importantAttributes, "important");
@@ -172,6 +182,7 @@ function groupRoleAttributes(attributes: RoleAttributePreview[]) {
     })
     .filter((group) => group.items.length > 0);
 }
+
 function getRoleAttributeChipStyle(importance: RoleAttributeImportance) {
   if (importance === "core") {
     return styles.roleAttributeChipCore;
@@ -207,6 +218,214 @@ function getRoleAttributeValueStyle(averageValue: number | null) {
 
   return styles.roleAttributeValueLow;
 }
+
+function getCandidateRoleScore(candidate: SlotCandidate): number {
+  return candidate.roleScore ?? candidate.roleResult.score;
+}
+
+function getCandidateKindBadgeLabel(candidate: SlotCandidate): string {
+  if (candidate.candidateKind === "natural") {
+    return "Naturalny";
+  }
+
+  if (candidate.candidateKind === "close") {
+    return "Bliski";
+  }
+
+  return "Awaryjnie";
+}
+
+function getCandidateKindBadgeStyle(candidate: SlotCandidate) {
+  if (candidate.candidateKind === "natural") {
+    return styles.candidateKindBadgeNatural;
+  }
+
+  if (candidate.candidateKind === "close") {
+    return styles.candidateKindBadgeClose;
+  }
+
+  return styles.candidateKindBadgeConversion;
+}
+
+function getCandidateCardKindStyle(candidate: SlotCandidate) {
+  if (candidate.candidateKind === "natural") {
+    return styles.activeTopMiniCardNatural;
+  }
+
+  if (candidate.candidateKind === "close") {
+    return styles.activeTopMiniCardClose;
+  }
+
+  return styles.activeTopMiniCardConversion;
+}
+
+function isUsedInOtherSlotCandidate(candidate: SlotCandidate): boolean {
+  return candidate.isUsedInOtherSlot === true;
+}
+
+function getUsedInOtherSlotLabel(candidate: SlotCandidate): string | null {
+  return candidate.usedInOtherSlotLabel ?? null;
+}
+
+function getCandidateRankLabel(candidate: SlotCandidate, index: number): string {
+  if (isUsedInOtherSlotCandidate(candidate)) {
+    return "XI";
+  }
+
+  return String(index + 1);
+}
+
+function getPotentialRankLabel(candidate: SlotCandidate): string | null {
+  const rank = candidate.potentialRankInSlot;
+
+  if (typeof rank !== "number" || !Number.isFinite(rank)) {
+    return null;
+  }
+
+  return `#${rank}`;
+}
+
+function formatSignedScore(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+
+  if (rounded > 0) {
+    return `+${formatRoleScore(rounded)}`;
+  }
+
+  return formatRoleScore(rounded);
+}
+
+function getBreakdownValueStyle(value: number) {
+  if (value > 0) {
+    return styles.scoreBreakdownValuePositive;
+  }
+
+  if (value < 0) {
+    return styles.scoreBreakdownValueNegative;
+  }
+
+  return styles.scoreBreakdownValueNeutral;
+}
+
+function getCompactBreakdownLabel(label: string): string {
+  return label
+    .replace("Forma klubu", "Forma")
+    .replace("OU / jakość", "OU")
+    .replace("Mental", "Mental")
+    .replace("Pozycja", "Poz.")
+    .replace("Pozycja powołania", "Pow. poz.")
+    .replace("Przejście fazy", "Faza");
+}
+
+function getScoreBreakdownItems(candidate: SlotCandidate): ScoreBreakdownItem[] {
+  const breakdown = candidate.scoreBreakdown;
+
+  if (!breakdown) {
+    return [
+      {
+        label: "Rola",
+        value: getCandidateRoleScore(candidate),
+        displayValue: formatRoleScore(getCandidateRoleScore(candidate)),
+        tone: "neutral",
+      },
+      {
+        label: "Ocena selekcyjna",
+        value: candidate.finalScore,
+        displayValue: formatRoleScore(candidate.finalScore),
+        tone: "total",
+      },
+    ];
+  }
+
+  const items: ScoreBreakdownItem[] = [
+    {
+      label: "Rola",
+      value: breakdown.roleScore,
+      displayValue: formatRoleScore(breakdown.roleScore),
+      tone: "neutral",
+    },
+  ];
+
+  if (Math.abs(breakdown.formBoost) >= 0.05) {
+    items.push({
+      label: "Forma klubu",
+      value: breakdown.formBoost,
+      displayValue: formatSignedScore(breakdown.formBoost),
+      tone: "signed",
+    });
+  }
+
+  if (Math.abs(breakdown.overallAbilityBoost) >= 0.05) {
+    items.push({
+      label: "OU / jakość",
+      value: breakdown.overallAbilityBoost,
+      displayValue: formatSignedScore(breakdown.overallAbilityBoost),
+      tone: "signed",
+    });
+  }
+
+  if (Math.abs(breakdown.reliabilityBoost) >= 0.05) {
+    items.push({
+      label: "Mental",
+      value: breakdown.reliabilityBoost,
+      displayValue: formatSignedScore(breakdown.reliabilityBoost),
+      tone: "signed",
+    });
+  }
+
+  if (Math.abs(breakdown.positionPenalty) >= 0.05) {
+    items.push({
+      label: "Pozycja",
+      value: -breakdown.positionPenalty,
+      displayValue: formatSignedScore(-breakdown.positionPenalty),
+      tone: "signed",
+    });
+  }
+
+  items.push({
+    label: "Ocena selekcyjna",
+    value: breakdown.finalScore,
+    displayValue: formatRoleScore(breakdown.finalScore),
+    tone: "total",
+  });
+
+  return items;
+}
+
+function getRankingBreakdownItems(candidate: SlotCandidate): ScoreBreakdownItem[] {
+  const breakdown = candidate.rankingBreakdown;
+
+  if (!breakdown) {
+    return [];
+  }
+
+  const callUpPositionAdjustment = breakdown.callUpPositionAdjustment ?? 0;
+  const tacticalTransitionAdjustment =
+    breakdown.tacticalTransitionAdjustment ?? 0;
+
+  const items: ScoreBreakdownItem[] = [];
+
+  if (Math.abs(callUpPositionAdjustment) >= 0.05) {
+    items.push({
+      label: "Pozycja powołania",
+      value: callUpPositionAdjustment,
+      displayValue: formatSignedScore(callUpPositionAdjustment),
+      tone: "signed",
+    });
+  }
+
+  if (Math.abs(tacticalTransitionAdjustment) >= 0.05) {
+    items.push({
+      label: "Przejście fazy",
+      value: tacticalTransitionAdjustment,
+      displayValue: formatSignedScore(tacticalTransitionAdjustment),
+      tone: "signed",
+    });
+  }
+
+  return items;
+}
+
 export function SquadBuilderActiveSlotPanel({
   activeSlot,
   scoreMode,
@@ -215,11 +434,14 @@ export function SquadBuilderActiveSlotPanel({
   getCurrentPitchPosition,
   onUpdateSlot,
   onHideTopCandidate,
+  onHideTopCandidateEverywhere,
+  onForceCandidateOnSlot,
   getPlayerMark,
   onSelectPlayer,
 }: SquadBuilderActiveSlotPanelProps) {
   const [attributeDetailsCandidate, setAttributeDetailsCandidate] =
-  useState<SlotCandidate | null>(null);
+    useState<SlotCandidate | null>(null);
+
   if (!activeSlot) {
     return <div style={styles.emptyText}>Kliknij slot na boisku.</div>;
   }
@@ -231,11 +453,20 @@ export function SquadBuilderActiveSlotPanel({
   );
   const tacticalViewLabel = getTacticalViewLabel(tacticalView);
 
-  const activeRoleLabel =
+  const baseActiveRoleLabel =
     activeSlot.roleId === "best"
       ? "najlepsza rola"
       : ROLE_DEFINITIONS.find((role) => role.id === activeSlot.roleId)?.name ??
         "-";
+
+  const excludedRoleName = activeSlot.excludedRoleId
+    ? ROLE_DEFINITIONS.find((role) => role.id === activeSlot.excludedRoleId)
+        ?.name ?? null
+    : null;
+
+  const activeRoleLabel = excludedRoleName
+    ? `${baseActiveRoleLabel} · bez: ${excludedRoleName}`
+    : baseActiveRoleLabel;
 
   return (
     <>
@@ -263,6 +494,7 @@ export function SquadBuilderActiveSlotPanel({
                   ),
                   positionGroup: nextPositionGroup,
                   roleId: "best",
+                  excludedRoleId: undefined,
                 });
               }}
               style={styles.select}
@@ -286,11 +518,17 @@ export function SquadBuilderActiveSlotPanel({
 
             <select
               value={activeSlot.roleId}
-              onChange={(event) =>
+              onChange={(event) => {
+                const nextRoleId = event.target.value;
+
                 onUpdateSlot(activeSlot.id, {
-                  roleId: event.target.value,
-                })
-              }
+                  roleId: nextRoleId,
+                  excludedRoleId:
+                    activeSlot.excludedRoleId === nextRoleId
+                      ? undefined
+                      : activeSlot.excludedRoleId,
+                });
+              }}
               style={styles.select}
               aria-label="Rola aktywnego slotu"
             >
@@ -298,6 +536,42 @@ export function SquadBuilderActiveSlotPanel({
 
               {getRoleOptions(activeSlot).map((role) => (
                 <option key={role.id} value={role.id}>
+                  {role.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label style={styles.field}>
+            Rola NIE
+
+            <select
+              value={activeSlot.excludedRoleId ?? ""}
+              onChange={(event) => {
+                const nextExcludedRoleId = event.target.value || undefined;
+
+                onUpdateSlot(activeSlot.id, {
+                  excludedRoleId: nextExcludedRoleId,
+                  roleId:
+                    nextExcludedRoleId &&
+                    activeSlot.roleId === nextExcludedRoleId
+                      ? "best"
+                      : activeSlot.roleId,
+                });
+              }}
+              style={styles.select}
+              aria-label="Wykluczona rola aktywnego slotu"
+            >
+              <option value="">Nie wykluczaj roli</option>
+
+              {getRoleOptions(activeSlot).map((role) => (
+                <option
+                  key={role.id}
+                  value={role.id}
+                  disabled={
+                    activeSlot.roleId !== "best" && activeSlot.roleId === role.id
+                  }
+                >
                   {role.name}
                 </option>
               ))}
@@ -348,19 +622,85 @@ export function SquadBuilderActiveSlotPanel({
 
         <div style={styles.activeTopCards}>
           {visibleTopCandidates.map((candidate, index) => {
-  const isSelected = getPlayerMark?.(candidate.row) === "selected";
+            const isSelected = getPlayerMark?.(candidate.row) === "selected";
+            const roleAttributes = getRoleAttributePreviews(candidate);
 
-  const roleAttributes = getRoleAttributePreviews(candidate);
+            const isUsedInOtherSlot = isUsedInOtherSlotCandidate(candidate);
+            const usedInOtherSlotLabel = getUsedInOtherSlotLabel(candidate);
+            const potentialRankLabel = getPotentialRankLabel(candidate);
 
-  return (
+            const scoreBreakdownItems = getScoreBreakdownItems(candidate);
+            const rankingBreakdownItems = getRankingBreakdownItems(candidate);
+
+            const roleScoreItem = scoreBreakdownItems.find(
+              (item) => item.label === "Rola"
+            );
+
+            const selectionScoreItem = scoreBreakdownItems.find(
+              (item) => item.label === "Ocena selekcyjna"
+            );
+
+            const compactScoreBreakdownItems = scoreBreakdownItems.filter(
+              (item) =>
+                item.label !== "Rola" && item.label !== "Ocena selekcyjna"
+            );
+
+            const compactAdjustmentItems = [
+              ...compactScoreBreakdownItems,
+              ...rankingBreakdownItems,
+            ];
+
+            return (
               <div
-                key={candidate.key}
+                key={`${candidate.key}-${isUsedInOtherSlot ? "used" : "free"}`}
                 style={{
                   ...styles.activeTopMiniCard,
+                  ...getCandidateCardKindStyle(candidate),
+                  ...(isUsedInOtherSlot
+                    ? styles.activeTopMiniCardUsedElsewhere
+                    : {}),
                   ...(isSelected ? styles.selectedCandidateRow : {}),
                 }}
               >
-                <div style={styles.miniCandidateRank}>{index + 1}</div>
+                <div
+                  style={{
+                    ...styles.miniCandidateRank,
+                    ...(isUsedInOtherSlot
+                      ? styles.miniCandidateRankUsedElsewhere
+                      : {}),
+                  }}
+                >
+                  {getCandidateRankLabel(candidate, index)}
+                </div>
+
+                {isUsedInOtherSlot && (
+                  <div style={styles.usedElsewhereBadgeRow}>
+                    {usedInOtherSlotLabel && (
+                      <span style={styles.usedElsewhereBadgeCompact}>
+                        XI: {usedInOtherSlotLabel}
+                      </span>
+                    )}
+
+                    {potentialRankLabel && (
+                      <span style={styles.potentialRankBadgeCompact}>
+                        tutaj {potentialRankLabel}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    ...styles.candidateKindBadge,
+                    ...getCandidateKindBadgeStyle(candidate),
+                    ...(isUsedInOtherSlot
+                      ? styles.candidateKindBadgeMuted
+                      : {}),
+                    justifySelf: "center",
+                  }}
+                >
+                  {getCandidateKindBadgeLabel(candidate)}
+                </div>
 
                 <div style={styles.miniCandidateMain}>
                   <div style={styles.miniCandidateNameRow}>
@@ -385,186 +725,262 @@ export function SquadBuilderActiveSlotPanel({
                     {candidate.position} · {candidate.club}
                   </div>
 
-                 <div style={styles.miniCandidateMeta}>
-  {candidate.roleResult.role.name} ·{" "}
-  {candidate.candidateKindLabel}
-</div>
+                  {scoreMode === "campaign-callups" && (
+                    <>
+                      <div style={styles.miniCandidateMeta}>
+                        Powołany na tę pozycję:{" "}
+                        {candidate.campaignPositionCallUps ?? 0} · razem:{" "}
+                        {candidate.campaignCallUps ?? 0}
+                      </div>
 
-<div style={styles.miniCandidateMeta}>
-  {candidate.footLabel}
-</div>
-<button
-  type="button"
-  style={styles.roleAttributesOpenButton}
-  onClick={() => setAttributeDetailsCandidate(candidate)}
->
-  <span style={styles.roleAttributesOpenButtonText}>
-    Atrybuty scoringu
-  </span>
+                      <div style={styles.miniCandidateMeta}>
+                        Mecze: {candidate.campaignMatches ?? 0} · minuty:{" "}
+                        {candidate.campaignMinutes ?? 0}
+                        {candidate.campaignAvgRating !== null &&
+                        candidate.campaignAvgRating !== undefined
+                          ? ` · ocena: ${candidate.campaignAvgRating.toFixed(
+                              2
+                            )}`
+                          : ""}
+                      </div>
+                    </>
+                  )}
 
-  <strong style={styles.roleAttributesOpenButtonCount}>
-    {roleAttributes.length}
-  </strong>
+                  <div style={styles.miniCandidateMeta}>
+                    {candidate.roleResult.role.name} ·{" "}
+                    {candidate.candidateKindLabel}
+                  </div>
 
-  <small style={styles.roleAttributesOpenButtonHint}>
-    kliknij szczegóły
-  </small>
-</button>
+                  <div style={styles.miniCandidateMeta}>
+                    {candidate.footLabel}
+                  </div>
 
-{scoreMode === "overall-ability" && (
-  <div style={styles.miniCandidateMeta}>
-    Dopasowanie roli:{" "}
-    {formatRoleScore(candidate.phaseScore ?? candidate.finalScore)}
-  </div>
-)}
+                  <button
+                    type="button"
+                    style={styles.roleAttributesOpenButton}
+                    onClick={() => setAttributeDetailsCandidate(candidate)}
+                  >
+                    <span style={styles.roleAttributesOpenButtonText}>
+                      Atrybuty scoringu
+                    </span>
+
+                    <strong style={styles.roleAttributesOpenButtonCount}>
+                      {roleAttributes.length}
+                    </strong>
+
+                    <small style={styles.roleAttributesOpenButtonHint}>
+                      kliknij szczegóły
+                    </small>
+                  </button>
                 </div>
 
                 <div style={styles.miniCandidateBottom}>
-                  <strong style={styles.miniCandidateScore}>
-                    {formatCandidateScoreForMode(candidate, scoreMode)}
-                  </strong>
+                  <div style={styles.scoreBreakdownCompact}>
+                    <div style={styles.scoreBreakdownCompactMain}>
+                      <span>
+                        Dopasowanie:{" "}
+                        <strong>
+                          {roleScoreItem?.displayValue ??
+                            formatRoleScore(getCandidateRoleScore(candidate))}
+                        </strong>
+                      </span>
 
-                  <div style={styles.miniCandidateButtons}>
+                      <span>
+                        Selekcja:{" "}
+                        <strong>
+                          {selectionScoreItem?.displayValue ??
+                            formatRoleScore(candidate.finalScore)}
+                        </strong>
+                      </span>
+                    </div>
 
-
-                    {onSelectPlayer && (
-                      <CallUpButton
-                        isSelected={isSelected}
-                        size="sm"
-                        onClick={() =>
-                          onSelectPlayer(candidate.row, activeSlot.positionGroup)
-                        }
-                      />
+                    {compactAdjustmentItems.length > 0 && (
+                      <div style={styles.scoreBreakdownCompactChips}>
+                        {compactAdjustmentItems.map((item) => (
+                          <span
+                            key={item.label}
+                            style={styles.scoreBreakdownCompactChip}
+                          >
+                            {getCompactBreakdownLabel(item.label)}{" "}
+                            <strong
+                              style={{
+                                ...styles.scoreBreakdownValue,
+                                ...(item.tone === "total"
+                                  ? styles.scoreBreakdownValueTotal
+                                  : getBreakdownValueStyle(item.value)),
+                              }}
+                            >
+                              {item.displayValue}
+                            </strong>
+                          </span>
+                        ))}
+                      </div>
                     )}
-
-                    <AppButton
-                      type="button"
-                      variant="neutral"
-                      size="sm"
-                      onClick={() =>
-                        onHideTopCandidate(
-                          activeSlot.id,
-                          candidate.key,
-                          tacticalView
-                        )
-                      }
-                    >
-                      Ukryj
-                    </AppButton>
                   </div>
+<div style={styles.miniCandidateButtons}>
+  {onForceCandidateOnSlot && (
+    <AppButton
+      type="button"
+      variant="primary"
+      size="sm"
+      onClick={() => onForceCandidateOnSlot(activeSlot.id, candidate.key)}
+    >
+      Ustaw tutaj
+    </AppButton>
+  )}
+
+  {onSelectPlayer && (
+    <CallUpButton
+      isSelected={isSelected}
+      size="sm"
+      onClick={() =>
+        onSelectPlayer(candidate.row, activeSlot.positionGroup)
+      }
+    />
+  )}
+
+  <AppButton
+    type="button"
+    variant="neutral"
+    size="sm"
+    onClick={() =>
+      onHideTopCandidate(activeSlot.id, candidate.key, tacticalView)
+    }
+  >
+    Ukryj slot
+  </AppButton>
+
+  <AppButton
+    type="button"
+    variant="danger"
+    size="sm"
+    onClick={() => onHideTopCandidateEverywhere(candidate.key)}
+  >
+    Wyklucz
+  </AppButton>
+</div>
                 </div>
               </div>
             );
           })}
         </div>
       </section>
+
       {attributeDetailsCandidate &&
-  (() => {
-    const modalAttributes = getRoleAttributePreviews(
-      attributeDetailsCandidate
-    );
-    const modalAttributeGroups = groupRoleAttributes(modalAttributes);
+        (() => {
+          const modalAttributes = getRoleAttributePreviews(
+            attributeDetailsCandidate
+          );
+          const modalAttributeGroups = groupRoleAttributes(modalAttributes);
 
-    return (
-      <div
-        style={styles.roleAttributesModalBackdrop}
-        role="presentation"
-        onClick={() => setAttributeDetailsCandidate(null)}
-      >
-        <section
-          style={styles.roleAttributesModal}
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Atrybuty scoringu: ${attributeDetailsCandidate.name}`}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <header style={styles.roleAttributesModalHeader}>
-            <div>
-              <h3 style={styles.roleAttributesModalTitle}>
-                {attributeDetailsCandidate.name}
-              </h3>
-
-              <div style={styles.roleAttributesModalSubtitle}>
-                {attributeDetailsCandidate.roleResult.role.name} ·{" "}
-                {attributeDetailsCandidate.candidateKindLabel}
-              </div>
-
-              <div style={styles.roleAttributesModalSubtitle}>
-                {attributeDetailsCandidate.position} ·{" "}
-                {attributeDetailsCandidate.club} ·{" "}
-                {attributeDetailsCandidate.footLabel}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              style={styles.roleAttributesModalClose}
+          return (
+            <div
+              style={styles.roleAttributesModalBackdrop}
+              role="presentation"
               onClick={() => setAttributeDetailsCandidate(null)}
-              aria-label="Zamknij okno atrybutów"
             >
-              ×
-            </button>
-          </header>
+              <section
+                style={styles.roleAttributesModal}
+                role="dialog"
+                aria-modal="true"
+                aria-label={`Atrybuty scoringu: ${attributeDetailsCandidate.name}`}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <header style={styles.roleAttributesModalHeader}>
+                  <div>
+                    <h3 style={styles.roleAttributesModalTitle}>
+                      {attributeDetailsCandidate.name}
+                    </h3>
 
-          <div style={styles.roleAttributesModalScoreRow}>
-            <span>Wynik</span>
-            <strong>
-              {formatCandidateScoreForMode(
-                attributeDetailsCandidate,
-                scoreMode
-              )}
-            </strong>
-          </div>
+                    <div style={styles.roleAttributesModalSubtitle}>
+                      {attributeDetailsCandidate.roleResult.role.name} ·{" "}
+                      {attributeDetailsCandidate.candidateKindLabel}
+                    </div>
 
-          <div style={styles.roleAttributesModalBody}>
-            <div style={styles.roleAttributesModalIntro}>
-              Atrybuty faktycznie używane w scoringu tej roli:{" "}
-              <strong>{modalAttributes.length}</strong>
-            </div>
-
-            <div style={styles.roleAttributeModalGroups}>
-              {modalAttributeGroups.map((group) => (
-                <div key={group.id} style={styles.roleAttributeModalGroup}>
-                  <div style={styles.roleAttributeModalGroupHeader}>
-                    <span>{group.label}</span>
-                    <small>{group.weightLabel}</small>
+                    <div style={styles.roleAttributesModalSubtitle}>
+                      {attributeDetailsCandidate.position} ·{" "}
+                      {attributeDetailsCandidate.club} ·{" "}
+                      {attributeDetailsCandidate.footLabel}
+                    </div>
                   </div>
 
-                  <div style={styles.roleAttributeModalGrid}>
-                    {group.items.map((attribute) => (
-                      <div
-                        key={`${attribute.importance}-${attribute.name}`}
-                        style={{
-                          ...styles.roleAttributeModalChip,
-                          ...getRoleAttributeChipStyle(attribute.importance),
-                        }}
-                        title={`${attribute.name} · ${attribute.groupLabel} · ${attribute.weightLabel}`}
-                      >
-                        <span style={styles.roleAttributeModalName}>
-                          {attribute.name}
-                        </span>
+                  <button
+                    type="button"
+                    style={styles.roleAttributesModalClose}
+                    onClick={() => setAttributeDetailsCandidate(null)}
+                    aria-label="Zamknij okno atrybutów"
+                  >
+                    ×
+                  </button>
+                </header>
 
-                        <strong
-                          style={{
-                            ...styles.roleAttributeModalValue,
-                            ...getRoleAttributeValueStyle(
-                              attribute.averageValue
-                            ),
-                          }}
-                        >
-                          {attribute.valueLabel}
-                        </strong>
+                <div style={styles.roleAttributesModalScoreRow}>
+                  <span>Dopasowanie roli</span>
+                  <strong>
+                    {formatRoleScore(
+                      getCandidateRoleScore(attributeDetailsCandidate)
+                    )}
+                  </strong>
+                </div>
+
+                <div style={styles.roleAttributesModalScoreRow}>
+                  <span>Ocena selekcyjna</span>
+                  <strong>
+                    {formatRoleScore(attributeDetailsCandidate.finalScore)}
+                  </strong>
+                </div>
+
+                <div style={styles.roleAttributesModalBody}>
+                  <div style={styles.roleAttributesModalIntro}>
+                    Atrybuty faktycznie używane w scoringu tej roli:{" "}
+                    <strong>{modalAttributes.length}</strong>
+                  </div>
+
+                  <div style={styles.roleAttributeModalGroups}>
+                    {modalAttributeGroups.map((group) => (
+                      <div key={group.id} style={styles.roleAttributeModalGroup}>
+                        <div style={styles.roleAttributeModalGroupHeader}>
+                          <span>{group.label}</span>
+                          <small>{group.weightLabel}</small>
+                        </div>
+
+                        <div style={styles.roleAttributeModalGrid}>
+                          {group.items.map((attribute) => (
+                            <div
+                              key={`${attribute.importance}-${attribute.name}`}
+                              style={{
+                                ...styles.roleAttributeModalChip,
+                                ...getRoleAttributeChipStyle(
+                                  attribute.importance
+                                ),
+                              }}
+                              title={`${attribute.name} · ${attribute.groupLabel} · ${attribute.weightLabel}`}
+                            >
+                              <span style={styles.roleAttributeModalName}>
+                                {attribute.name}
+                              </span>
+
+                              <strong
+                                style={{
+                                  ...styles.roleAttributeModalValue,
+                                  ...getRoleAttributeValueStyle(
+                                    attribute.averageValue
+                                  ),
+                                }}
+                              >
+                                {attribute.valueLabel}
+                              </strong>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>
                 </div>
-              ))}
+              </section>
             </div>
-          </div>
-        </section>
-      </div>
-    );
-  })()}
+          );
+        })()}
     </>
   );
 }

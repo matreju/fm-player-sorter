@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Camp } from "../../types/camp";
 import type { TableRow } from "../../types/table";
+import { useModuleDrawer } from "../../hooks/useModuleDrawer";
 import { loadCamps } from "../../utils/campStorage";
 import {
   formatAverageRatingValue,
@@ -12,17 +13,23 @@ import {
 import { nationalCoreStyles as styles } from "./NationalCore.styles";
 
 type NationalCoreView = "core" | "caps" | "callups" | "captains";
-type PositionFilter = "all" | "goalkeepers" | "defenders" | "midfielders" | "attackers";
-const moduleDockEventName = "fm-player-sorter-open-module";
+
+type PositionFilter =
+  | "all"
+  | "goalkeepers"
+  | "defenders"
+  | "midfielders"
+  | "attackers";
+
 type NationalCoreDrawerProps = {
   rows: TableRow[];
 };
 
 const VIEW_LABELS: Record<NationalCoreView, string> = {
-  core: "Trzon kadry",
-  caps: "Najwięcej meczów",
-  callups: "Najwięcej powołań",
-  captains: "Kandydaci na kapitana",
+  core: "Aktualny trzon",
+  caps: "Historia / występy",
+  callups: "Powołania",
+  captains: "Kapitanowie",
 };
 
 const POSITION_FILTERS: Array<{
@@ -43,21 +50,23 @@ function normalizeText(value: unknown): string {
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "");
 }
-
+function getHistoryAppearances(player: NationalCorePlayer): number {
+  return Math.max(player.nationalCaps ?? 0, player.appMatches ?? 0);
+}
 function getViewDescription(view: NationalCoreView): string {
   if (view === "core") {
-    return "Ogólny ranking znaczenia zawodnika dla reprezentacji.";
+    return "Aktualny trzon: ostatnie powołania, minuty, aktywność i dopiero potem historia.";
   }
 
   if (view === "caps") {
-    return "Najbardziej doświadczeni reprezentanci według kolumny Wyst. Rep.";
+    return "Historyczne znaczenie: najbardziej doświadczeni reprezentanci według występów.";
   }
 
   if (view === "callups") {
     return "Najczęściej powoływani zawodnicy na podstawie zapisanych zgrupowań.";
   }
 
-  return "Ranking kapitański: doświadczenie, wiek, przywództwo, współpraca i mental.";
+  return "Kapitanowie: aktualność w kadrze, doświadczenie, przywództwo, współpraca i mental.";
 }
 
 function hasPositionCode(position: string, code: string): boolean {
@@ -86,14 +95,10 @@ function getPlayerPositionFilter(player: NationalCorePlayer): PositionFilter {
     return "goalkeepers";
   }
 
-  // Najpierw napastnik, bo zawodnik typu OP (Ś), N (Ś)
-  // ma być widoczny w ATA, a nie zgubiony w POM.
   if (hasPositionCode(position, "N")) {
     return "attackers";
   }
 
-  // Obrońcy: tylko realne O/WO/ŚO/LO/PO itd.
-  // Nie łapiemy OP, bo OP to ofensywny pomocnik.
   if (
     hasPositionCode(position, "O") ||
     hasPositionCode(position, "WO") ||
@@ -125,6 +130,7 @@ function getPlayerPositionFilter(player: NationalCorePlayer): PositionFilter {
 
   return "midfielders";
 }
+
 function getSortedPlayers(
   players: NationalCorePlayer[],
   view: NationalCoreView
@@ -133,12 +139,23 @@ function getSortedPlayers(
 
   if (view === "caps") {
     return sorted.sort((left, right) => {
+      const leftAppearances = getHistoryAppearances(left);
+      const rightAppearances = getHistoryAppearances(right);
+
+      if (rightAppearances !== leftAppearances) {
+        return rightAppearances - leftAppearances;
+      }
+
       if (right.nationalCaps !== left.nationalCaps) {
         return right.nationalCaps - left.nationalCaps;
       }
 
-      if (right.coreScore !== left.coreScore) {
-        return right.coreScore - left.coreScore;
+      if (right.appMatches !== left.appMatches) {
+        return right.appMatches - left.appMatches;
+      }
+
+      if (right.recentMinutes !== left.recentMinutes) {
+        return right.recentMinutes - left.recentMinutes;
       }
 
       return left.name.localeCompare(right.name, "pl");
@@ -149,6 +166,10 @@ function getSortedPlayers(
     return sorted.sort((left, right) => {
       if (right.appCallUps !== left.appCallUps) {
         return right.appCallUps - left.appCallUps;
+      }
+
+      if (right.recentCallUps !== left.recentCallUps) {
+        return right.recentCallUps - left.recentCallUps;
       }
 
       if (right.appMatches !== left.appMatches) {
@@ -169,6 +190,10 @@ function getSortedPlayers(
         return right.captainScore - left.captainScore;
       }
 
+      if (right.recentMinutes !== left.recentMinutes) {
+        return right.recentMinutes - left.recentMinutes;
+      }
+
       if (right.nationalCaps !== left.nationalCaps) {
         return right.nationalCaps - left.nationalCaps;
       }
@@ -178,16 +203,39 @@ function getSortedPlayers(
   }
 
   return sorted.sort((left, right) => {
+    const coreStatusOrder: Record<string, number> = {
+      "Trzon kadry": 0,
+      Regularny: 1,
+      Rotacja: 2,
+      Epizod: 3,
+      Nowy: 4,
+    };
+
+    const statusDiff =
+      coreStatusOrder[left.coreStatus] - coreStatusOrder[right.coreStatus];
+
+    if (statusDiff !== 0) {
+      return statusDiff;
+    }
+
     if (right.coreScore !== left.coreScore) {
       return right.coreScore - left.coreScore;
     }
 
-    if (right.nationalCaps !== left.nationalCaps) {
-      return right.nationalCaps - left.nationalCaps;
+    if (right.recentMinutes !== left.recentMinutes) {
+      return right.recentMinutes - left.recentMinutes;
+    }
+
+    if (right.recentCallUps !== left.recentCallUps) {
+      return right.recentCallUps - left.recentCallUps;
     }
 
     if (right.appCallUps !== left.appCallUps) {
       return right.appCallUps - left.appCallUps;
+    }
+
+    if (right.nationalCaps !== left.nationalCaps) {
+      return right.nationalCaps - left.nationalCaps;
     }
 
     return left.name.localeCompare(right.name, "pl");
@@ -220,6 +268,8 @@ function getFilteredPlayers(
         player.position,
         player.coreStatus,
         player.captainStatus,
+        player.currentStatus,
+        player.latestCampName,
       ].join(" ")
     );
 
@@ -262,54 +312,93 @@ function getBadgeStyle(player: NationalCorePlayer, view: NationalCoreView) {
   return styles.badge;
 }
 
+function getCurrentStatusBadgeStyle(player: NationalCorePlayer) {
+  if (player.currentStatus === "Aktualnie powołany") {
+    return {
+      ...styles.badge,
+      ...styles.regularBadge,
+    };
+  }
+
+  if (player.currentStatus === "Regularnie powoływany") {
+    return styles.badge;
+  }
+
+  if (player.currentStatus === "Ostatnio w rotacji") {
+    return {
+      ...styles.badge,
+      ...styles.rotationBadge,
+    };
+  }
+
+  if (player.currentStatus === "Odesłany / poza finałową kadrą") {
+    return {
+      ...styles.badge,
+      ...styles.rotationBadge,
+    };
+  }
+
+  if (player.currentStatus === "Historyczny lider") {
+    return styles.captainBadge;
+  }
+
+  return {
+    ...styles.badge,
+    opacity: 0.72,
+  };
+}
+
 function renderPlayerStats(player: NationalCorePlayer, view: NationalCoreView) {
   if (view === "captains") {
     return (
       <>
-        {renderStat("Ocena kapitańska", formatNationalCoreScore(player.captainScore))}
+        {renderStat(
+          "Ocena kapitańska",
+          formatNationalCoreScore(player.captainScore)
+        )}
+        {renderStat("Status", player.currentStatus)}
         {renderStat("Przywództwo", formatNullableNumber(player.leadership))}
         {renderStat("Współpraca", formatNullableNumber(player.teamwork))}
         {renderStat("Presja", formatNullableNumber(player.pressure))}
-        {renderStat("Występy w kadrze", player.nationalCaps)}
-        {renderStat("Wiek", player.age ?? "-")}
+        {renderStat("Ostatnie minuty", player.recentMinutes)}
       </>
     );
   }
 
-  if (view === "caps") {
-    return (
-      <>
-        {renderStat("Występy w kadrze", player.nationalCaps)}
+if (view === "caps") {
+  return (
+    <>
+      {renderStat("Występy", getHistoryAppearances(player))}
         {renderStat("Gole w kadrze", player.nationalGoals)}
-        {renderStat("Ocena trzonu", formatNationalCoreScore(player.coreScore))}
+        {renderStat("Aktualny status", player.currentStatus)}
+        {renderStat("Ostatnie minuty", player.recentMinutes)}
         {renderStat("Powołania", player.appCallUps)}
-        {renderStat("Wiek", player.age ?? "-")}
-        {renderStat("Obecne umiejętności", formatNullableNumber(player.overallAbility))}
-              </>
+        {renderStat("OU", formatNullableNumber(player.overallAbility))}
+      </>
     );
   }
 
   if (view === "callups") {
     return (
       <>
-      {renderStat("Powołania", player.appCallUps)}
-      {renderStat("Mecze ze zgrupowań", player.appMatches)}
-      {renderStat("Występy w kadrze", player.nationalCaps)}
-      {renderStat("Gole w kadrze", player.nationalGoals)}
-      {renderStat("Gole + asysty", `${player.goals}+${player.assists}`)}
-      {renderStat("Ocena trzonu", formatNationalCoreScore(player.coreScore))}
+        {renderStat("Powołania", player.appCallUps)}
+        {renderStat("Ostatnie pow.", player.recentCallUps)}
+        {renderStat("Mecze ze zgr.", player.appMatches)}
+        {renderStat("Ostatnie minuty", player.recentMinutes)}
+        {renderStat("Gole + asysty", `${player.goals}+${player.assists}`)}
+        {renderStat("Śr. ocena", formatAverageRatingValue(player.avgRating))}
       </>
     );
   }
 
   return (
     <>
-    {renderStat("Ocena trzonu", formatNationalCoreScore(player.coreScore))}
-    {renderStat("Występy w kadrze", player.nationalCaps)}
-    {renderStat("Gole w kadrze", player.nationalGoals)}
-    {renderStat("Powołania", player.appCallUps)}
-    {renderStat("Wiek", player.age ?? "-")}
-    {renderStat("Obecne umiejętności", formatNullableNumber(player.overallAbility))}
+      {renderStat("Ocena trzonu", formatNationalCoreScore(player.coreScore))}
+      {renderStat("Status", player.currentStatus)}
+      {renderStat("Ostatnie pow.", player.recentCallUps)}
+      {renderStat("Ostatnie minuty", player.recentMinutes)}
+      {renderStat("Występy w kadrze", player.nationalCaps)}
+      {renderStat("OU", formatNullableNumber(player.overallAbility))}
     </>
   );
 }
@@ -336,15 +425,25 @@ function PlayerCard({
         </span>
 
         <span style={styles.playerSubMeta}>
-OU: {formatNullableNumber(player.overallAbility)} · Występy w kadrze:{" "}
-{player.nationalCaps}
+          OU: {formatNullableNumber(player.overallAbility)} · Występy w kadrze:{" "}
+          {player.nationalCaps} · Ostatnio: {player.recentCallUps} pow. /{" "}
+          {player.recentMinutes} min
           {view === "callups"
             ? ` · Śr. ocena: ${formatAverageRatingValue(player.avgRating)}`
             : ""}
         </span>
 
+        <span style={styles.playerSubMeta}>
+          Aktualność: <strong>{player.currentStatus}</strong>
+          {player.latestCampName ? ` · ${player.latestCampName}` : ""}
+        </span>
+
         <span style={getBadgeStyle(player, view)}>
           {view === "captains" ? player.captainStatus : player.coreStatus}
+        </span>
+
+        <span style={getCurrentStatusBadgeStyle(player)}>
+          {player.currentStatus}
         </span>
       </div>
 
@@ -362,15 +461,21 @@ function getNavMetric(
   }
 
   if (view === "core") {
-    return `${players.filter((player) => player.coreStatus === "Trzon kadry").length} w trzonie`;
+    return `${
+      players.filter((player) => player.coreStatus === "Trzon kadry").length
+    } w trzonie`;
   }
 
-  if (view === "caps") {
-    return `${Math.max(...players.map((player) => player.nationalCaps))} max występów`;
-  }
+if (view === "caps") {
+  return `${Math.max(
+    ...players.map((player) => getHistoryAppearances(player))
+  )} max występów`;
+}
 
   if (view === "callups") {
-    return `${Math.max(...players.map((player) => player.appCallUps))} max powołań`;
+    return `${Math.max(
+      ...players.map((player) => player.appCallUps)
+    )} max powołań`;
   }
 
   const bestCaptain = [...players].sort(
@@ -378,34 +483,24 @@ function getNavMetric(
   )[0];
 
   return bestCaptain
-    ? `${formatNationalCoreScore(bestCaptain.captainScore)} · ${bestCaptain.name}`
+    ? `${formatNationalCoreScore(bestCaptain.captainScore)} · ${
+        bestCaptain.name
+      }`
     : "-";
 }
 
 export function NationalCoreDrawer({ rows }: NationalCoreDrawerProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  useEffect(() => {
-  function handleOpenModule(event: Event) {
-    const module = (event as CustomEvent<{ module?: string }>).detail?.module;
-
-    if (module === "core") {
-      setIsOpen(true);
-    }
-  }
-
-  window.addEventListener(moduleDockEventName, handleOpenModule);
-
-  return () => {
-    window.removeEventListener(moduleDockEventName, handleOpenModule);
-  };
-}, []);
+  const { isOpen, close } = useModuleDrawer("core");
   const [camps, setCamps] = useState<Camp[]>([]);
   const [activeView, setActiveView] = useState<NationalCoreView>("core");
-  const [positionFilter, setPositionFilter] = useState<PositionFilter>("all");
+  const [positionFilter, setPositionFilter] =
+    useState<PositionFilter>("all");
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      return;
+    }
 
     setCamps(loadCamps());
   }, [isOpen]);
@@ -425,122 +520,119 @@ export function NationalCoreDrawer({ rows }: NationalCoreDrawerProps) {
     [sortedPlayers, search, positionFilter]
   );
 
-  return (
-    <>
-      {isOpen && (
-        <div style={styles.overlay}>
-          <section style={styles.drawer}>
-            <header style={styles.header}>
-              <div>
-                <h2 style={styles.title}>Trzon reprezentacji</h2>
+  if (!isOpen) {
+    return null;
+  }
 
-                <div style={styles.subtitle}>
-                  Liderzy kadry, hierarchia szatni i kandydaci na kapitana.
+  return (
+    <div style={styles.overlay}>
+      <section style={styles.drawer}>
+        <header style={styles.header}>
+          <div>
+            <h2 style={styles.title}>Trzon reprezentacji</h2>
+
+            <div style={styles.subtitle}>
+              Aktualni liderzy kadry, historia reprezentacji i realni
+              kandydaci na kapitana.
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={close}
+            style={styles.closeButton}
+            aria-label="Zamknij trzon reprezentacji"
+          >
+            ×
+          </button>
+        </header>
+
+        <main style={styles.body}>
+          <section style={styles.tilesGrid}>
+            {(["core", "caps", "callups", "captains"] as NationalCoreView[]).map(
+              (view) => (
+                <button
+                  key={view}
+                  type="button"
+                  onClick={() => setActiveView(view)}
+                  style={{
+                    ...styles.navTile,
+                    ...(activeView === view ? styles.navTileActive : {}),
+                  }}
+                >
+                  <span style={styles.navTileTitle}>{VIEW_LABELS[view]}</span>
+
+                  <span style={styles.navTileText}>
+                    {getViewDescription(view)}
+                  </span>
+
+                  <span style={styles.navTileMetric}>
+                    {getNavMetric(view, players)}
+                  </span>
+                </button>
+              )
+            )}
+          </section>
+
+          <section style={styles.panel}>
+            <div style={styles.panelHeader}>
+              <div>
+                <h3 style={styles.panelTitle}>{VIEW_LABELS[activeView]}</h3>
+
+                <div style={styles.panelHint}>
+                  {getViewDescription(activeView)}
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                style={styles.closeButton}
-                aria-label="Zamknij trzon reprezentacji"
-              >
-                ×
-              </button>
-            </header>
+              <div style={styles.toolbar}>
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Szukaj zawodnika, klubu, pozycji, statusu..."
+                  style={styles.input}
+                />
 
-            <main style={styles.body}>
-              <section style={styles.tilesGrid}>
-                {(["core", "caps", "callups", "captains"] as NationalCoreView[]).map(
-                  (view) => (
-                    <button
-                      key={view}
-                      type="button"
-                      onClick={() => setActiveView(view)}
-                      style={{
-                        ...styles.navTile,
-                        ...(activeView === view ? styles.navTileActive : {}),
-                      }}
-                    >
-                      <span style={styles.navTileTitle}>
-                        {VIEW_LABELS[view]}
-                      </span>
+                <span style={styles.badge}>
+                  Pokazano: {filteredPlayers.length} / {players.length}
+                </span>
+              </div>
+            </div>
 
-                      <span style={styles.navTileText}>
-                        {getViewDescription(view)}
-                      </span>
+            <div style={styles.positionFilters}>
+              {POSITION_FILTERS.map((filter) => (
+                <button
+                  key={filter.id}
+                  type="button"
+                  onClick={() => setPositionFilter(filter.id)}
+                  style={{
+                    ...styles.positionFilterButton,
+                    ...(positionFilter === filter.id
+                      ? styles.positionFilterButtonActive
+                      : {}),
+                  }}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
 
-                      <span style={styles.navTileMetric}>
-                        {getNavMetric(view, players)}
-                      </span>
-                    </button>
-                  )
-                )}
-              </section>
+            <div style={styles.list}>
+              {filteredPlayers.length === 0 && (
+                <div style={styles.empty}>Brak zawodników do pokazania.</div>
+              )}
 
-              <section style={styles.panel}>
-                <div style={styles.panelHeader}>
-                  <div>
-                    <h3 style={styles.panelTitle}>{VIEW_LABELS[activeView]}</h3>
-
-                    <div style={styles.panelHint}>
-                      {getViewDescription(activeView)}
-                    </div>
-                  </div>
-
-                  <div style={styles.toolbar}>
-                    <input
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                      placeholder="Szukaj zawodnika, klubu, pozycji..."
-                      style={styles.input}
-                    />
-
-                    <span style={styles.badge}>
-                      Pokazano: {filteredPlayers.length} / {players.length}
-                    </span>
-                  </div>
-                </div>
-
-                <div style={styles.positionFilters}>
-                  {POSITION_FILTERS.map((filter) => (
-                    <button
-                      key={filter.id}
-                      type="button"
-                      onClick={() => setPositionFilter(filter.id)}
-                      style={{
-                        ...styles.positionFilterButton,
-                        ...(positionFilter === filter.id
-                          ? styles.positionFilterButtonActive
-                          : {}),
-                      }}
-                    >
-                      {filter.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div style={styles.list}>
-                  {filteredPlayers.length === 0 && (
-                    <div style={styles.empty}>
-                      Brak zawodników do pokazania.
-                    </div>
-                  )}
-
-                  {filteredPlayers.slice(0, 60).map((player, index) => (
-                    <PlayerCard
-                      key={`${activeView}-${player.key}`}
-                      player={player}
-                      view={activeView}
-                      rank={index + 1}
-                    />
-                  ))}
-                </div>
-              </section>
-            </main>
+              {filteredPlayers.slice(0, 60).map((player, index) => (
+                <PlayerCard
+                  key={`${activeView}-${player.key}`}
+                  player={player}
+                  view={activeView}
+                  rank={index + 1}
+                />
+              ))}
+            </div>
           </section>
-        </div>
-      )}
-    </>
+        </main>
+      </section>
+    </div>
   );
 }

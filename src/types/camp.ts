@@ -5,6 +5,8 @@ export type CampType =
   | "tournament"
   | "other";
 
+export type CampPlayerStatus = "active" | "released";
+
 export type CampPlayerSnapshot = {
   key: string;
   name: string;
@@ -19,8 +21,12 @@ export type CampPlayerSnapshot = {
   age: string;
   uid?: string;
   legacyKey?: string;
-};
 
+  // active = normalnie w kadrze zgrupowania
+  // released = odesłany po redukcji kadry, ale zostaje w historii/statystykach
+  status?: CampPlayerStatus;
+  releasedAt?: string;
+};
 export type CampMatchType =
   | "friendly"
   | "qualifiers"

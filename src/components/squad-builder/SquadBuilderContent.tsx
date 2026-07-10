@@ -6,6 +6,9 @@ import { SquadBuilderActiveSlotPanel } from "./SquadBuilderActiveSlotPanel";
 import { SquadBuilderPlanSuggestionsModal } from "./SquadBuilderPlanSuggestionsModal";
 import { useSquadBuilderSlotDrag } from "./useSquadBuilderSlotDrag";
 import { useSquadBuilderSuggestions } from "./useSquadBuilderSuggestions";
+import { loadCamps } from "../../utils/campStorage";
+import { loadCampaigns } from "../../utils/campaignStorage";
+import { buildCampaignCallUpsByPlayerKey } from "../../utils/squadBuilderCampaignCallups";
 import {
   loadLocalStorageValue,
   saveLocalStorageValue,
@@ -25,10 +28,19 @@ import {
   type TacticalPlanRecommendation,
 } from "../../utils/tacticalPlanAdvisor";
 import type {
+  FormationPreset,
   FormationSlot,
+  PitchPosition,
   SquadBuilderProps,
   SquadBuilderScoreMode,
 } from "../../types/squadBuilderTypes";
+import {
+  addCustomSquadBuilderFormation,
+  createCustomSquadBuilderFormation,
+  loadCustomSquadBuilderFormations,
+  removeCustomSquadBuilderFormation,
+  type CustomSquadBuilderFormation,
+} from "../../utils/customSquadBuilderFormations";
 
 const SQUAD_BUILDER_STATE_STORAGE_KEY =
   "fm-player-sorter-squad-builder-state-v3";
@@ -41,28 +53,39 @@ type PersistedSquadBuilderState = {
   onlySelected?: boolean;
   topOnlyNatural?: boolean;
   scoreMode?: SquadBuilderScoreMode;
+  campaignCallUpsCampaignId?: string;
   slots?: FormationSlot[];
   withoutBallSlotOverrides?: Record<string, Partial<FormationSlot>>;
 };
 
-function getDefaultFormationId() {
-  return FORMATION_PRESETS.some((preset) => preset.id === "433dm")
+function getDefaultFormationId(
+  formationPresets: FormationPreset[] = FORMATION_PRESETS
+) {
+  return formationPresets.some((preset) => preset.id === "433dm")
     ? "433dm"
-    : FORMATION_PRESETS[0]?.id ?? "";
+    : formationPresets[0]?.id ?? "";
 }
 
-function getValidFormationId(formationId: string | undefined) {
-  if (!formationId) return getDefaultFormationId();
+function getValidFormationId(
+  formationId: string | undefined,
+  formationPresets: FormationPreset[] = FORMATION_PRESETS
+) {
+  if (!formationId) {
+    return getDefaultFormationId(formationPresets);
+  }
 
-  return FORMATION_PRESETS.some((preset) => preset.id === formationId)
+  return formationPresets.some((preset) => preset.id === formationId)
     ? formationId
-    : getDefaultFormationId();
+    : getDefaultFormationId(formationPresets);
 }
 
-function getFormationById(formationId: string) {
+function getFormationById(
+  formationId: string,
+  formationPresets: FormationPreset[] = FORMATION_PRESETS
+) {
   return (
-    FORMATION_PRESETS.find((preset) => preset.id === formationId) ??
-    FORMATION_PRESETS[0]
+    formationPresets.find((preset) => preset.id === formationId) ??
+    formationPresets[0]
   );
 }
 
@@ -76,9 +99,10 @@ function makeWithBallSlots(slots: FormationSlot[]): FormationSlot[] {
 
 function makeWithoutBallSlots(
   formationId: string,
-  overrides: Record<string, Partial<FormationSlot>>
+  overrides: Record<string, Partial<FormationSlot>>,
+  formationPresets: FormationPreset[] = FORMATION_PRESETS
 ): FormationSlot[] {
-  const formation = getFormationById(formationId);
+  const formation = getFormationById(formationId, formationPresets);
 
   return cloneFormationSlots(formation.slots).map((slot) => {
     const override = overrides[slot.id] ?? {};
@@ -99,6 +123,8 @@ function makeWithoutBallSlots(
 
 export function SquadBuilderContent({
   rows,
+  playerMarks = {},
+  selectedPositionByPlayerKey = {},
   getPlayerMark,
   onSelectPlayer,
   onClearCallUps,
@@ -110,18 +136,29 @@ export function SquadBuilderContent({
       {}
     )
   );
+const [customFormations, setCustomFormations] = useState<
+  CustomSquadBuilderFormation[]
+>(() => loadCustomSquadBuilderFormations());
 
-  const initialFormationId = getValidFormationId(persistedState.formationId);
-  const initialFormation = getFormationById(initialFormationId);
+const formationPresets = useMemo(
+  () => [...FORMATION_PRESETS, ...customFormations],
+  [customFormations]
+);
+const initialFormationId = getValidFormationId(
+  persistedState.formationId,
+  formationPresets
+);
+const initialFormation = getFormationById(initialFormationId, formationPresets);
 
   
   const [formationId, setFormationId] = useState(initialFormationId);
 
   const [withoutBallFormationId, setWithoutBallFormationId] = useState(
-    getValidFormationId(
-      persistedState.withoutBallFormationId ?? initialFormationId
-    )
-  );
+  getValidFormationId(
+    persistedState.withoutBallFormationId ?? initialFormationId,
+    formationPresets
+  )
+);
 
   const [slots, setSlots] = useState<FormationSlot[]>(() => {
     if (persistedState.slots && persistedState.slots.length > 0) {
@@ -156,17 +193,44 @@ export function SquadBuilderContent({
   );
 
   const [isPlanSuggestionsOpen, setIsPlanSuggestionsOpen] = useState(false);
+  const [campaigns] = useState(() => loadCampaigns());
+  const [storedCamps] = useState(() => loadCamps());
 
-  const formation = getFormationById(formationId);
-  const withoutBallFormation = getFormationById(withoutBallFormationId);
+  const campaignOptions = useMemo(() => {
+    return campaigns.filter((campaign) =>
+      storedCamps.some((camp) => camp.campaignId === campaign.id)
+    );
+  }, [campaigns, storedCamps]);
+
+  const [campaignCallUpsCampaignId, setCampaignCallUpsCampaignId] = useState(
+    persistedState.campaignCallUpsCampaignId ??
+      campaignOptions[0]?.id ??
+      ""
+  );
+
+  const selectedCampaignId =
+    campaignCallUpsCampaignId || campaignOptions[0]?.id || "";
+
+  const selectedCampaignName =
+    campaignOptions.find((campaign) => campaign.id === selectedCampaignId)
+      ?.name ?? "brak kampanii";
+const formation = getFormationById(formationId, formationPresets);
+const withoutBallFormation = getFormationById(
+  withoutBallFormationId,
+  formationPresets
+);
 
   const withBallSlots = useMemo(() => makeWithBallSlots(slots), [slots]);
 
   const withoutBallSlots = useMemo(
-    () => makeWithoutBallSlots(withoutBallFormationId, withoutBallSlotOverrides),
-    [withoutBallFormationId, withoutBallSlotOverrides]
-  );
-
+  () =>
+    makeWithoutBallSlots(
+      withoutBallFormationId,
+      withoutBallSlotOverrides,
+      formationPresets
+    ),
+  [withoutBallFormationId, withoutBallSlotOverrides, formationPresets]
+);
   const activeSlots =
     tacticalView === "with-ball" ? withBallSlots : withoutBallSlots;
 
@@ -186,6 +250,7 @@ export function SquadBuilderContent({
     onlySelected,
     topOnlyNatural,
     scoreMode,
+    campaignCallUpsCampaignId,
     slots,
     withoutBallSlotOverrides,
   }
@@ -198,38 +263,86 @@ export function SquadBuilderContent({
     onlySelected,
     topOnlyNatural,
     scoreMode,
+    campaignCallUpsCampaignId,
     slots,
     withoutBallSlotOverrides,
   ]);
+  const campaignCallUpsByPlayerKey = useMemo(() => {
+    if (scoreMode !== "campaign-callups") {
+      return {};
+    }
 
-  const {
-    availableRows,
-    suggestedSquadWithBall,
-    suggestedSquadWithoutBall,
-    hiddenTopCount,
-    getVisibleTopCandidates,
-    hideTopCandidate,
-    clearHiddenTopCandidates,
-  } = useSquadBuilderSuggestions({
+    return buildCampaignCallUpsByPlayerKey(
+      rows,
+      storedCamps,
+      selectedCampaignId
+    );
+  }, [rows, storedCamps, selectedCampaignId, scoreMode]);
+ const {
+  availableRows,
+  suggestedSquadWithBall,
+  suggestedSquadWithoutBall,
+  hiddenTopCount,
+  getVisibleTopCandidates,
+  hideTopCandidate,
+  hideTopCandidateEverywhere,
+  clearHiddenTopCandidates,
+  forceCandidateOnSlot,
+} = useSquadBuilderSuggestions({
+  rows,
+  playerMarks,
+  selectedPositionByPlayerKey,
+  campaignCallUpsByPlayerKey,
+  withBallSlots,
+  withoutBallSlots,
+  tacticalView,
+  onlySelected,
+  topOnlyNatural,
+  scoreMode,
+  getPlayerMark,
+});
+  const selectionFilterSignatureForPlans = useMemo(() => {
+  const rejectedKeys: string[] = [];
+  const selectedKeys: string[] = [];
+
+  for (const [playerKey, mark] of Object.entries(playerMarks)) {
+    if (mark === "rejected") {
+      rejectedKeys.push(playerKey);
+      continue;
+    }
+
+    if (onlySelected && mark === "selected") {
+      selectedKeys.push(playerKey);
+    }
+  }
+
+  rejectedKeys.sort();
+  selectedKeys.sort();
+
+  return `${onlySelected ? selectedKeys.join("|") : ""}::${rejectedKeys.join(
+    "|"
+  )}`;
+}, [playerMarks, onlySelected]);
+
+const tacticalPlanRecommendations = useMemo(() => {
+  if (!isPlanSuggestionsOpen) {
+    return [];
+  }
+
+  return getTacticalPlanRecommendations({
     rows,
-    withBallSlots,
-    withoutBallSlots,
-    tacticalView,
+    getPlayerMark,
     onlySelected,
     topOnlyNatural,
-    scoreMode,
-    getPlayerMark,
+    limit: 6,
   });
-
-  const tacticalPlanRecommendations = useMemo(() => {
-    return getTacticalPlanRecommendations({
-      rows,
-      getPlayerMark,
-      onlySelected,
-      topOnlyNatural,
-      limit: 4,
-    });
-  }, [rows, getPlayerMark, onlySelected, topOnlyNatural]);
+}, [
+  isPlanSuggestionsOpen,
+  rows,
+  onlySelected,
+  topOnlyNatural,
+  selectionFilterSignatureForPlans,
+]);
 
   function updateWithBallSlot(slotId: string, patch: Partial<FormationSlot>) {
     setSlots((current) =>
@@ -337,37 +450,167 @@ export function SquadBuilderContent({
     withoutBallFormationId,
     withoutBallDrag.customPitchPositions
   );
+function getEffectivePitchPositionsForSlots(
+  currentSlots: FormationSlot[],
+  getCurrentPitchPosition: (slot: FormationSlot) => PitchPosition
+): Record<string, PitchPosition> {
+  return Object.fromEntries(
+    currentSlots.map((slot) => [
+      slot.id,
+      { ...getCurrentPitchPosition(slot) },
+    ])
+  );
+}
 
-  function changeFormation(nextFormationId: string) {
-    const nextFormation = FORMATION_PRESETS.find(
-      (preset) => preset.id === nextFormationId
-    );
+function isCustomFormationId(id: string) {
+  return customFormations.some((formation) => formation.id === id);
+}
 
-    if (!nextFormation) return;
+const activeFormationIsCustom =
+  tacticalView === "with-ball"
+    ? isCustomFormationId(formationId)
+    : isCustomFormationId(withoutBallFormationId);
 
-    setFormationId(nextFormation.id);
-    setSlots(makeWithBallSlots(cloneFormationSlots(nextFormation.slots)));
-    setTacticalView("with-ball");
-    setActiveSlotId(nextFormation.slots[0]?.id ?? "");
-    withBallDrag.resetCustomPitchPositions();
-    clearHiddenTopCandidates();
+function saveCurrentCustomFormation() {
+  const currentSlots =
+    tacticalView === "with-ball" ? withBallSlots : withoutBallSlots;
+
+  const getCurrentPitchPosition =
+    tacticalView === "with-ball"
+      ? withBallDrag.getCurrentPitchPosition
+      : withoutBallDrag.getCurrentPitchPosition;
+
+  const detectedName =
+    tacticalView === "with-ball"
+      ? detectedShape || formation.name
+      : detectedWithoutBallShape || withoutBallFormation.name;
+
+  const name = window.prompt(
+    "Nazwa własnej formacji:",
+    `Moja ${detectedName}`
+  );
+
+  if (!name?.trim()) {
+    return;
   }
+
+  const pitchPositions = getEffectivePitchPositionsForSlots(
+    currentSlots,
+    getCurrentPitchPosition
+  );
+
+  const customFormation = createCustomSquadBuilderFormation({
+    name: name.trim(),
+    slots: currentSlots,
+    pitchPositions,
+  });
+
+  const nextCustomFormations = addCustomSquadBuilderFormation(
+    customFormations,
+    customFormation
+  );
+
+  setCustomFormations(nextCustomFormations);
+
+  if (tacticalView === "with-ball") {
+    setFormationId(customFormation.id);
+    setSlots(makeWithBallSlots(cloneFormationSlots(customFormation.slots)));
+    withBallDrag.replaceCustomPitchPositions(customFormation.pitchPositions);
+    setActiveSlotId(customFormation.slots[0]?.id ?? "");
+    return;
+  }
+
+  setWithoutBallFormationId(customFormation.id);
+  setWithoutBallSlotOverrides({});
+  withoutBallDrag.replaceCustomPitchPositions(customFormation.pitchPositions);
+  setActiveSlotId(customFormation.slots[0]?.id ?? "");
+}
+
+function deleteActiveCustomFormation() {
+  const activeFormationId =
+    tacticalView === "with-ball" ? formationId : withoutBallFormationId;
+
+  const activeCustomFormation = customFormations.find(
+    (formation) => formation.id === activeFormationId
+  );
+
+  if (!activeCustomFormation) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Usunąć własną formację "${activeCustomFormation.name}"?`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const nextCustomFormations = removeCustomSquadBuilderFormation(
+    customFormations,
+    activeCustomFormation.id
+  );
+
+  setCustomFormations(nextCustomFormations);
+
+  const defaultFormationId = getDefaultFormationId(FORMATION_PRESETS);
+  const defaultFormation = getFormationById(defaultFormationId, FORMATION_PRESETS);
+
+  if (formationId === activeCustomFormation.id) {
+    setFormationId(defaultFormationId);
+    setSlots(makeWithBallSlots(cloneFormationSlots(defaultFormation.slots)));
+    withBallDrag.replaceCustomPitchPositions({});
+  }
+
+  if (withoutBallFormationId === activeCustomFormation.id) {
+    setWithoutBallFormationId(defaultFormationId);
+    setWithoutBallSlotOverrides({});
+    withoutBallDrag.replaceCustomPitchPositions({});
+  }
+
+  setActiveSlotId(defaultFormation.slots[0]?.id ?? "");
+}
+function changeFormation(nextFormationId: string) {
+  const nextFormation = formationPresets.find(
+    (preset) => preset.id === nextFormationId
+  );
+
+  if (!nextFormation) return;
+
+  const customFormation = customFormations.find(
+    (preset) => preset.id === nextFormation.id
+  );
+
+  setFormationId(nextFormation.id);
+  setSlots(makeWithBallSlots(cloneFormationSlots(nextFormation.slots)));
+  setTacticalView("with-ball");
+  setActiveSlotId(nextFormation.slots[0]?.id ?? "");
+  withBallDrag.replaceCustomPitchPositions(
+    customFormation?.pitchPositions ?? {}
+  );
+  clearHiddenTopCandidates();
+}
 
   function changeWithoutBallFormation(nextFormationId: string) {
-    const nextFormation = FORMATION_PRESETS.find(
-      (preset) => preset.id === nextFormationId
-    );
+  const nextFormation = formationPresets.find(
+    (preset) => preset.id === nextFormationId
+  );
 
-    if (!nextFormation) return;
+  if (!nextFormation) return;
 
-    setWithoutBallFormationId(nextFormation.id);
-    setWithoutBallSlotOverrides({});
-    setTacticalView("without-ball");
-    setActiveSlotId(nextFormation.slots[0]?.id ?? "");
-    withoutBallDrag.resetCustomPitchPositions();
-    clearHiddenTopCandidates();
-  }
+  const customFormation = customFormations.find(
+    (preset) => preset.id === nextFormation.id
+  );
 
+  setWithoutBallFormationId(nextFormation.id);
+  setWithoutBallSlotOverrides({});
+  setTacticalView("without-ball");
+  setActiveSlotId(nextFormation.slots[0]?.id ?? "");
+  withoutBallDrag.replaceCustomPitchPositions(
+    customFormation?.pitchPositions ?? {}
+  );
+  clearHiddenTopCandidates();
+}
   function applyTacticalPlan(recommendation: TacticalPlanRecommendation) {
     setFormationId(recommendation.withBallFormationId);
     setWithoutBallFormationId(recommendation.withoutBallFormationId);
@@ -383,18 +626,31 @@ export function SquadBuilderContent({
   }
 
   function resetCurrentFormationLayout() {
-    setSlots(makeWithBallSlots(cloneFormationSlots(formation.slots)));
-    setWithoutBallSlotOverrides({});
-    setActiveSlotId(
-      tacticalView === "with-ball"
-        ? formation.slots[0]?.id ?? ""
-        : withoutBallFormation.slots[0]?.id ?? ""
-    );
-    clearHiddenTopCandidates();
-    withBallDrag.resetCustomPitchPositions();
-    withoutBallDrag.resetCustomPitchPositions();
-  }
+  const withBallCustomFormation = customFormations.find(
+    (preset) => preset.id === formationId
+  );
 
+  const withoutBallCustomFormation = customFormations.find(
+    (preset) => preset.id === withoutBallFormationId
+  );
+
+  setSlots(makeWithBallSlots(cloneFormationSlots(formation.slots)));
+  setWithoutBallSlotOverrides({});
+
+  setActiveSlotId(
+    tacticalView === "with-ball"
+      ? formation.slots[0]?.id ?? ""
+      : withoutBallFormation.slots[0]?.id ?? ""
+  );
+
+  withBallDrag.replaceCustomPitchPositions(
+    withBallCustomFormation?.pitchPositions ?? {}
+  );
+
+  withoutBallDrag.replaceCustomPitchPositions(
+    withoutBallCustomFormation?.pitchPositions ?? {}
+  );
+}
   function renderActiveSlotPanel() {
     return (
       <SquadBuilderActiveSlotPanel
@@ -409,9 +665,11 @@ export function SquadBuilderContent({
   }
   onUpdateSlot={updateActiveSlot}
   onHideTopCandidate={hideTopCandidate}
+  onHideTopCandidateEverywhere={hideTopCandidateEverywhere}
+  onForceCandidateOnSlot={forceCandidateOnSlot}
   getPlayerMark={getPlayerMark}
   onSelectPlayer={onSelectPlayer}
-      />
+/>
     );
   }
 
@@ -419,31 +677,35 @@ export function SquadBuilderContent({
     return (
       <section style={styles.wrapper}>
         <div style={styles.pitchSection}>
-          <SquadBuilderToolbar
-            formationName={formation.name ?? "-"}
-            detectedShape={detectedShape}
-            detectedWithoutBallShape={detectedWithoutBallShape}
-            availableRowsCount={availableRows.length}
-            slotsCount={withBallSlots.length}
-            formationId={formationId}
-            withoutBallFormationId={withoutBallFormationId}
-            onlySelected={onlySelected}
-            topOnlyNatural={topOnlyNatural}
-            hiddenTopCount={hiddenTopCount}
-            selectedPlayersCount={selectedPlayersCount}
-            planSuggestionsCount={tacticalPlanRecommendations.length}
-            tacticalView={tacticalView}
-            activeSlot={activeSlot}
-            onFormationChange={changeFormation}
-            onWithoutBallFormationChange={changeWithoutBallFormation}
-            onTacticalViewChange={setTacticalView}
-            onOnlySelectedChange={setOnlySelected}
-            onTopOnlyNaturalChange={setTopOnlyNatural}
-            onClearHiddenTopCandidates={clearHiddenTopCandidates}
-            onClearCallUps={onClearCallUps}
-            onResetFormationLayout={resetCurrentFormationLayout}
-            onOpenPlanSuggestions={() => setIsPlanSuggestionsOpen(true)}
-          />
+<SquadBuilderToolbar
+  formationName={formation.name ?? "-"}
+  detectedShape={detectedShape}
+  detectedWithoutBallShape={detectedWithoutBallShape}
+  availableRowsCount={availableRows.length}
+  slotsCount={withBallSlots.length}
+  formationOptions={formationPresets}
+  formationId={formationId}
+  withoutBallFormationId={withoutBallFormationId}
+  onlySelected={onlySelected}
+  topOnlyNatural={topOnlyNatural}
+  hiddenTopCount={hiddenTopCount}
+  selectedPlayersCount={selectedPlayersCount}
+planSuggestionsCount={6}
+  tacticalView={tacticalView}
+  activeSlot={activeSlot}
+  onFormationChange={changeFormation}
+  onWithoutBallFormationChange={changeWithoutBallFormation}
+  onTacticalViewChange={setTacticalView}
+  onOnlySelectedChange={setOnlySelected}
+  onTopOnlyNaturalChange={setTopOnlyNatural}
+  onClearHiddenTopCandidates={clearHiddenTopCandidates}
+  onClearCallUps={onClearCallUps}
+  onResetFormationLayout={resetCurrentFormationLayout}
+  onOpenPlanSuggestions={() => setIsPlanSuggestionsOpen(true)}
+  activeFormationIsCustom={activeFormationIsCustom}
+  onSaveCustomFormation={saveCurrentCustomFormation}
+  onDeleteCustomFormation={deleteActiveCustomFormation}
+/>
 
           <div
             style={{
@@ -454,27 +716,54 @@ export function SquadBuilderContent({
               padding: "0 12px 10px",
             }}
           >
-            <label style={styles.compactCheckbox}>
-              <input
-                type="checkbox"
-                checked={scoreMode === "overall-ability"}
+            <label style={styles.compactField}>
+              <span style={styles.compactLabel}>Tryb składu</span>
+
+              <select
+                value={scoreMode}
                 onChange={(event) =>
-                  setScoreMode(
-                    event.currentTarget.checked
-                      ? "overall-ability"
-                      : "role-score"
-                  )
+                  setScoreMode(event.target.value as SquadBuilderScoreMode)
                 }
-              />
-              Buduj wg OU
+                style={styles.compactSelect}
+              >
+                <option value="role-score">Dopasowanie do roli</option>
+                <option value="overall-ability">Obecne umiejętności / OU</option>
+                <option value="campaign-callups">Powołania w kampanii</option>
+              </select>
             </label>
+
+            {scoreMode === "campaign-callups" && (
+              <label style={styles.compactField}>
+                <span style={styles.compactLabel}>Kampania</span>
+
+                <select
+                  value={selectedCampaignId}
+                  onChange={(event) =>
+                    setCampaignCallUpsCampaignId(event.target.value)
+                  }
+                  style={styles.compactSelect}
+                >
+                  {campaignOptions.length === 0 && (
+                    <option value="">Brak kampanii</option>
+                  )}
+
+                  {campaignOptions.map((campaign) => (
+                    <option key={campaign.id} value={campaign.id}>
+                      {campaign.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
 
             <div style={styles.pitchActiveInfo}>
               Tryb składu:{" "}
               <strong>
                 {scoreMode === "overall-ability"
                   ? "obecne umiejętności"
-                  : "dopasowanie do roli"}
+                  : scoreMode === "campaign-callups"
+                    ? `powołania w kampanii · ${selectedCampaignName}`
+                    : "dopasowanie do roli"}
               </strong>
             </div>
           </div>

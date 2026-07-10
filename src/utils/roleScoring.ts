@@ -497,7 +497,34 @@ const gates = ROLE_GATES_BY_ROLE_ID[role.id] ?? [];
   return Math.max(0, Math.min(adjustedScore, scoreCap));
 }
 type ScoreMode = "min" | "average" | "max";
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
 
+function getTrustedScoreFromRange({
+  minScore,
+  averageScore,
+  usedAttributes,
+  rangedAttributes,
+}: {
+  minScore: number;
+  averageScore: number;
+  usedAttributes: number;
+  rangedAttributes: number;
+}): number {
+  if (rangedAttributes <= 0 || usedAttributes <= 0) {
+    return averageScore;
+  }
+
+  const rangedRatio = clamp(rangedAttributes / usedAttributes, 0, 1);
+
+  // Im więcej widełek, tym mniej ufamy średniej.
+  // Przy małej liczbie widełek wynik lekko spada.
+  // Przy dużej liczbie widełek wynik jest wyraźnie bliżej dolnego wariantu.
+  const averageTrust = clamp(0.45 - rangedRatio * 0.2, 0.25, 0.45);
+
+  return minScore + (averageScore - minScore) * averageTrust;
+}
 export type RoleAttributeImportance = "core" | "key" | "important" | "support";
 
 export const ROLE_ATTRIBUTE_WEIGHTS: Record<RoleAttributeImportance, number> = {
@@ -788,7 +815,6 @@ function calculateAdjustedScoreForMode(
     rangedAttributes: rawResult.rangedAttributes,
   };
 }
-
 export function calculateRoleScoreDetails(
   row: TableRow,
   role: RoleDefinition
@@ -814,8 +840,15 @@ export function calculateRoleScoreDetails(
   }
 
   const minScore = minResult?.score ?? averageResult.score;
-  const score = averageResult.score;
+  const averageScore = averageResult.score;
   const maxScore = maxResult?.score ?? averageResult.score;
+
+  const score = getTrustedScoreFromRange({
+    minScore,
+    averageScore,
+    usedAttributes: averageResult.usedAttributes,
+    rangedAttributes: averageResult.rangedAttributes,
+  });
 
   const result: RoleScoreResult = {
     role,
@@ -831,7 +864,6 @@ export function calculateRoleScoreDetails(
 
   return result;
 }
-
 export function calculateRoleScore(
   row: TableRow,
   role: RoleDefinition

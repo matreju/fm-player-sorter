@@ -15,9 +15,10 @@ import {
 import { cloneFormationSlots } from "./squadBuilderPitch";
 import { getPlayerAvailability } from "./playerAvailability";
 
-const PLAN_LIMIT = 4;
-const WITH_BALL_PLAN_WEIGHT = 0.92;
-const WITHOUT_BALL_PLAN_WEIGHT = 0.08;
+const PLAN_LIMIT = 6;
+const WITH_BALL_PLAN_WEIGHT = 0.9;
+const WITHOUT_BALL_PLAN_WEIGHT = 0.1;
+const MIN_WITH_BALL_VARIETY_GAP = 0.15;
 
 export type TacticalPlanRecommendation = {
   id: string;
@@ -163,12 +164,14 @@ function buildPlanRecommendation(
   const withBallScore = getLineupScore(withBallSquad);
   const withoutBallScore = getLineupScore(withoutBallSquad);
 
-const conversionPenalty = candidateKinds.conversionCount * 1.25;
+  const conversionPenalty = candidateKinds.conversionCount * 1.25;
+  const injuredPenalty = injuredWarnings.length * 0.75;
 
   const score = clampScore(
     withBallScore * WITH_BALL_PLAN_WEIGHT +
       withoutBallScore * WITHOUT_BALL_PLAN_WEIGHT -
-      conversionPenalty
+      conversionPenalty -
+      injuredPenalty
   );
 
   return {
@@ -197,6 +200,58 @@ const conversionPenalty = candidateKinds.conversionCount * 1.25;
   };
 }
 
+function comparePlans(
+  left: TacticalPlanRecommendation,
+  right: TacticalPlanRecommendation
+) {
+  if (right.score !== left.score) return right.score - left.score;
+  if (right.withBallScore !== left.withBallScore) {
+    return right.withBallScore - left.withBallScore;
+  }
+  if (right.withoutBallScore !== left.withoutBallScore) {
+    return right.withoutBallScore - left.withoutBallScore;
+  }
+  return left.name.localeCompare(right.name, "pl");
+}
+
+function pickBestPlanPerWithBallFormation(
+  plans: TacticalPlanRecommendation[]
+): TacticalPlanRecommendation[] {
+  const bestByWithBallFormation = new Map<string, TacticalPlanRecommendation>();
+
+  for (const plan of plans) {
+    const current = bestByWithBallFormation.get(plan.withBallFormationId);
+
+    if (!current || comparePlans(plan, current) < 0) {
+      bestByWithBallFormation.set(plan.withBallFormationId, plan);
+    }
+  }
+
+  return [...bestByWithBallFormation.values()];
+}
+
+function removeAlmostDuplicateWithBallScores(
+  plans: TacticalPlanRecommendation[]
+): TacticalPlanRecommendation[] {
+  const result: TacticalPlanRecommendation[] = [];
+
+  for (const plan of plans) {
+    const hasAlmostSameWithBallScore = result.some(
+      (selectedPlan) =>
+        Math.abs(selectedPlan.withBallScore - plan.withBallScore) <
+        MIN_WITH_BALL_VARIETY_GAP
+    );
+
+    // Nie wycinamy wszystkiego na siłę. Jeżeli formacja jest inna, ale wynik
+    // jest niemal identyczny, nadal może wejść, gdy brakuje propozycji.
+    if (!hasAlmostSameWithBallScore || result.length < 3) {
+      result.push(plan);
+    }
+  }
+
+  return result;
+}
+
 export function getTacticalPlanRecommendations({
   rows,
   getPlayerMark,
@@ -211,7 +266,7 @@ export function getTacticalPlanRecommendations({
     topOnlyNatural,
   });
 
-  const plans: TacticalPlanRecommendation[] = [];
+  const allPlans: TacticalPlanRecommendation[] = [];
 
   for (const withBallFormation of FORMATION_PRESETS) {
     const withBallSlots = makeWithBallSlots(withBallFormation.id);
@@ -233,7 +288,7 @@ export function getTacticalPlanRecommendations({
 
       if (withoutBallCandidates.length < withoutBallSlots.length) continue;
 
-      plans.push(
+      allPlans.push(
         buildPlanRecommendation(
           withBallFormation.id,
           withoutBallFormation.id,
@@ -246,10 +301,11 @@ export function getTacticalPlanRecommendations({
     }
   }
 
-  return plans
-    .sort((left, right) => {
-      if (right.score !== left.score) return right.score - left.score;
-      return right.withBallScore - left.withBallScore;
-    })
-    .slice(0, limit);
+  const variedPlans = pickBestPlanPerWithBallFormation(allPlans).sort(comparePlans);
+  const softlyFilteredPlans = removeAlmostDuplicateWithBallScores(variedPlans);
+
+  const finalPlans =
+    softlyFilteredPlans.length >= limit ? softlyFilteredPlans : variedPlans;
+
+  return finalPlans.slice(0, limit);
 }

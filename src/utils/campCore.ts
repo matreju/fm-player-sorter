@@ -50,9 +50,22 @@ export function createPlayerSnapshot(row: TableRow): CampPlayerSnapshot {
     age: row["Wiek"] || "-",
     uid: uid || undefined,
     legacyKey: getLegacyPlayerKey(row),
+    status: "active",
   };
 }
+export function isCampPlayerActive(player: CampPlayerSnapshot): boolean {
+  return player.status !== "released";
+}
 
+export function isCampPlayerReleased(player: CampPlayerSnapshot): boolean {
+  return player.status === "released";
+}
+
+export function getActiveCampPlayers(
+  players: CampPlayerSnapshot[]
+): CampPlayerSnapshot[] {
+  return players.filter(isCampPlayerActive);
+}
 export function isValidCampPlayer(player: CampPlayerSnapshot): boolean {
   const name = player.name.trim();
   const key = player.key.trim();

@@ -377,7 +377,7 @@ activeTopCards: {
 
 activeTopMiniCard: {
   minWidth:0,
-  minHeight: 170,
+  minHeight: 145,
   display: "grid",
   gridTemplateRows: "auto 1fr auto",
   gap: 7,
@@ -461,26 +461,6 @@ activeTopRole: {
   fontWeight: 850,
   textAlign: "center",
 },
-
-  squadBuilderTab: {
-    position: "fixed",
-    right: 0,
-    top: "50%",
-    transform: "translateY(-50%)",
-    writingMode: "vertical-rl",
-    textOrientation: "mixed",
-    padding: "14px 9px",
-    border: "1px solid #4f46e5",
-    borderRight: "none",
-    borderRadius: "12px 0 0 12px",
-    background: "#4f46e5",
-    color: "#ffffff",
-    fontWeight: 950,
-    fontSize: 13,
-    letterSpacing: 1,
-    cursor: "pointer",
-    zIndex: 1200,
-  },
 
   squadBuilderBackdrop: {
     position: "fixed",
@@ -1241,5 +1221,235 @@ roleAttributeModalValue: {
   fontSize: 17,
   fontWeight: 950,
   lineHeight: 1,
+},
+
+
+candidateKindBadgeNatural: {
+  border: "1px solid rgba(34, 197, 94, 0.65)",
+  background: "rgba(22, 101, 52, 0.26)",
+  color: "#bbf7d0",
+},
+
+candidateKindBadgeClose: {
+  border: "1px solid rgba(96, 165, 250, 0.65)",
+  background: "rgba(37, 99, 235, 0.22)",
+  color: "#bfdbfe",
+},
+
+candidateKindBadgeConversion: {
+  border: "1px solid rgba(251, 191, 36, 0.72)",
+  background: "rgba(120, 53, 15, 0.28)",
+  color: "#fde68a",
+},
+
+activeTopMiniCardNatural: {
+  boxShadow: "inset 4px 0 0 rgba(34, 197, 94, 0.86)",
+  background:
+    "linear-gradient(90deg, rgba(22, 101, 52, 0.16), rgba(17, 24, 39, 1) 34%)",
+},
+
+activeTopMiniCardClose: {
+  boxShadow: "inset 4px 0 0 rgba(96, 165, 250, 0.86)",
+  background:
+    "linear-gradient(90deg, rgba(37, 99, 235, 0.16), rgba(17, 24, 39, 1) 34%)",
+},
+
+activeTopMiniCardConversion: {
+  boxShadow: "inset 4px 0 0 rgba(251, 191, 36, 0.9)",
+  background:
+    "linear-gradient(90deg, rgba(120, 53, 15, 0.22), rgba(17, 24, 39, 1) 34%)",
+},
+
+miniCandidateScoreNote: {
+  marginTop: 2,
+  color: "#94a3b8",
+  fontSize: 10.5,
+  fontWeight: 850,
+  lineHeight: 1.15,
+},
+scoreBreakdownBox: {
+  width: "100%",
+  marginTop: 7,
+  padding: "7px 8px",
+  border: "1px solid rgba(51, 65, 85, 0.82)",
+  borderRadius: 9,
+  background: "rgba(2, 6, 23, 0.34)",
+},
+
+scoreBreakdownHeader: {
+  marginBottom: 5,
+  color: "#93c5fd",
+  fontSize: 9.5,
+  lineHeight: 1,
+  fontWeight: 950,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+},
+
+scoreBreakdownRow: {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  minHeight: 20,
+  borderTop: "1px solid rgba(51, 65, 85, 0.42)",
+  paddingTop: 4,
+  marginTop: 4,
+},
+
+scoreBreakdownLabel: {
+  minWidth: 0,
+  color: "#cbd5e1",
+  fontSize: 10.5,
+  fontWeight: 800,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+},
+
+scoreBreakdownValue: {
+  flexShrink: 0,
+  fontSize: 11,
+  fontWeight: 950,
+  lineHeight: 1,
+},
+
+scoreBreakdownValuePositive: {
+  color: "#86efac",
+},
+
+scoreBreakdownValueNegative: {
+  color: "#fca5a5",
+},
+
+scoreBreakdownValueNeutral: {
+  color: "#bfdbfe",
+},
+
+scoreBreakdownValueTotal: {
+  color: "#f8fafc",
+},
+activeTopMiniCardUsedElsewhere: {
+  borderColor: "rgba(251, 191, 36, 0.48)",
+  boxShadow:
+    "inset 4px 0 0 rgba(251, 191, 36, 0.72), 0 0 0 1px rgba(251, 191, 36, 0.08)",
+  background:
+    "linear-gradient(90deg, rgba(63, 45, 12, 0.22), rgba(15, 23, 42, 0.98) 30%)",
+  opacity: 0.86,
+},
+
+usedElsewhereBadge: {
+  display: "none",
+},
+
+scoreBreakdownCompact: {
+  width: "100%",
+  marginTop: 7,
+  padding: "7px 8px",
+  border: "1px solid rgba(51, 65, 85, 0.82)",
+  borderRadius: 9,
+  background: "rgba(2, 6, 23, 0.28)",
+},
+
+scoreBreakdownCompactMain: {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  color: "#cbd5e1",
+  fontSize: 10.5,
+  fontWeight: 850,
+  lineHeight: 1.15,
+},
+
+scoreBreakdownCompactChips: {
+  marginTop: 6,
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 4,
+},
+
+scoreBreakdownCompactChip: {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 3,
+  padding: "2px 6px",
+  borderRadius: 999,
+  border: "1px solid rgba(51, 65, 85, 0.7)",
+  background: "rgba(15, 23, 42, 0.72)",
+  color: "#cbd5e1",
+  fontSize: 9.5,
+  fontWeight: 850,
+  lineHeight: 1.1,
+},
+potentialRankBadge: {
+  display: "none",
+},
+usedElsewhereBadgeRow: {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 6,
+  flexWrap: "wrap",
+  marginTop: 2,
+  marginBottom: 2,
+},
+
+usedElsewhereBadgeCompact: {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: 19,
+  padding: "3px 8px",
+  borderRadius: 999,
+  border: "1px solid rgba(251, 191, 36, 0.5)",
+  background: "rgba(63, 45, 12, 0.34)",
+  color: "#fde68a",
+  fontSize: 9,
+  lineHeight: 1,
+  fontWeight: 950,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+},
+
+potentialRankBadgeCompact: {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: 19,
+  padding: "3px 8px",
+  borderRadius: 999,
+  border: "1px solid rgba(148, 163, 184, 0.38)",
+  background: "rgba(15, 23, 42, 0.72)",
+  color: "#cbd5e1",
+  fontSize: 9,
+  lineHeight: 1,
+  fontWeight: 950,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+},
+
+candidateKindBadge: {
+  minHeight: 20,
+  justifySelf: "center",
+  alignSelf: "center",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "3px 10px",
+  borderRadius: 999,
+  fontSize: 9.5,
+  lineHeight: 1,
+  fontWeight: 950,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  width: "auto",
+  maxWidth: "fit-content",
+},
+candidateKindBadgeMuted: {
+  opacity: 0.68,
+  borderColor: "rgba(148, 163, 184, 0.42)",
+  background: "rgba(15, 23, 42, 0.62)",
+  color: "#cbd5e1",
 },
 };

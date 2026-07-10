@@ -27,12 +27,34 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function getMinutesMultiplier(minutes: number | null): number {
-  if (minutes === null) return 0.5;
-  if (minutes < 300) return 0.25;
-  if (minutes < 600) return 0.5;
-  if (minutes < 900) return 0.75;
+  if (minutes === null) return 0.65;
+  if (minutes < 250) return 0.35;
+  if (minutes < 500) return 0.6;
+  if (minutes < 800) return 0.82;
 
   return 1;
+}
+
+function getClubFormRawBonus(combinedRating: number): number {
+  const baseBonus = (combinedRating - 6.75) * 3.2;
+
+  if (combinedRating >= 7.6) {
+    return baseBonus + 1.4;
+  }
+
+  if (combinedRating >= 7.4) {
+    return baseBonus + 0.9;
+  }
+
+  if (combinedRating >= 7.2) {
+    return baseBonus + 0.45;
+  }
+
+  if (combinedRating <= 6.45) {
+    return baseBonus - 0.45;
+  }
+
+  return baseBonus;
 }
 
 export function calculateClubFormImpact(row: TableRow): ClubFormImpact {
@@ -43,7 +65,7 @@ export function calculateClubFormImpact(row: TableRow): ClubFormImpact {
   let combinedRating: number | null = null;
 
   if (rating !== null && recentRating !== null) {
-    combinedRating = rating * 0.65 + recentRating * 0.35;
+    combinedRating = rating * 0.55 + recentRating * 0.45;
   } else if (rating !== null) {
     combinedRating = rating;
   } else if (recentRating !== null) {
@@ -60,9 +82,8 @@ export function calculateClubFormImpact(row: TableRow): ClubFormImpact {
   }
 
   const minutesMultiplier = getMinutesMultiplier(minutes);
-
-  const rawBonus = (combinedRating - 6.8) * 1.4;
-  const limitedBonus = clamp(rawBonus, -0.8, 2.0);
+  const rawBonus = getClubFormRawBonus(combinedRating);
+  const limitedBonus = clamp(rawBonus, -2.0, 6.0);
   const finalBonus = Math.round(limitedBonus * minutesMultiplier * 10) / 10;
 
   return {

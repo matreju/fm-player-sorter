@@ -58,11 +58,13 @@ function getOverallAbility(row: TableRow): number | null {
 
 function getOverallAbilityTieBreaker(row: TableRow): number {
   const overallAbility = getOverallAbility(row);
-  if (overallAbility === null) return 0;
 
-  return clamp((overallAbility - 120) * 0.035, -3.5, 5);
+  if (overallAbility === null) {
+    return 0;
+  }
+
+  return Math.max(-0.35, Math.min(0.35, (overallAbility - 120) * 0.003));
 }
-
 function hasFamily(
   profiles: PlayerMobilityProfile[],
   family: PositionFamily
@@ -123,14 +125,14 @@ function getMinimumScoreForSlot(slot: FormationSlot, kind: CandidateKind): numbe
 
 function getSelectionKindBonus(slot: FormationSlot, kind: CandidateKind): number {
   if (kind === "natural") {
-    return 1.5;
+    return 0.25;
   }
 
   if (kind === "close") {
     return 0;
   }
 
-  return isCriticalSlot(slot) ? -4 : -2;
+  return isCriticalSlot(slot) ? -1.25 : -0.75;
 }
 
 function getCandidateSelectionScore(candidate: SlotCandidate): number {
@@ -153,6 +155,12 @@ function compareCandidatesForLineup(
     return compareCandidatesForMode(left, right, scoreMode);
   }
 
+  const finalDiff = right.finalScore - left.finalScore;
+
+  if (Math.abs(finalDiff) >= 0.25) {
+    return finalDiff;
+  }
+
   const selectionDiff =
     getCandidateSelectionScore(right) - getCandidateSelectionScore(left);
 
@@ -160,15 +168,14 @@ function compareCandidatesForLineup(
     return selectionDiff;
   }
 
-  const finalDiff = right.finalScore - left.finalScore;
+  const nameDiff = left.name.localeCompare(right.name, "pl");
 
-  if (finalDiff !== 0) {
-    return finalDiff;
+  if (nameDiff !== 0) {
+    return nameDiff;
   }
 
-  return left.name.localeCompare(right.name, "pl");
+  return left.key.localeCompare(right.key, "pl");
 }
-
 function shouldRejectImpossibleWideSide(
   profiles: PlayerMobilityProfile[],
   slot: FormationSlot,

@@ -13,6 +13,7 @@ import type {
 import { formatRoleScore } from "../../utils/roleScoring";
 import { squadBuilderStyles as styles } from "./squadBuilderStyles";
 import type { TacticalView } from "../../utils/squadBuilderTacticalView";
+import { formatCandidateScoreForMode } from "../../utils/squadBuilderScoreMode";
 
 const GOALKEEPER_SLOT: FormationSlot = {
   id: "GK",
@@ -103,6 +104,7 @@ export function SquadBuilderPitch({
   tacticalView,
   suggestedSquadWithBall,
   suggestedSquadWithoutBall,
+  scoreMode,
   withBallDraggingSlotId,
   withoutBallDraggingSlotId,
   getCurrentWithBallPitchPosition,
@@ -233,12 +235,14 @@ export function SquadBuilderPitch({
                 </strong>
 
                 <span style={styles.pitchSlotMeta}>
-                  {candidate
-                    ? `${formatRoleScore(
-                        candidate.phaseScore ?? candidate.finalScore
-                      )} · ${candidate.roleResult.role.name}`
-                    : slot.positionGroup}
-                </span>
+  {candidate
+    ? `${
+        scoreMode === "role-score"
+          ? formatRoleScore(candidate.phaseScore ?? candidate.finalScore)
+          : formatCandidateScoreForMode(candidate, scoreMode)
+      } · ${candidate.roleResult.role.name}`
+    : slot.positionGroup}
+</span>
               </button>
             );
           })}

@@ -1,24 +1,7 @@
 import type { CSSProperties } from "react";
 
 export const nationalCoreStyles: Record<string, CSSProperties> = {
-  floatingButton: {
-    position: "fixed",
-    right: 0,
-    top: "calc(50% + 188px)",
-    zIndex: 45,
-    writingMode: "vertical-rl",
-    textOrientation: "mixed",
-    border: "1px solid rgba(56, 189, 248, 0.75)",
-    borderRight: "none",
-    borderRadius: "14px 0 0 14px",
-    background: "linear-gradient(180deg, #0ea5e9, #0369a1)",
-    color: "#ecfeff",
-    fontWeight: 950,
-    letterSpacing: 1.5,
-    padding: "13px 10px",
-    cursor: "pointer",
-    boxShadow: "0 18px 42px rgba(0,0,0,0.45)",
-  },
+
 
   overlay: {
     position: "fixed",
