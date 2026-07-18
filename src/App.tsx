@@ -85,6 +85,7 @@ import type {
   TacticalView,
 } from "./types/squadBuilderTypes";
 import { scorePlayerForSlot } from "./utils/squadBuilderScoring";
+import { FmConnectionPanel } from "./components/FmConnection/FmConnectionPanel";
 
 type PlayerViewMode = "table" | "cards";
 
@@ -764,6 +765,7 @@ return (
           onClearPlayerSelection={clearPlayerSelection}
         />
       </aside>
+        <FmConnectionPanel />
 
       <section style={styles.mainWorkspace} aria-labelledby="workspace-title">
         <h2 id="workspace-title" style={styles.visuallyHidden}>

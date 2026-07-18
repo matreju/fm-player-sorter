@@ -1,0 +1,640 @@
+===Cpp2IL by Samboy063===
+A Tool to Reverse Unity's "il2cpp" Build Process.
+Version 2022.1.0-development.1618+5ef1a19.5ef1a1957c8cd6bfa3c5c7303879d2d89da7921d
+
+[38;2;173;216;230m[Info] [Program] [0m[38;2;173;216;230mRunning on Win32NT
+[0m[38;2;173;216;230m[Info] [Plugins] [0m[38;2;173;216;230mLoading plugins from C:\dev\fm-player-sorter\tools\fm26-il2cpp\cpp2il\Plugins...
+[0m[38;2;128;128;128m[Verb] [Plugins] [0m[38;2;128;128;128mCollecting and instantiating plugins...
+[0m[38;2;128;128;128m[Verb] [Plugins] [0m[38;2;128;128;128m	Loading plugin Cpp2IL.Core.Cpp2IlCorePlugin from assembly: Cpp2IL.Core.dll
+[0m[38;2;128;128;128m[Verb] [Plugins] [0m[38;2;128;128;128mInvoking OnLoad on 1 plugins.
+[0m[38;2;128;128;128m[Verb] [Plugin: Cpp2IL Built-In] [0m[38;2;128;128;128mInitializing...
+[0m[38;2;128;128;128m[Verb] [Plugin: Cpp2IL Built-In] [0m[38;2;128;128;128m	Registering built-in instruction set handlers...
+[0m[38;2;128;128;128m[Verb] [Plugin: Cpp2IL Built-In] [0m[38;2;128;128;128m	Registering built-in binary parsers...
+[0m[38;2;128;128;128m[Verb] [Plugin: Cpp2IL Built-In] [0m[38;2;128;128;128m	Registering built-in output formats...
+[0m[38;2;128;128;128m[Verb] [Plugin: Cpp2IL Built-In] [0m[38;2;128;128;128m	Registering built-in processing layers
+[0m[38;2;128;128;128m[Verb] [Plugin: Cpp2IL Built-In] [0m[38;2;128;128;128mCore plugin loaded in 265429 ticks (26,5429ms)
+[0m[38;2;173;216;230m[Info] [Plugins] [0m[38;2;173;216;230mUsing Plugin: Cpp2IL Built-In
+[0m[38;2;128;128;128m[Verb] [Plugins] [0m[38;2;128;128;128mOnLoad complete
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128mBeginning path resolution...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128mTrying HandleWindowsGamePath as provided path is a directory with no GameAssembly.so, potential GA is D:\steam\steamapps\common\Football Manager 26\GameAssembly.dll and executable fm
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128mFound probable windows game at path: D:\steam\steamapps\common\Football Manager 26. Attempting to get unity version...
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128mDetermineUnityVersion: Have game data path D:\steam\steamapps\common\Football Manager 26\fm_Data, trying to pull version from globalgamemanagers or data.unity3d
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128mDetermineUnityVersion: globalgamemanagers exists, pulling version from it
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128mFirst-attempt unity version detection gave: 6000.0.52f1
+[0m[38;2;173;216;230m[Info] [Program] [0m[38;2;173;216;230mDetermined game's unity version to be 6000.0.52f1
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128mSelected output formats: [dll_default]
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128mSelected processing layers: Attribute Injector
+[0m[38;2;173;216;230m[Info] [Library] [0m[38;2;173;216;230mInitializing Metadata...
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	IL2CPP Metadata Declares its version as 31
+[0m[38;2;173;216;230m[Info] [Library] [0m[38;2;173;216;230m	Using actual IL2CPP Metadata version 31,1
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Metadata version is pre-v38, using fixed 32-bit widths for all variable width indices
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading image definitions...[0m[38;2;128;128;128mOK (1,2354 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading assembly definitions...[0m[38;2;128;128;128mOK (1,265 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading type definitions...[0m[38;2;128;128;128m17691 OK (28,0785 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading interface offsets...[0m[38;2;128;128;128mOK (3,9113 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading vtable indices...[0m[38;2;128;128;128mOK (15,3182 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading method definitions...[0m[38;2;128;128;128mOK (191,2413 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading method parameter definitions...[0m[38;2;128;128;128mOK (44,2263 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading field definitions...[0m[38;2;128;128;128mOK (55,2418 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading default field values...[0m[38;2;128;128;128mOK (35,875 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading default parameter values...[0m[38;2;128;128;128mOK (0,3975 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading property definitions...[0m[38;2;128;128;128mOK (35,3958 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading interface definitions...[0m[38;2;128;128;128mOK (0,5671 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading nested type definitions...[0m[38;2;128;128;128mOK (0,6361 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading event definitions...[0m[38;2;128;128;128mOK (0,5876 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading generic container definitions...[0m[38;2;128;128;128mOK (0,5497 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading generic parameter definitions...[0m[38;2;128;128;128mOK (0,8775 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading generic parameter constraint indices...[0m[38;2;128;128;128mOK (0,0308 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading referenced assemblies...[0m[38;2;128;128;128mOK (0,3111 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading string definitions...[0m[38;2;128;128;128mOK (1,7602 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading exported types...[0m[38;2;128;128;128mOK (0,3418 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading field references...[0m[38;2;128;128;128mOK (0,2808 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading Attribute data...[0m[38;2;128;128;128mOK (1,8821 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Building Lookup Table for field defaults...[0m[38;2;128;128;128mOK (33,6669 ms)
+[0m[38;2;173;216;230m[Info] [Library] [0m[38;2;173;216;230mInitialized Metadata in 480ms
+[0m[38;2;173;216;230m[Info] [Library] [0m[38;2;173;216;230mUsing binary type Portable Executable (from LibCpp2IL)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading PE File Header...[0m[38;2;128;128;128mOK (1,8569 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		Image Base at 0x180000000
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		DLL is 64-bit
+[0m[38;2;173;216;230m[Info] [Library] [0m[38;2;173;216;230mSearching Binary for Required Data...
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Attempting to locate code and metadata registration functions...
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Searching for MetadataReg...
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Looking for the number of type definitions, 0x451B
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Looking for bytes: 1b 45 00 00 00 00 00 00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Found 2 instances of the number of type definitions: [1829961D0, 1829961E0]
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Found 2 potential metadata registrations: [182996170, 182996180]
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Rejecting metadata registration 0x182996170 because the pointer at index 1, which is 0xFFFFFFFFFFFFFFFF, can't be mapped to the binary.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Accepting metadata reg as VA 0x182996180
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Searching for CodeReg...
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Using mscorlib full-disassembly approach to get codereg, this may take a while...
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Looking for bytes: 6d 73 63 6f 72 6c 69 62 2e 64 6c 6c 00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Found 1 occurrences of mscorlib.dll: [182A870C8]
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Looking for bytes: c8 70 a8 82 01 00 00 00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Found 1 potential codegen modules for mscorlib: [182A87040]
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Looking for bytes: 40 70 a8 82 01 00 00 00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Found 1 address for potential codegen modules in potential codegen module lists: [182D575B0]
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Looking for bytes: 08 72 d5 82 01 00 00 00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Looking for bytes: 00 72 d5 82 01 00 00 00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Looking for bytes: f8 71 d5 82 01 00 00 00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Looking for bytes: f0 71 d5 82 01 00 00 00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Looking for bytes: e8 71 d5 82 01 00 00 00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Looking for bytes: e0 71 d5 82 01 00 00 00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Looking for bytes: d8 71 d5 82 01 00 00 00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Looking for bytes: d0 71 d5 82 01 00 00 00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Looking for bytes: c8 71 d5 82 01 00 00 00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Looking for bytes: c0 71 d5 82 01 00 00 00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Found valid address for pCodegenModules after a backtrack of 126/127: 18218E610
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Found 1 potential pCodegenModules addresses: [18218E610]
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			pCodegenModules is the second-to-last field of the codereg struct. Therefore on this version and architecture, we need to subtract 128 bytes from its address to get pCodeReg
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			Only found one codegen module pointer, so assuming it's correct and returning pCodeReg = 0x18218E590
+[0m[38;2;173;216;230m[Info] [Library] [0m[38;2;173;216;230mGot Binary codereg: 0x18218E590, metareg: 0x182996180 in 109ms.
+[0m[38;2;173;216;230m[Info] [Library] [0m[38;2;173;216;230mInitializing Binary...
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading generic instances...[0m[38;2;128;128;128mOK (10,6768 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading generic method pointers...[0m[38;2;128;128;128mOK (4,0168 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading field offsets...[0m[38;2;128;128;128mOK (3,0417 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading types...[0m[38;2;128;128;128mOK (56,2905 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading type definition sizes...[0m[38;2;128;128;128mOK (0,4415 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading code gen modules...
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Assembly-CSharp.dll, contains 5 method pointers starting at 0x182D68D88
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 5 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Backtrace.Unity.dll, contains 750 method pointers starting at 0x182D68DB0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 750 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 3 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 44 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for FMGame.dll, contains 298 method pointers starting at 0x182DA31D0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 298 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 4 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for FM.GameConfig.dll, contains 3 method pointers starting at 0x182D6A690
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 3 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for FM.GamePlugin.dll, contains 827 method pointers starting at 0x182D6A6B0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 827 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for FM.Graphics.dll, contains 2614 method pointers starting at 0x182D6C440
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 2614 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 26 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 181 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for FM.Graphics.Tools.dll, contains 46 method pointers starting at 0x182D6C2D0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 46 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for FM.Input.dll, contains 89 method pointers starting at 0x182D718B0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 89 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for FM.Match.dll, contains 2637 method pointers starting at 0x182D71B80
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 2637 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 28 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 137 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for FM.Performance.dll, contains 4 method pointers starting at 0x182D77490
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 4 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for FM.UI.dll, contains 22138 method pointers starting at 0x182D774B0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 22138 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 28 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 229 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for FastNoise Lite.dll, contains 46 method pointers starting at 0x182D6A520
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 46 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Gadsme.dll, contains 352 method pointers starting at 0x182DA3B30
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 352 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 3 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Gadsme.GadsmeSdk.dll, contains 1 method pointers starting at 0x182DA3B20
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for LiveChartsCore.dll, contains 1313 method pointers starting at 0x182F54F20
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1313 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 81 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1618 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Microsoft.Bcl.TimeProvider.dll, contains 5 method pointers starting at 0x182F57C80
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 5 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Microsoft.Extensions.DependencyInjection.Abstractions.dll, contains 72 method pointers starting at 0x182F57CB0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 72 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 5 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 9 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Microsoft.Extensions.DependencyInjection.dll, contains 341 method pointers starting at 0x182F57EF0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 341 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 4 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 46 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Microsoft.Extensions.Logging.Abstractions.dll, contains 74 method pointers starting at 0x182F58D10
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 74 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 4 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 10 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Microsoft.Extensions.Logging.dll, contains 121 method pointers starting at 0x182F590F0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 121 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 6 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 24 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Microsoft.Extensions.Options.dll, contains 74 method pointers starting at 0x182F59610
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 74 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 17 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 186 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Microsoft.Extensions.Primitives.dll, contains 17 method pointers starting at 0x182F59860
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 17 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 3 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 21 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Mono.Security.dll, contains 538 method pointers starting at 0x182F598F0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 538 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Newtonsoft.Json.dll, contains 2367 method pointers starting at 0x182F74C00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 2367 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 67 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 433 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for RTLTMPro.dll, contains 61 method pointers starting at 0x182F797D0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 61 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SIShared.Skinning.dll, contains 19 method pointers starting at 0x182F9F990
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 19 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SI.Addressables.dll, contains 30 method pointers starting at 0x182F79A30
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 30 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 8 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SI.Anim.dll, contains 150 method pointers starting at 0x182F79B30
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 150 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 4 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SI.Audio.dll, contains 167 method pointers starting at 0x182F79FE0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 167 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 11 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SI.Bindable.dll, contains 9785 method pointers starting at 0x182F7AD30
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 9785 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 78 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 455 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SI.Bindable.Reference.Core.dll, contains 117 method pointers starting at 0x182F7A740
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 117 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 5 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 37 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SI.CityGen.dll, contains 868 method pointers starting at 0x182F8EEE0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 868 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 7 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 76 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SI.Core.dll, contains 2198 method pointers starting at 0x182F90FB0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 2198 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 222 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1455 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SI.Debug.dll, contains 49 method pointers starting at 0x182F95EB0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 49 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SI.Graphics.dll, contains 4 method pointers starting at 0x182F96058
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 4 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SI.Input.dll, contains 62 method pointers starting at 0x182F96090
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 62 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SI.Interop.dll, contains 41 method pointers starting at 0x182F96300
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 41 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SI.Marshalling.dll, contains 59 method pointers starting at 0x182F964C0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 59 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 8 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 23 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SI.MatchTypes.dll, contains 0 method pointers starting at 0x0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SI.Match.dll, contains 77 method pointers starting at 0x182F96830
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 77 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SI.Services.dll, contains 43 method pointers starting at 0x182F96AA0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 43 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 3 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SI.UI.dll, contains 2001 method pointers starting at 0x182F96C20
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 2001 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 8 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 72 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SI.VisualScripting.dll, contains 2338 method pointers starting at 0x182F9AF70
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 2338 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 21 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 113 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SI.VisualScripting.Core.dll, contains 3 method pointers starting at 0x182F9AF58
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 3 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for SceneLoadTest.dll, contains 4 method pointers starting at 0x182F79A10
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 4 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for System.dll, contains 4804 method pointers starting at 0x182FC3950
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 4804 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 40 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 540 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for System.Collections.Immutable.dll, contains 358 method pointers starting at 0x182F9FA30
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 358 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 38 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 698 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for System.Core.dll, contains 3168 method pointers starting at 0x182FA0560
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 3168 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 224 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1497 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for System.Data.dll, contains 3130 method pointers starting at 0x182FA6920
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 3130 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 8 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 104 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for System.Diagnostics.DiagnosticSource.dll, contains 107 method pointers starting at 0x182FADA00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 107 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 3 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 18 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for System.Drawing.dll, contains 51 method pointers starting at 0x182FADE90
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 51 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for System.IO.Hashing.dll, contains 54 method pointers starting at 0x182FAE260
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 54 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for System.Net.Http.dll, contains 463 method pointers starting at 0x182FAE430
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 463 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 14 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 80 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for System.Numerics.dll, contains 146 method pointers starting at 0x182FAF3B0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 146 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for System.Runtime.CompilerServices.Unsafe.dll, contains 12 method pointers starting at 0x18303B730
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 12 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 12 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 15 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for System.Runtime.Serialization.dll, contains 6 method pointers starting at 0x182FAF9D0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 6 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for System.Text.Encodings.Web.dll, contains 116 method pointers starting at 0x182FAFA00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 116 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 2 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 2 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for System.Text.Json.dll, contains 2311 method pointers starting at 0x182FAFF00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 2311 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 132 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1291 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for System.Xml.dll, contains 6531 method pointers starting at 0x182FB61E0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 6531 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 2 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 19 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for System.Xml.Linq.dll, contains 226 method pointers starting at 0x182FB59F0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 226 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 4 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 24 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Tayx.Graphy.dll, contains 286 method pointers starting at 0x182FCD660
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 286 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 5 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.AIModule.dll, contains 4 method pointers starting at 0x182FF1610
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 4 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.AccessibilityModule.dll, contains 144 method pointers starting at 0x182FF0F20
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 144 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 4 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 16 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.AndroidJNIModule.dll, contains 302 method pointers starting at 0x182FF1630
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 302 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 12 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 25 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.AnimationModule.dll, contains 686 method pointers starting at 0x182FF1FC0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 686 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 9 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 30 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.AssetBundleModule.dll, contains 38 method pointers starting at 0x182FF38A0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 38 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.AudioModule.dll, contains 333 method pointers starting at 0x182FF39D0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 333 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.dll, contains 0 method pointers starting at 0x0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.CoreModule.dll, contains 7574 method pointers starting at 0x182FF8190
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 7574 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 302 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1155 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.DirectorModule.dll, contains 109 method pointers starting at 0x183006E40
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 109 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.GridModule.dll, contains 1 method pointers starting at 0x1830071C8
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.HierarchyCoreModule.dll, contains 283 method pointers starting at 0x1830071D0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 283 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 3 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 20 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.IMGUIModule.dll, contains 590 method pointers starting at 0x183007F00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 590 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.ImageConversionModule.dll, contains 7 method pointers starting at 0x183007EC0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 7 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.InputForUIModule.dll, contains 240 method pointers starting at 0x183009200
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 240 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 5 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 21 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.InputLegacyModule.dll, contains 76 method pointers starting at 0x18300A030
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 76 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.InputModule.dll, contains 18 method pointers starting at 0x18300A3B0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 18 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.JSONSerializeModule.dll, contains 8 method pointers starting at 0x18300A440
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 8 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 2 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.ParticleSystemModule.dll, contains 415 method pointers starting at 0x18300A480
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 415 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.Physics2DModule.dll, contains 40 method pointers starting at 0x18300B670
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 40 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.PhysicsModule.dll, contains 167 method pointers starting at 0x18300B870
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 167 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.PropertiesModule.dll, contains 837 method pointers starting at 0x18300BFA0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 837 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 83 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 647 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.ScreenCaptureModule.dll, contains 5 method pointers starting at 0x18300DD30
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 5 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.SharedInternalsModule.dll, contains 11 method pointers starting at 0x18300DD60
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 11 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.SubsystemsModule.dll, contains 32 method pointers starting at 0x18300DDC0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 32 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 9 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.TerrainModule.dll, contains 45 method pointers starting at 0x18300DEC0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 45 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.TextCoreFontEngineModule.dll, contains 174 method pointers starting at 0x18300E040
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 174 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 2 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 11 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.TextCoreTextEngineModule.dll, contains 748 method pointers starting at 0x18300EBC0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 748 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 13 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 62 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.TextRenderingModule.dll, contains 146 method pointers starting at 0x183010660
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 146 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.TilemapModule.dll, contains 59 method pointers starting at 0x183010B20
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 59 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.UIElementsModule.dll, contains 11136 method pointers starting at 0x183010D60
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 11136 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 227 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 2241 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.UIModule.dll, contains 179 method pointers starting at 0x18302A7C0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 179 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.UI.dll, contains 1908 method pointers starting at 0x18302AD60
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1908 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 25 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 134 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.UnityAnalyticsCommonModule.dll, contains 63 method pointers starting at 0x18302ED00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 63 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.UnityAnalyticsModule.dll, contains 12 method pointers starting at 0x18302EF00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 12 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.UnityWebRequestAssetBundleModule.dll, contains 24 method pointers starting at 0x18302EF60
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 24 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.UnityWebRequestModule.dll, contains 206 method pointers starting at 0x18302F020
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 206 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.VFXModule.dll, contains 300 method pointers starting at 0x18302F690
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 300 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.VRModule.dll, contains 1 method pointers starting at 0x183030788
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.VideoModule.dll, contains 237 method pointers starting at 0x183030000
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 237 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for UnityEngine.XRModule.dll, contains 65 method pointers starting at 0x183030790
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 65 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.Addressables.dll, contains 652 method pointers starting at 0x182FCDF50
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 652 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 41 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 153 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.Burst.dll, contains 94 method pointers starting at 0x182FCF460
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 94 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 5 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 16 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.Burst.Unsafe.dll, contains 1 method pointers starting at 0x18303B790
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.Cinemachine.dll, contains 614 method pointers starting at 0x182FCF860
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 614 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 3 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 9 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.Collections.dll, contains 505 method pointers starting at 0x182FD0E10
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 505 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 83 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 761 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.InputSystem.dll, contains 3751 method pointers starting at 0x182FD5920
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 3751 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 114 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 572 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.InputSystem.ForUI.dll, contains 38 method pointers starting at 0x182FD2270
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 38 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.Mathematics.dll, contains 391 method pointers starting at 0x182FDCE60
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 391 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.MemoryProfiler.dll, contains 9 method pointers starting at 0x182FDE490
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 9 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.Profiling.Core.dll, contains 3 method pointers starting at 0x18303B798
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 3 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.RenderPipeline.Universal.ShaderLibrary.dll, contains 0 method pointers starting at 0x0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.RenderPipelines.Core.Runtime.dll, contains 2749 method pointers starting at 0x182FDE4E0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 2749 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 96 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 699 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.RenderPipelines.Core.Runtime.Shared.dll, contains 1 method pointers starting at 0x182FDE4D8
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.RenderPipelines.GPUDriven.Runtime.dll, contains 707 method pointers starting at 0x182FE4310
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 707 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 5 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 15 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.RenderPipelines.Universal.2D.Runtime.dll, contains 1 method pointers starting at 0x182FE6C00
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 1 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.RenderPipelines.Universal.Runtime.dll, contains 2675 method pointers starting at 0x182FE6C10
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 2675 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 22 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 74 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.ResourceManager.dll, contains 933 method pointers starting at 0x182FEC860
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 933 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 63 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 557 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.Splines.dll, contains 238 method pointers starting at 0x182FEEA70
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 238 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 38 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 172 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.Timeline.dll, contains 695 method pointers starting at 0x182FEF430
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 695 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 6 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 28 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Unity.VisualEffectGraph.Runtime.dll, contains 107 method pointers starting at 0x182FF0BC0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 107 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for Utf8StringInterpolation.dll, contains 62 method pointers starting at 0x183030CB0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 62 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 3 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 53 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for ZLogger.dll, contains 304 method pointers starting at 0x183030EB0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 304 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 32 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 236 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for ZLogger.Unity.dll, contains 2 method pointers starting at 0x183030EA0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 2 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for ZString.dll, contains 121 method pointers starting at 0x183031B10
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 121 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 21 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 191 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for __Generated, contains 3 method pointers starting at 0x183032130
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 3 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m		-Read module data for mscorlib.dll, contains 11616 method pointers starting at 0x182F5A9C0
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 11616 method pointers.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 341 RGCTX ranges.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m			-Read 2740 RGCTXs.
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	OK (123,0536 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading generic method tables...[0m[38;2;128;128;128mOK (25,0724 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading method specifications...[0m[38;2;128;128;128mOK (11,4224 ms)
+[0m[38;2;128;128;128m[Verb] [Library] [0m[38;2;128;128;128m	Reading generic methods...[0m[38;2;128;128;128mOK (90,1958 ms)
+[0m[38;2;173;216;230m[Info] [Library] [0m[38;2;173;216;230mInitialized Binary in 332ms
+[0m[38;2;173;216;230m[Info] [Library] [0m[38;2;173;216;230mMapping pointers to Il2CppMethodDefinitions...[0m[38;2;173;216;230mProcessed 128072 OK (245ms)
+[0m[38;2;173;216;230m[Info] [Program] [0m[38;2;173;216;230mCreating application model...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Using instruction set handler: Cpp2IL.Core.InstructionSets.X86InstructionSet
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: FM.UI...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: mscorlib...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.UIElementsModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SI.Bindable...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: System.Xml...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.CoreModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: System...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.InputSystem...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.RenderPipelines.Universal.Runtime...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: System.Data...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.RenderPipelines.Core.Runtime...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: FM.Graphics...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: FM.Match...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: System.Core...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Newtonsoft.Json...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: System.Text.Json...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SI.Core...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.TextCoreTextEngineModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SI.UI...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.UI...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: FM.GamePlugin...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SI.VisualScripting...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: LiveChartsCore...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.RenderPipelines.GPUDriven.Runtime...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.ResourceManager...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SI.CityGen...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Backtrace.Unity...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Mono.Security...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.Cinemachine...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.Addressables...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.PropertiesModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.IMGUIModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.Timeline...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Gadsme...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: System.Net.Http...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.AnimationModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.Collections...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: FMGame...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Microsoft.Extensions.DependencyInjection...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.AndroidJNIModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SI.MatchTypes...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: ZLogger...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.ParticleSystemModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Tayx.Graphy...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: System.Collections.Immutable...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: System.Drawing...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.AudioModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.Splines...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.UnityWebRequestModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.InputForUIModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.Mathematics...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: System.Numerics...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.VFXModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: System.Xml.Linq...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.TextCoreFontEngineModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.HierarchyCoreModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: System.Text.Encodings.Web...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: ZString...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.VideoModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.PhysicsModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.UIModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SI.Audio...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.TextRenderingModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SI.Anim...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Microsoft.Extensions.Logging...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SI.Match...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: System.Diagnostics.DiagnosticSource...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.VisualEffectGraph.Runtime...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.Burst...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.AccessibilityModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.DirectorModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: FastNoise Lite...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.XRModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.InputLegacyModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SI.Debug...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.TerrainModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.TilemapModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Utf8StringInterpolation...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: FM.Input...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.UnityAnalyticsCommonModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Microsoft.Extensions.Logging.Abstractions...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: RTLTMPro...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Microsoft.Extensions.DependencyInjection.Abstractions...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Microsoft.Extensions.Options...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.Physics2DModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: FM.GameConfig...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.SubsystemsModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SI.Marshalling...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: System.IO.Hashing...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.InputSystem.ForUI...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.AssetBundleModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SI.Bindable.Reference.Core...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: FM.Graphics.Tools...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SI.Input...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.UnityWebRequestAssetBundleModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.InputModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SI.Addressables...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.JSONSerializeModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.UnityAnalyticsModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.ImageConversionModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.ScreenCaptureModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.SharedInternalsModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.AIModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.GridModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: UnityEngine.VRModule...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SI.Services...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Microsoft.Extensions.Primitives...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SI.Interop...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SIShared.Skinning...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.RenderPipeline.Universal.ShaderLibrary...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Microsoft.Bcl.TimeProvider...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.MemoryProfiler...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SI.Graphics...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: System.Runtime.CompilerServices.Unsafe...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: System.Runtime.Serialization...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: ZLogger.Unity...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Assembly-CSharp...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: FM.Performance...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SceneLoadTest...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.RenderPipelines.Core.Runtime.Shared...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.RenderPipelines.Universal.2D.Runtime...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Gadsme.GadsmeSdk...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: SI.VisualScripting.Core...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.Profiling.Core...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: Unity.Burst.Unsafe...
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing assembly: __Generated...
+[0m[38;2;128;128;128m[Verb] [MAC] [0m[38;2;128;128;128m			Unexpectedly got 0-byte method body for Method: System.__Il2CppComObject::Finalize. Pointer was 0x1820C1450
+[0m[38;2;128;128;128m[Verb] [MAC] [0m[38;2;128;128;128m			Unexpectedly got 0-byte method body for Method: System.__Il2CppComDelegate::Finalize. Pointer was 0x1820C1450
+[0m[38;2;128;128;128m[Verb] [Program] [0m[38;2;128;128;128m	Processing concrete generic methods...
+[0m[38;2;173;216;230m[Info] [Program] [0m[38;2;173;216;230mApplication model created in 2331,4561ms
+[0m[38;2;173;216;230m[Info] [Program] [0m[38;2;173;216;230mPre-processing processing layers...
+[0m[38;2;173;216;230m[Info] [Program] [0m[38;2;173;216;230m    Attribute Injector...
+[0m[38;2;173;216;230m[Info] [Program] [0m[38;2;173;216;230m    Attribute Injector finished in 0,4717ms
+[0m[38;2;173;216;230m[Info] [Program] [0m[38;2;173;216;230mInvoking processing layers...
+[0m[38;2;173;216;230m[Info] [Program] [0m[38;2;173;216;230m    Attribute Injector...
+[0m[38;2;173;216;230m[Info] [Program] [0m[38;2;173;216;230m    Attribute Injector finished in 520,6758ms
+[0m[38;2;173;216;230m[Info] [Program] [0m[38;2;173;216;230mOutputting as DLL files with default method bodies to C:\dev\fm-player-sorter\tools\fm26-il2cpp\output...
+[0m[38;2;128;128;128m[Verb] [DllOutput] [0m[38;2;128;128;128mBuilding stub assemblies...[0m[38;2;128;128;128m131,0ms
+[0m[38;2;128;128;128m[Verb] [DllOutput] [0m[38;2;128;128;128mConfiguring inheritance and generics...[0m[38;2;128;128;128m72,1ms
+[0m[38;2;128;128;128m[Verb] [DllOutput] [0m[38;2;128;128;128mAdding fields, methods, properties, and events (in parallel)...[0m[38;2;128;128;128m1650,1ms
+[0m[38;2;128;128;128m[Verb] [DllOutput] [0m[38;2;128;128;128mAdding custom attributes to all of the above...[0m[38;2;128;128;128m502,3ms
+[0m[38;2;128;128;128m[Verb] [DllOutput] [0m[38;2;128;128;128mFilling method bodies (in parallel)...[0m[38;2;128;128;128m405,0ms
+[0m[38;2;128;128;128m[Verb] [DllOutput] [0m[38;2;128;128;128mGenerating PE images...[0m[38;2;128;128;128m1964,5ms
+[0m[38;2;128;128;128m[Verb] [DllOutput] [0m[38;2;128;128;128mBuilding and writing managed PE files to disk...[0m[38;2;128;128;128m616,6ms
+[0m[38;2;173;216;230m[Info] [Program] [0m[38;2;173;216;230mFinished outputting in 5354,1759ms
+[0m[38;2;173;216;230m[Info] [Program] [0m[38;2;173;216;230mDone. Total execution time: 9450,3881ms
+[0m

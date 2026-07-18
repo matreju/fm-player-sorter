@@ -1,0 +1,393 @@
+=== DATA RAPORTU ===
+
+pi¹tek, 10 lipca 2026 13:52:43
+
+
+
+=== ZAWARTOSC BepInEx ===
+
+Name          Mode   Length LastWriteTime      
+----          ----   ------ -------------      
+cache         d-----        12.06.2026 13:32:34
+config        d-----        12.06.2026 13:31:23
+core          d-----        12.06.2026 13:31:23
+interop       d-----        12.06.2026 13:32:27
+patchers      d-----        12.01.2025 14:14:06
+plugins       d-----        12.06.2026 13:34:10
+unity-libs    d-----        12.06.2026 13:31:49
+ErrorLog.log  -a---- 0      10.07.2026 12:08:01
+LogOutput.log -a---- 0      10.07.2026 12:08:06
+
+
+
+=== POCZATEK LOGU BepInEx ===
+PLIK LOGU: D:\steam\steamapps\common\Football Manager 26\BepInEx\LogOutput.log
+[Message: Preloader] BepInEx 6.0.0-be.738 - fm (12.11.2025 21:34:35)
+[Message: Preloader] Built from commit af0cba71fb69324aa4dfd651422bfa020309ce15
+[Info   :   BepInEx] System platform: Windows 10 64-bit
+[Info   :   BepInEx] Process bitness: 64-bit (x64)
+[Info   :   BepInEx] Running under Unity 6000.0.52f1
+[Info   :   BepInEx] Runtime version: 6.0.7
+[Info   :   BepInEx] Runtime information: .NET 6.0.7
+[Info   : Preloader] 0 patcher plugins loaded
+[Info   : Preloader] 0 assemblies discovered
+[Message:AssemblyPatcher] Executing 0 patch(es)
+[Message:   BepInEx] Chainloader initialized
+[Debug  : Preloader] Runtime invoke pointer: 0x7FFEB697BD60
+[Debug  :DobbyDetour] Preparing detour from 0x7FFEB697BD60 to 0x7FFE566E3264
+[Debug  :DobbyDetour] Prepared detour; Trampoline: 0x7FFE76980000
+[Debug  :DobbyDetour] Original: 7FFEB697BD60, Trampoline: 7FFE76980000, diff: 3FFFBD60
+[Debug  : Preloader] Runtime invoke patched
+[Debug  :Il2CppInterop] il2cpp_image_get_class: 0x7FFEB697B920
+[Debug  :Il2CppInterop] Image::GetType: 0x7FFEB6968730
+[Debug  :Il2CppInterop] imageGetTypeXrefs.Length: 2
+[Debug  :Il2CppInterop] getTypeInfoFromHandle: 7FFEB6928540
+[Debug  :Il2CppInterop] MetadataCache::GetTypeInfoFromTypeDefinitionIndex found: 0x7FFEB691BAC0
+[Debug  :DobbyDetour] Preparing detour from 0x7FFEB691BAC0 to 0x7FFE566E32A4
+[Debug  :DobbyDetour] Prepared detour; Trampoline: 0x7FFE76980020
+[Debug  :DobbyDetour] Original: 7FFEB691BAC0, Trampoline: 7FFE76980020, diff: 3FF9BAA0
+[Debug  :Il2CppInterop] Class::GetDefaultFieldValue found: 0x7FFEB691A490
+[Debug  :DobbyDetour] Preparing detour from 0x7FFEB691A490 to 0x7FFE566E32E4
+[Debug  :DobbyDetour] Prepared detour; Trampoline: 0x7FFE76980040
+[Debug  :DobbyDetour] Original: 7FFEB691A490, Trampoline: 7FFE76980040, diff: 3FF9A450
+[Warning:Il2CppInterop] Class::Init signatures have been exhausted, using a substitute!
+[Debug  :Il2CppInterop] Picked mono_class_instance_size as a Class::Init substitute
+[Debug  :Il2CppInterop] Class::Init: 0x7FFEB697C570
+[Debug  :Il2CppInterop] il2cpp_class_from_il2cpp_type: 0x7FFEB690BFA0
+[Debug  :Il2CppInterop] Class::FromIl2CppType found: 0x7FFEB6925320
+[Debug  :DobbyDetour] Preparing detour from 0x7FFEB6925320 to 0x7FFE566E3324
+[Debug  :DobbyDetour] Prepared detour; Trampoline: 0x7FFE76980060
+[Debug  :DobbyDetour] Original: 7FFEB6925320, Trampoline: 7FFE76980060, diff: 3FFA52C0
+[Debug  :Il2CppInterop] il2cpp_class_from_name: 0x7FFEB697B210
+[Debug  :Il2CppInterop] Class::FromName found: 0x7FFEB6925880
+[Debug  :DobbyDetour] Preparing detour from 0x7FFEB6925880 to 0x7FFE566E3364
+[Debug  :DobbyDetour] Prepared detour; Trampoline: 0x7FFE76980080
+[Debug  :DobbyDetour] Original: 7FFEB6925880, Trampoline: 7FFE76980080, diff: 3FFA5800
+[Debug  :Il2CppInterop] GarbageCollector::RunFinalizer found: 0x7FFEB69598D0
+[Debug  :DobbyDetour] Preparing detour from 0x7FFEB69598D0 to 0x7FFE566E33A4
+[Debug  :DobbyDetour] Prepared detour; Trampoline: 0x7FFE769800A0
+[Debug  :DobbyDetour] Original: 7FFEB69598D0, Trampoline: 7FFE769800A0, diff: 3FFD9830
+[Info   :Il2CppInterop] Registered mono type Il2CppInterop.Runtime.DelegateSupport+Il2CppToMonoDelegateReference in il2cpp domain
+[Debug  :     Unity] Test call after applying unity logging hook
+[Debug  :InteropManager] Preloaded 159 interop assemblies in 2991ms
+[Info   :   BepInEx] 1 plugin to load
+[Info   :   BepInEx] Loading [FM26 Player Export 4.0.1]
+[Info   :FM26 Player Export] [FM26Export v4] Carregado! Atalhos: [F9 ou Ctrl+P] = exportar | [F8] = re-escanear
+[Info   :Il2CppInterop] Registered mono type FM26PlayerExport.ExportBehaviour in il2cpp domain
+[Message:   BepInEx] Chainloader startup complete
+[Debug  : Preloader] Runtime invoke unpatched
+[Message:     Unity] RenderGraph is now enabled.
+[Info   :FM26 Player Export] [FM26Export] 0 UIDocuments
+[Info   :FM26 Player Export] [FM26Export] PanelManagers: 0
+[Warning:     Unity] Backtrace native integration status: Cannot initialize Crashpad client
+[Message:     Unity] Initialising plugin - game_plugin Jun  5 2026 10:07:01 FINAL
+[Message:     Unity] {"Timestamp":"2026-07-10T12:08:56.5180837+02:00","LogLevel":"Information","Category":"Default","Message":"GAME_PLUGIN::initialise() called (\u003Ccolor=#3B8FE1\u003E\u003Clink=\u0022plugin-link://C:\\TeamCity\\work\\d85b1bb5a16ae7d8\\apps\\game\\plugin\\generic\\game_plugin_impl.cpp:1527\u003EC:\\TeamCity\\work\\d85b1bb5a16ae7d8\\apps\\game\\plugin\\generic\\game_plugin_impl.cpp:1527\u003C/link\u003E\u003C/color\u003E)"}
+[Message:     Unity] {"Timestamp":"2026-07-10T12:08:56.9177839+02:00","LogLevel":"Information","Category":"default","Message":"Football Manager 26 plugin version: 26.3.2\u002B2329565 (fm26-rel-prod) (\u003Ccolor=#3B8FE1\u003E\u003Clink=\u0022plugin-link://C:\\TeamCity\\work\\d85b1bb5a16ae7d8\\apps\\game\\plugin\\generic\\game_plugin_impl.cpp:798\u003EC:\\TeamCity\\work\\d85b1bb5a16ae7d8\\apps\\game\\plugin\\generic\\game_plugin_impl.cpp:798\u003C/link\u003E\u003C/color\u003E)"}
+[Message:     Unity] Resolution changed: 1920x1080
+[Message:     Unity] {"Timestamp":"2026-07-10T12:09:00.2737058+02:00","LogLevel":"Information","Category":"default","Message":"Loading translation data... (\u003Ccolor=#3B8FE1\u003E\u003Clink=\u0022plugin-link://C:\\TeamCity\\work\\d85b1bb5a16ae7d8\\shared\\libraries\\si\\core\\sicore\\generic\\translation\\sitranslation.cpp:520\u003EC:\\TeamCity\\work\\d85b1bb5a16ae7d8\\shared\\libraries\\si\\core\\sicore\\generic\\translation\\sitranslation.cpp:520\u003C/link\u003E\u003C/color\u003E)"}
+[Message:     Unity] {"Timestamp":"2026-07-10T12:09:00.5576289+02:00","LogLevel":"Information","Category":"default","Message":"...Loading translation data took 282ms (\u003Ccolor=#3B8FE1\u003E\u003Clink=\u0022plugin-link://C:\\TeamCity\\work\\d85b1bb5a16ae7d8\\shared\\libraries\\si\\core\\sicore\\generic\\translation\\sitranslation.cpp:538\u003EC:\\TeamCity\\work\\d85b1bb5a16ae7d8\\shared\\libraries\\si\\core\\sicore\\generic\\translation\\sitranslation.cpp:538\u003C/link\u003E\u003C/color\u003E)"}
+[Message:     Unity] {"Timestamp":"2026-07-10T12:09:02.2417324+02:00","LogLevel":"Information","Category":"MULTIPLAYER_CHANNEL","Message":"Created NETWORKING_PLAYFAB (\u003Ccolor=#3B8FE1\u003E\u003Clink=\u0022plugin-link://C:\\TeamCity\\work\\d85b1bb5a16ae7d8\\shared\\libraries\\si\\core\\simultiplayer\\services\\networking\\playfab\\networking_playfab.cpp:72\u003EC:\\TeamCity\\work\\d85b1bb5a16ae7d8\\shared\\libraries\\si\\core\\simultiplayer\\services\\networking\\playfab\\networking_playfab.cpp:72\u003C/link\u003E\u003C/color\u003E)"}
+[Message:     Unity] Football Manager 26 version: 26.3.2.2329565
+[Message:     Unity] {"Timestamp":"2026-07-10T12:10:35.4742523+02:00","LogLevel":"Information","Category":"MULTIPLAYER_CHANNEL","Message":"Unable to stop_lobby_server, networking service is either not signed in or not initialised (\u003Ccolor=#3B8FE1\u003E\u003Clink=\u0022plugin-link://C:\\TeamCity\\work\\d85b1bb5a16ae7d8\\shared\\libraries\\si\\core\\simultiplayer\\generic\\multiplayer\\multiplayer_manager.cpp:822\u003EC:\\TeamCity\\work\\d85b1bb5a16ae7d8\\shared\\libraries\\si\\core\\simultiplayer\\generic\\multiplayer\\multiplayer_manager.cpp:822\u003C/link\u003E\u003C/color\u003E)"}
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Message:     Unity] {"Timestamp":"2026-07-10T12:22:51.4928119+02:00","LogLevel":"Information","Category":"MULTIPLAYER_CHANNEL","Message":"Unable to stop_lobby_server, networking service is either not signed in or not initialised (\u003Ccolor=#3B8FE1\u003E\u003Clink=\u0022plugin-link://C:\\TeamCity\\work\\d85b1bb5a16ae7d8\\shared\\libraries\\si\\core\\simultiplayer\\generic\\multiplayer\\multiplayer_manager.cpp:822\u003EC:\\TeamCity\\work\\d85b1bb5a16ae7d8\\shared\\libraries\\si\\core\\simultiplayer\\generic\\multiplayer\\multiplayer_manager.cpp:822\u003C/link\u003E\u003C/color\u003E)"}
+[Message:     Unity] {"Timestamp":"2026-07-10T12:23:52.0819266+02:00","LogLevel":"Information","Category":"MULTIPLAYER_CHANNEL","Message":"Unable to stop_lobby_server, networking service is either not signed in or not initialised (\u003Ccolor=#3B8FE1\u003E\u003Clink=\u0022plugin-link://C:\\TeamCity\\work\\d85b1bb5a16ae7d8\\shared\\libraries\\si\\core\\simultiplayer\\generic\\multiplayer\\multiplayer_manager.cpp:822\u003EC:\\TeamCity\\work\\d85b1bb5a16ae7d8\\shared\\libraries\\si\\core\\simultiplayer\\generic\\multiplayer\\multiplayer_manager.cpp:822\u003C/link\u003E\u003C/color\u003E)"}
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+[Error  :     Unity] Layout update is struggling to process current layout (consider simplifying to avoid recursive layout): PanelRootElement DefaultLayerSettings (x:0.00, y:0.00, width:1680.00, height:945.00) world rect: (x:0.00, y:0.00, width:1680.00, height:945.00)
+=== BepInEx CORE ===
+
+Name                              Length LastWriteTime      
+----                              ------ -------------      
+0Harmony.dll                      264192 12.06.2026 13:31:23
+AsmResolver.dll                    67584 12.06.2026 13:31:23
+AsmResolver.DotNet.dll            524288 12.06.2026 13:31:23
+AsmResolver.PE.dll                380416 12.06.2026 13:31:23
+AsmResolver.PE.File.dll            39424 12.06.2026 13:31:23
+AssetRipper.CIL.dll                28160 12.06.2026 13:31:23
+AssetRipper.Primitives.dll         28672 12.06.2026 13:31:23
+BepInEx.Core.dll                  135168 12.06.2026 13:31:23
+BepInEx.Core.xml                   90254 12.06.2026 13:31:23
+BepInEx.Preloader.Core.dll         52736 12.06.2026 13:31:23
+BepInEx.Preloader.Core.xml         16386 12.06.2026 13:31:23
+BepInEx.Unity.Common.dll           13824 12.06.2026 13:31:23
+BepInEx.Unity.Common.xml            1196 12.06.2026 13:31:23
+BepInEx.Unity.IL2CPP.dll           79360 12.06.2026 13:31:23
+BepInEx.Unity.IL2CPP.dll.config      456 12.06.2026 13:31:23
+BepInEx.Unity.IL2CPP.xml            1846 12.06.2026 13:31:23
+Cpp2IL.Core.dll                   355328 12.06.2026 13:31:23
+Disarm.dll                        138240 12.06.2026 13:31:23
+dobby.dll                         205312 12.06.2026 13:31:23
+Gee.External.Capstone.dll         295936 12.06.2026 13:31:23
+Iced.dll                         1896448 12.06.2026 13:31:23
+Il2CppInterop.Common.dll           41472 12.06.2026 13:31:23
+Il2CppInterop.Generator.dll       219136 12.06.2026 13:31:23
+Il2CppInterop.HarmonySupport.dll   25600 12.06.2026 13:31:23
+Il2CppInterop.Runtime.dll         289792 12.06.2026 13:31:23
+LibCpp2IL.dll                     284672 12.06.2026 13:31:23
+Mono.Cecil.dll                    356864 12.06.2026 13:31:23
+Mono.Cecil.Mdb.dll                 39424 12.06.2026 13:31:23
+Mono.Cecil.Pdb.dll                 89600 12.06.2026 13:31:23
+Mono.Cecil.Rocks.dll               24576 12.06.2026 13:31:23
+MonoMod.Backports.dll              29184 12.06.2026 13:31:23
+MonoMod.ILHelpers.dll               4096 12.06.2026 13:31:23
+MonoMod.RuntimeDetour.dll         112640 12.06.2026 13:31:23
+MonoMod.Utils.dll                 193024 12.06.2026 13:31:23
+SemanticVersioning.dll             34816 12.06.2026 13:31:23
+StableNameDotNet.dll               28160 12.06.2026 13:31:23
+WasmDisassembler.dll               22528 12.06.2026 13:31:23
+
+
+
+=== BepInEx PLUGINS ===
+
+Name                 Length FullName                                                                                           
+----                 ------ --------                                                                                           
+FM26PlayerExport.dll  18944 D:\steam\steamapps\common\Football Manager 26\BepInEx\plugins\FM26PlayerExport\FM26PlayerExport.dll
+
+
+
+=== INTEROP - NAJWIEKSZE PLIKI ===
+
+Name                                                              Length FullName                                                                                                                     
+----                                                              ------ --------                                                                                                                     
+MethodXrefScanCache.db                                          26881600 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\MethodXrefScanCache.db                                         
+FM.UI.dll                                                        8501248 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\FM.UI.dll                                                      
+Il2Cppmscorlib.dll                                               5469696 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2Cppmscorlib.dll                                             
+UnityEngine.UIElementsModule.dll                                 5394944 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UIElementsModule.dll                               
+SI.Bindable.dll                                                  4606464 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Bindable.dll                                                
+UnityEngine.CoreModule.dll                                       4365312 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.CoreModule.dll                                     
+Il2CppSystem.Xml.dll                                             3013632 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Xml.dll                                           
+Il2CppSystem.dll                                                 2441216 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.dll                                               
+MethodAddressToToken.db                                          1972573 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\MethodAddressToToken.db                                        
+Unity.InputSystem.dll                                            1826304 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Unity.InputSystem.dll                                          
+Unity.RenderPipelines.Universal.Runtime.dll                      1754624 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Unity.RenderPipelines.Universal.Runtime.dll                    
+Unity.RenderPipelines.Core.Runtime.dll                           1594880 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Unity.RenderPipelines.Core.Runtime.dll                         
+FM.Graphics.dll                                                  1502208 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\FM.Graphics.dll                                                
+Il2CppSystem.Core.dll                                            1500672 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Core.dll                                          
+FM.Match.dll                                                     1426432 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\FM.Match.dll                                                   
+Il2CppSystem.Data.dll                                            1336832 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Data.dll                                          
+Il2CppSystem.Text.Json.dll                                       1161216 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Text.Json.dll                                     
+SI.Core.dll                                                      1128960 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Core.dll                                                    
+Newtonsoft.Json.dll                                              1124352 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Newtonsoft.Json.dll                                            
+SI.UI.dll                                                         944128 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.UI.dll                                                      
+UnityEngine.UI.dll                                                827392 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UI.dll                                             
+SI.VisualScripting.dll                                            798720 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.VisualScripting.dll                                         
+LiveChartsCore.dll                                                632832 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\LiveChartsCore.dll                                             
+UnityEngine.TextCoreTextEngineModule.dll                          547328 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.TextCoreTextEngineModule.dll                       
+Unity.RenderPipelines.GPUDriven.Runtime.dll                       532992 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Unity.RenderPipelines.GPUDriven.Runtime.dll                    
+UnityEngine.AnimationModule.dll                                   518656 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.AnimationModule.dll                                
+Unity.ResourceManager.dll                                         467968 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Unity.ResourceManager.dll                                      
+SI.CityGen.dll                                                    428544 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.CityGen.dll                                                 
+UnityEngine.PropertiesModule.dll                                  423936 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.PropertiesModule.dll                               
+FM.GamePlugin.dll                                                 408576 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\FM.GamePlugin.dll                                              
+UnityEngine.IMGUIModule.dll                                       389120 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.IMGUIModule.dll                                    
+Backtrace.Unity.dll                                               381952 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Backtrace.Unity.dll                                            
+Unity.Addressables.dll                                            357376 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Unity.Addressables.dll                                         
+Unity.Cinemachine.dll                                             330240 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Unity.Cinemachine.dll                                          
+UnityEngine.Physics2DModule.dll                                   319488 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.Physics2DModule.dll                                
+Il2CppMono.Security.dll                                           306176 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppMono.Security.dll                                        
+UnityEngine.PhysicsModule.dll                                     296960 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.PhysicsModule.dll                                  
+Unity.Timeline.dll                                                294912 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Unity.Timeline.dll                                             
+Unity.Collections.dll                                             252928 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Unity.Collections.dll                                          
+UnityEngine.AudioModule.dll                                       235008 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.AudioModule.dll                                    
+Il2CppSystem.Net.Http.dll                                         229376 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Net.Http.dll                                      
+Gadsme.dll                                                        219648 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Gadsme.dll                                                     
+UnityEngine.ParticleSystemModule.dll                              200192 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.ParticleSystemModule.dll                           
+UnityEngine.AndroidJNIModule.dll                                  195072 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.AndroidJNIModule.dll                               
+UnityEngine.HierarchyCoreModule.dll                               178688 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.HierarchyCoreModule.dll                            
+ZLogger.dll                                                       171520 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\ZLogger.dll                                                    
+Il2CppMicrosoft.Extensions.DependencyInjection.dll                171520 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppMicrosoft.Extensions.DependencyInjection.dll             
+FMGame.dll                                                        159232 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\FMGame.dll                                                     
+Il2CppSystem.Collections.Immutable.dll                            158208 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Collections.Immutable.dll                         
+Tayx.Graphy.dll                                                   155648 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Tayx.Graphy.dll                                                
+UnityEngine.VFXModule.dll                                         155136 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.VFXModule.dll                                      
+UnityEngine.TerrainModule.dll                                     151040 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.TerrainModule.dll                                  
+UnityEngine.TextCoreFontEngineModule.dll                          134144 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.TextCoreFontEngineModule.dll                       
+Unity.Splines.dll                                                 125440 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Unity.Splines.dll                                              
+UnityEngine.VideoModule.dll                                       113152 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.VideoModule.dll                                    
+UnityEngine.InputForUIModule.dll                                  107008 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.InputForUIModule.dll                               
+UnityEngine.UnityWebRequestModule.dll                             104960 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UnityWebRequestModule.dll                          
+UnityEngine.XRModule.dll                                          103424 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.XRModule.dll                                       
+Il2CppSystem.Xml.Linq.dll                                         101888 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Xml.Linq.dll                                      
+Unity.Mathematics.dll                                             101376 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Unity.Mathematics.dll                                          
+UnityEngine.MarshallingModule.dll                                  95744 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.MarshallingModule.dll                              
+UnityEngine.AccessibilityModule.dll                                94208 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.AccessibilityModule.dll                            
+SI.Audio.dll                                                       84480 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Audio.dll                                                   
+UnityEngine.UIModule.dll                                           82944 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UIModule.dll                                       
+SI.Anim.dll                                                        80384 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Anim.dll                                                    
+UnityEngine.TilemapModule.dll                                      80384 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.TilemapModule.dll                                  
+SI.Match.dll                                                       78336 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Match.dll                                                   
+UnityEngine.TextRenderingModule.dll                                75264 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.TextRenderingModule.dll                            
+ZString.dll                                                        74240 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\ZString.dll                                                    
+Il2CppMicrosoft.Extensions.Logging.dll                             72192 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppMicrosoft.Extensions.Logging.dll                         
+UnityEngine.UnityAnalyticsModule.dll                               72192 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UnityAnalyticsModule.dll                           
+Il2CppSystem.Numerics.dll                                          68608 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Numerics.dll                                      
+UnityEngine.AIModule.dll                                           68608 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.AIModule.dll                                       
+Unity.VisualEffectGraph.Runtime.dll                                67072 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Unity.VisualEffectGraph.Runtime.dll                            
+Il2CppSystem.Diagnostics.DiagnosticSource.dll                      62976 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Diagnostics.DiagnosticSource.dll                  
+UnityEngine.InputLegacyModule.dll                                  59392 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.InputLegacyModule.dll                              
+UnityEngine.UnityAnalyticsCommonModule.dll                         55808 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UnityAnalyticsCommonModule.dll                     
+Il2CppSystem.Text.Encodings.Web.dll                                55808 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Text.Encodings.Web.dll                            
+SI.MatchTypes.dll                                                  55296 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.MatchTypes.dll                                              
+SI.Bindable.Reference.Core.dll                                     53760 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Bindable.Reference.Core.dll                                 
+UnityEngine.DirectorModule.dll                                     49664 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.DirectorModule.dll                                 
+Unity.Burst.dll                                                    48128 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Unity.Burst.dll                                                
+FM.Input.dll                                                       47104 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\FM.Input.dll                                                   
+Il2CppMicrosoft.Extensions.Options.dll                             46592 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppMicrosoft.Extensions.Options.dll                         
+Il2CppMicrosoft.Extensions.Logging.Abstractions.dll                43520 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppMicrosoft.Extensions.Logging.Abstractions.dll            
+Il2CppMicrosoft.Extensions.DependencyInjection.Abstractions.dll    39936 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppMicrosoft.Extensions.DependencyInjection.Abstractions.dll
+UnityEngine.AssetBundleModule.dll                                  38400 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.AssetBundleModule.dll                              
+SI.Marshalling.dll                                                 37376 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Marshalling.dll                                             
+RTLTMPro.dll                                                       34304 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\RTLTMPro.dll                                                   
+Utf8StringInterpolation.dll                                        33280 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Utf8StringInterpolation.dll                                    
+SI.Input.dll                                                       32768 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Input.dll                                                   
+SI.Debug.dll                                                       31232 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Debug.dll                                                   
+UnityEngine.SubsystemsModule.dll                                   30720 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.SubsystemsModule.dll                               
+FM.Graphics.Tools.dll                                              29696 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\FM.Graphics.Tools.dll                                          
+SI.Services.dll                                                    27136 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Services.dll                                                
+FastNoise Lite.dll                                                 26624 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\FastNoise Lite.dll                                             
+Il2CppSystem.IO.Hashing.dll                                        26624 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.IO.Hashing.dll                                    
+UnityEngine.ClothModule.dll                                        26112 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.ClothModule.dll                                    
+Unity.InputSystem.ForUI.dll                                        25600 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Unity.InputSystem.ForUI.dll                                    
+Il2CppSystem.Drawing.dll                                           25088 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Drawing.dll                                       
+
+
+
+=== INTEROP - FM / SI / ASSEMBLY-CSHARP ===
+
+Name                                                             Length FullName                                                                                                                     
+----                                                             ------ --------                                                                                                                     
+Assembly-CSharp.dll                                                6144 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Assembly-CSharp.dll                                            
+FM.GameConfig.dll                                                  4608 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\FM.GameConfig.dll                                              
+FM.GamePlugin.dll                                                408576 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\FM.GamePlugin.dll                                              
+FM.Graphics.dll                                                 1502208 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\FM.Graphics.dll                                                
+FM.Graphics.Tools.dll                                             29696 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\FM.Graphics.Tools.dll                                          
+FM.Input.dll                                                      47104 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\FM.Input.dll                                                   
+FM.Match.dll                                                    1426432 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\FM.Match.dll                                                   
+FM.Performance.dll                                                 6656 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\FM.Performance.dll                                             
+FM.UI.dll                                                       8501248 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\FM.UI.dll                                                      
+Il2CppSystem.Collections.Immutable.dll                           158208 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Collections.Immutable.dll                         
+Il2CppSystem.Core.dll                                           1500672 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Core.dll                                          
+Il2CppSystem.Data.dll                                           1336832 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Data.dll                                          
+Il2CppSystem.Diagnostics.DiagnosticSource.dll                     62976 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Diagnostics.DiagnosticSource.dll                  
+Il2CppSystem.dll                                                2441216 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.dll                                               
+Il2CppSystem.Drawing.dll                                          25088 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Drawing.dll                                       
+Il2CppSystem.IO.Hashing.dll                                       26624 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.IO.Hashing.dll                                    
+Il2CppSystem.Net.Http.dll                                        229376 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Net.Http.dll                                      
+Il2CppSystem.Numerics.dll                                         68608 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Numerics.dll                                      
+Il2CppSystem.Runtime.CompilerServices.Unsafe.dll                  10240 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Runtime.CompilerServices.Unsafe.dll               
+Il2CppSystem.Runtime.Serialization.dll                             7168 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Runtime.Serialization.dll                         
+Il2CppSystem.Text.Encodings.Web.dll                               55808 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Text.Encodings.Web.dll                            
+Il2CppSystem.Text.Json.dll                                      1161216 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Text.Json.dll                                     
+Il2CppSystem.Xml.dll                                            3013632 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Xml.dll                                           
+Il2CppSystem.Xml.Linq.dll                                        101888 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\Il2CppSystem.Xml.Linq.dll                                      
+SI.Addressables.dll                                               20992 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Addressables.dll                                            
+SI.Anim.dll                                                       80384 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Anim.dll                                                    
+SI.Audio.dll                                                      84480 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Audio.dll                                                   
+SI.Bindable.dll                                                 4606464 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Bindable.dll                                                
+SI.Bindable.Reference.Core.dll                                    53760 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Bindable.Reference.Core.dll                                 
+SI.CityGen.dll                                                   428544 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.CityGen.dll                                                 
+SI.Core.dll                                                     1128960 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Core.dll                                                    
+SI.Debug.dll                                                      31232 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Debug.dll                                                   
+SI.Graphics.dll                                                    6656 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Graphics.dll                                                
+SI.Input.dll                                                      32768 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Input.dll                                                   
+SI.Interop.dll                                                    18432 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Interop.dll                                                 
+SI.Marshalling.dll                                                37376 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Marshalling.dll                                             
+SI.Match.dll                                                      78336 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Match.dll                                                   
+SI.MatchTypes.dll                                                 55296 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.MatchTypes.dll                                              
+SI.Services.dll                                                   27136 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.Services.dll                                                
+SI.UI.dll                                                        944128 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.UI.dll                                                      
+SI.VisualScripting.Core.dll                                        5120 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.VisualScripting.Core.dll                                    
+SI.VisualScripting.dll                                           798720 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\SI.VisualScripting.dll                                         
+UnityEngine.AccessibilityModule.dll                               94208 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.AccessibilityModule.dll                            
+UnityEngine.AIModule.dll                                          68608 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.AIModule.dll                                       
+UnityEngine.AndroidJNIModule.dll                                 195072 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.AndroidJNIModule.dll                               
+UnityEngine.AnimationModule.dll                                  518656 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.AnimationModule.dll                                
+UnityEngine.AssetBundleModule.dll                                 38400 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.AssetBundleModule.dll                              
+UnityEngine.AudioModule.dll                                      235008 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.AudioModule.dll                                    
+UnityEngine.ClothModule.dll                                       26112 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.ClothModule.dll                                    
+UnityEngine.ClusterInputModule.dll                                 8192 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.ClusterInputModule.dll                             
+UnityEngine.ClusterRendererModule.dll                              6656 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.ClusterRendererModule.dll                          
+UnityEngine.ContentLoadModule.dll                                  4096 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.ContentLoadModule.dll                              
+UnityEngine.CoreModule.dll                                      4365312 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.CoreModule.dll                                     
+UnityEngine.CrashReportingModule.dll                               6656 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.CrashReportingModule.dll                           
+UnityEngine.DirectorModule.dll                                    49664 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.DirectorModule.dll                                 
+UnityEngine.dll                                                    3072 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.dll                                                
+UnityEngine.DSPGraphModule.dll                                    10240 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.DSPGraphModule.dll                                 
+UnityEngine.GameCenterModule.dll                                  11264 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.GameCenterModule.dll                               
+UnityEngine.GIModule.dll                                           2048 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.GIModule.dll                                       
+UnityEngine.GraphicsStateCollectionSerializerModule.dll            2048 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.GraphicsStateCollectionSerializerModule.dll        
+UnityEngine.GridModule.dll                                        13824 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.GridModule.dll                                     
+UnityEngine.HierarchyCoreModule.dll                              178688 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.HierarchyCoreModule.dll                            
+UnityEngine.HotReloadModule.dll                                    2048 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.HotReloadModule.dll                                
+UnityEngine.ImageConversionModule.dll                             15360 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.ImageConversionModule.dll                          
+UnityEngine.IMGUIModule.dll                                      389120 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.IMGUIModule.dll                                    
+UnityEngine.InputForUIModule.dll                                 107008 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.InputForUIModule.dll                               
+UnityEngine.InputLegacyModule.dll                                 59392 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.InputLegacyModule.dll                              
+UnityEngine.InputModule.dll                                       14848 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.InputModule.dll                                    
+UnityEngine.JSONSerializeModule.dll                                7680 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.JSONSerializeModule.dll                            
+UnityEngine.LocalizationModule.dll                                 6144 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.LocalizationModule.dll                             
+UnityEngine.MarshallingModule.dll                                 95744 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.MarshallingModule.dll                              
+UnityEngine.MultiplayerModule.dll                                  4096 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.MultiplayerModule.dll                              
+UnityEngine.ParticleSystemModule.dll                             200192 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.ParticleSystemModule.dll                           
+UnityEngine.PerformanceReportingModule.dll                         3072 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.PerformanceReportingModule.dll                     
+UnityEngine.Physics2DModule.dll                                  319488 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.Physics2DModule.dll                                
+UnityEngine.PhysicsModule.dll                                    296960 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.PhysicsModule.dll                                  
+UnityEngine.PropertiesModule.dll                                 423936 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.PropertiesModule.dll                               
+UnityEngine.RuntimeInitializeOnLoadManagerInitializerModule.dll    2048 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.RuntimeInitializeOnLoadManagerInitializerModule.dll
+UnityEngine.ScreenCaptureModule.dll                                5632 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.ScreenCaptureModule.dll                            
+UnityEngine.ShaderVariantAnalyticsModule.dll                       2048 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.ShaderVariantAnalyticsModule.dll                   
+UnityEngine.SharedInternalsModule.dll                             12288 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.SharedInternalsModule.dll                          
+UnityEngine.SpriteMaskModule.dll                                  11776 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.SpriteMaskModule.dll                               
+UnityEngine.SpriteShapeModule.dll                                  8704 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.SpriteShapeModule.dll                              
+UnityEngine.StreamingModule.dll                                    4608 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.StreamingModule.dll                                
+UnityEngine.SubstanceModule.dll                                    6656 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.SubstanceModule.dll                                
+UnityEngine.SubsystemsModule.dll                                  30720 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.SubsystemsModule.dll                               
+UnityEngine.TerrainModule.dll                                    151040 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.TerrainModule.dll                                  
+UnityEngine.TerrainPhysicsModule.dll                               4096 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.TerrainPhysicsModule.dll                           
+UnityEngine.TextCoreFontEngineModule.dll                         134144 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.TextCoreFontEngineModule.dll                       
+UnityEngine.TextCoreTextEngineModule.dll                         547328 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.TextCoreTextEngineModule.dll                       
+UnityEngine.TextRenderingModule.dll                               75264 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.TextRenderingModule.dll                            
+UnityEngine.TilemapModule.dll                                     80384 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.TilemapModule.dll                                  
+UnityEngine.TLSModule.dll                                          5120 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.TLSModule.dll                                      
+UnityEngine.UI.dll                                               827392 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UI.dll                                             
+UnityEngine.UIElementsModule.dll                                5394944 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UIElementsModule.dll                               
+UnityEngine.UIModule.dll                                          82944 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UIModule.dll                                       
+UnityEngine.UmbraModule.dll                                        2048 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UmbraModule.dll                                    
+UnityEngine.UnityAnalyticsCommonModule.dll                        55808 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UnityAnalyticsCommonModule.dll                     
+UnityEngine.UnityAnalyticsModule.dll                              72192 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UnityAnalyticsModule.dll                           
+UnityEngine.UnityConnectModule.dll                                10240 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UnityConnectModule.dll                             
+UnityEngine.UnityCurlModule.dll                                    7168 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UnityCurlModule.dll                                
+UnityEngine.UnityTestProtocolModule.dll                            2048 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UnityTestProtocolModule.dll                        
+UnityEngine.UnityWebRequestAssetBundleModule.dll                  14336 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UnityWebRequestAssetBundleModule.dll               
+UnityEngine.UnityWebRequestAudioModule.dll                         7168 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UnityWebRequestAudioModule.dll                     
+UnityEngine.UnityWebRequestModule.dll                            104960 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UnityWebRequestModule.dll                          
+UnityEngine.UnityWebRequestTextureModule.dll                       4096 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UnityWebRequestTextureModule.dll                   
+UnityEngine.UnityWebRequestWWWModule.dll                           7680 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.UnityWebRequestWWWModule.dll                       
+UnityEngine.VehiclesModule.dll                                    14848 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.VehiclesModule.dll                                 
+UnityEngine.VFXModule.dll                                        155136 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.VFXModule.dll                                      
+UnityEngine.VideoModule.dll                                      113152 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.VideoModule.dll                                    
+UnityEngine.VirtualTexturingModule.dll                            18432 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.VirtualTexturingModule.dll                         
+UnityEngine.VRModule.dll                                          17408 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.VRModule.dll                                       
+UnityEngine.WindModule.dll                                         7168 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.WindModule.dll                                     
+UnityEngine.XRModule.dll                                         103424 D:\steam\steamapps\common\Football Manager 26\BepInEx\interop\UnityEngine.XRModule.dll                                       
+
+
+

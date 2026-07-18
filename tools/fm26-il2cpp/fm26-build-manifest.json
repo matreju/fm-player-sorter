@@ -1,0 +1,24 @@
+﻿{
+    "generatedAtUtc":  "2026-07-10T13:01:27.8939739Z",
+    "fmRoot":  "D:\\steam\\steamapps\\common\\Football Manager 26",
+    "fmVersion":  "6000.0.52f1-fm26-05f1 (87a0370e9917)",
+    "fmFileVersion":  "6000.0.52.8888375",
+    "fmExe":  {
+                  "path":  "D:\\steam\\steamapps\\common\\Football Manager 26\\fm.exe",
+                  "size":  672256,
+                  "lastWriteUtc":  "2025-11-12T20:34:35.8633997Z",
+                  "sha256":  "3653c97f9ccec2be28edc4faae67304b5b6c26733f2f07dea3e7c591d3b9ff73"
+              },
+    "gameAssembly":  {
+                         "path":  "D:\\steam\\steamapps\\common\\Football Manager 26\\GameAssembly.dll",
+                         "size":  53639168,
+                         "lastWriteUtc":  "2026-06-10T18:47:43.0057764Z",
+                         "sha256":  "7ce3eb474dc6093df633f979e869e55b2ec7953fde2e732392a694d379ff7a0c"
+                     },
+    "globalMetadata":  {
+                           "path":  "D:\\steam\\steamapps\\common\\Football Manager 26\\fm_Data\\il2cpp_data\\Metadata\\global-metadata.dat",
+                           "size":  15586328,
+                           "lastWriteUtc":  "2026-06-10T18:47:42.9494934Z",
+                           "sha256":  "52287eadeb07d3d222c9e370e64f308260934911807e2073fb0e72f49c273213"
+                       }
+}
