@@ -206,11 +206,9 @@ export interface FmReaderProfileStatus {
   error: string | null;
 }
 
-export interface FmPlayerPreview {
-  uid: number | null;
-  firstName: string | null;
-  lastName: string | null;
-  clubName: string | null;
+export interface FmClassOffsetStat {
+  offset: string;
+  count: number;
 }
 
 export interface FmDatabaseLoadResult {
@@ -228,15 +226,29 @@ export interface FmDatabaseLoadResult {
   readerMode: string;
   requiresBepinex: boolean;
   readOnly: boolean;
-
-  profile: FmReaderProfileStatus;
-  memory: FmMemoryStatus;
-
+  pid: number | null;
+  profile: string | null;
   databaseRootFound: boolean;
   playerCount: number;
+  scanRegionCount: number;
+  scannedBytes: number;
+  scanDurationMs: number;
   gameDate: string | null;
+  gameDateSource: string;
   dataStale: boolean;
-  players: FmPlayerPreview[];
+  headers: string[];
+  rows: Record<string, string>[];
+  classOffsets: FmClassOffsetStat[];
+}
+
+export interface FmDateStatus {
+  processDetected: boolean;
+  available: boolean;
+  importedDate: string | null;
+  currentDate: string | null;
+  dataStale: boolean;
+  source: string;
+  error: string | null;
 }
 
 export async function inspectFootballManagerReaderProfile(): Promise<FmReaderProfileStatus> {
@@ -257,4 +269,20 @@ export async function loadFootballManagerDatabase(): Promise<FmDatabaseLoadResul
   }
 
   return invoke<FmDatabaseLoadResult>("load_fm_database");
+}
+
+export async function getFootballManagerDateStatus(): Promise<FmDateStatus> {
+  if (!isTauri()) {
+    return {
+      processDetected: false,
+      available: false,
+      importedDate: null,
+      currentDate: null,
+      dataStale: false,
+      source: "unavailable",
+      error: null,
+    };
+  }
+
+  return invoke<FmDateStatus>("get_fm_date_status");
 }

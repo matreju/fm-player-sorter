@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   isDesktopApp,
   probeFootballManagerMemory,
+  type FmDatabaseLoadResult,
   type FmMemoryStatus,
 } from "../../services/fmConnection";
 
@@ -11,7 +12,13 @@ import { FmDatabasePanel } from "./FmDatabasePanel";
 
 const CHECK_INTERVAL_MS = 2000;
 
-export function FmConnectionPanel() {
+interface FmConnectionPanelProps {
+  onDatabaseLoaded: (result: FmDatabaseLoadResult) => void;
+}
+
+export function FmConnectionPanel({
+  onDatabaseLoaded,
+}: FmConnectionPanelProps) {
   const desktopMode = isDesktopApp();
 
   const [status, setStatus] = useState<FmMemoryStatus | null>(null);
@@ -179,7 +186,7 @@ export function FmConnectionPanel() {
               </div>
             </dl>
 
-            <FmDatabasePanel />
+            <FmDatabasePanel onDatabaseLoaded={onDatabaseLoaded} />
           </>
         )}
       </div>

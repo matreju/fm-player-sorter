@@ -86,6 +86,7 @@ import type {
 } from "./types/squadBuilderTypes";
 import { scorePlayerForSlot } from "./utils/squadBuilderScoring";
 import { FmConnectionPanel } from "./components/FmConnection/FmConnectionPanel";
+import type { FmDatabaseLoadResult } from "./services/fmConnection";
 
 type PlayerViewMode = "table" | "cards";
 
@@ -647,6 +648,28 @@ function handleComparePlayer(playerKey: string) {
   setFootFilter("any");
     setError("");
   }
+
+  const handleFmDatabaseLoaded = useCallback(
+    (result: FmDatabaseLoadResult) => {
+      clearStoredTable();
+      clearStoredImportChangeReport();
+
+      setHeaders(result.headers);
+      setRows(result.rows);
+      setImportChangeReport(null);
+      setFileName(
+        result.gameDate ? `FM26 • ${result.gameDate}` : "FM26 • odczyt pamięci",
+      );
+      setSortConfig(null);
+      setSearchTerm("");
+      setMinAge("");
+      setMaxAge("");
+      setFootFilter("any");
+      setSelectedPlayerKey(null);
+      setError("");
+    },
+    [],
+  );
   
 const handleSquadBuilderSelectPlayer = useCallback(
   (row: TableRow, selectionPosition: string) => {
@@ -765,7 +788,7 @@ return (
           onClearPlayerSelection={clearPlayerSelection}
         />
       </aside>
-        <FmConnectionPanel />
+        <FmConnectionPanel onDatabaseLoaded={handleFmDatabaseLoaded} />
 
       <section style={styles.mainWorkspace} aria-labelledby="workspace-title">
         <h2 id="workspace-title" style={styles.visuallyHidden}>
