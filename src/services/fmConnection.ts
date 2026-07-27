@@ -229,7 +229,12 @@ export interface FmDatabaseLoadResult {
   pid: number | null;
   profile: string | null;
   databaseRootFound: boolean;
+  databasePlayerCount: number;
   playerCount: number;
+  managedTeam: string | null;
+  managedNation: string | null;
+  managedSquadGender: string | null;
+  nationalFilterApplied: boolean;
   scanRegionCount: number;
   scannedBytes: number;
   scanDurationMs: number;

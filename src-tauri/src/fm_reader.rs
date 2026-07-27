@@ -16,7 +16,12 @@ pub struct FmClassOffsetStat {
 pub struct FmNativeDatabase {
     pub pid: u32,
     pub profile: String,
+    pub database_player_count: usize,
     pub player_count: usize,
+    pub managed_team: Option<String>,
+    pub managed_nation: Option<String>,
+    pub managed_squad_gender: Option<String>,
+    pub national_filter_applied: bool,
     pub scan_region_count: usize,
     pub scanned_bytes: u64,
     pub scan_duration_ms: u128,
@@ -443,6 +448,18 @@ mod windows_reader {
     }
 
     #[derive(Debug)]
+    struct PlayerCandidate {
+        uid: u32,
+        person_address: usize,
+        player_address: usize,
+        nation_address: usize,
+        birth_raw: u32,
+        female: bool,
+        ca: u16,
+        pa: u16,
+    }
+
+    #[derive(Debug)]
     struct PlayerRecord {
         uid: u32,
         first_name: Option<String>,
@@ -578,8 +595,7 @@ mod windows_reader {
             game_assembly,
         };
 
-        let mut players = HashMap::<u32, PlayerRecord>::new();
-        let mut person_to_uid = HashMap::<usize, u32>::new();
+        let mut player_candidates = HashMap::<u32, PlayerCandidate>::new();
         let mut club_candidates = HashSet::<usize>::new();
         let mut manager_people = Vec::<usize>::new();
         let mut class_offset_histogram = HashMap::<i32, u64>::new();
@@ -680,23 +696,32 @@ mod windows_reader {
                             continue;
                         }
 
-                        if let std::collections::hash_map::Entry::Vacant(entry) = players.entry(uid)
+                        if let std::collections::hash_map::Entry::Vacant(entry) =
+                            player_candidates.entry(uid)
                         {
-                            if let Some(player) = read_player(
-                                &process,
+                            let nation_address = read_u64(&buffer, local + PERSON_NATION)
+                                .or_else(|| process.read_u64(person_address + PERSON_NATION))
+                                .unwrap_or(0) as usize;
+                            let birth_raw = read_u32(&buffer, local + PERSON_DOB)
+                                .or_else(|| process.read_u32(person_address + PERSON_DOB))
+                                .unwrap_or(0);
+                            let female = buffer
+                                .get(local + PERSON_GENDER)
+                                .copied()
+                                .or_else(|| process.read_u8(person_address + PERSON_GENDER))
+                                .map(|value| value & GENDER_FEMALE_BIT != 0)
+                                .unwrap_or(false);
+
+                            entry.insert(PlayerCandidate {
                                 uid,
                                 person_address,
                                 player_address,
+                                nation_address,
+                                birth_raw,
+                                female,
                                 ca,
                                 pa,
-                            ) {
-                                if let Some(club) = player.owner_club_address {
-                                    club_candidates.insert(club);
-                                }
-                                person_to_uid.insert(person_address, uid);
-                                person_to_uid.insert(player_address, uid);
-                                entry.insert(player);
-                            }
+                            });
                         }
                     } else if dynamic_offset == HUMAN_MANAGER_OFFSET {
                         let offset = dynamic_offset as usize;
@@ -722,7 +747,7 @@ mod windows_reader {
         }
 
         let class_offsets = top_class_offsets(&class_offset_histogram);
-        if players.len() < 500 {
+        if player_candidates.len() < 500 {
             let diagnostic = class_offsets
                 .iter()
                 .take(6)
@@ -731,12 +756,75 @@ mod windows_reader {
                 .join(", ");
             return Err(format!(
                 "Profil pamięci FM26 26.3.x nie przeszedł walidacji: znaleziono tylko {} graczy. Najczęstsze offsety klas: {}. Nie pokazano częściowych ani losowych danych.",
-                players.len(), diagnostic
+                player_candidates.len(), diagnostic
             ));
         }
 
         let manager_person = manager_people.first().copied();
         let manager_team = manager_person.and_then(|person| contract_team(&process, person));
+        let managed_team = manager_team
+            .and_then(|team| process.read_ptr(team + TEAM_CLUB))
+            .and_then(|club| club_name(&process, club));
+        let nation_counts = player_candidates
+            .values()
+            .filter(|candidate| candidate.nation_address != 0)
+            .fold(HashMap::<usize, usize>::new(), |mut counts, candidate| {
+                *counts.entry(candidate.nation_address).or_default() += 1;
+                counts
+            });
+        let (managed_nation_address, managed_nation) = manager_team
+            .and_then(|team| {
+                resolve_managed_nation(
+                    &process,
+                    team,
+                    managed_team.as_deref(),
+                    &nation_counts,
+                )
+            })
+            .ok_or_else(|| {
+                "Wykryto FM26, ale nie udało się ustalić narodowości prowadzonej reprezentacji. Otwórz ekran swojej kadry narodowej w grze i spróbuj ponownie.".to_string()
+            })?;
+        let managed_gender = manager_team
+            .and_then(|team| resolve_managed_squad_gender(&process, team, &player_candidates));
+
+        let selected_candidates = player_candidates
+            .values()
+            .filter(|candidate| {
+                candidate.nation_address == managed_nation_address
+                    && managed_gender
+                        .map(|female| candidate.female == female)
+                        .unwrap_or(true)
+            })
+            .collect::<Vec<_>>();
+        if selected_candidates.is_empty() {
+            return Err(format!(
+                "Rozpoznano reprezentację {managed_nation}, ale nie znaleziono żadnych uprawnionych zawodników w bazie."
+            ));
+        }
+
+        let database_player_count = player_candidates.len();
+        let derived_year = derive_game_year_from_candidates(player_candidates.values());
+        let mut players = HashMap::<u32, PlayerRecord>::with_capacity(selected_candidates.len());
+        let mut person_to_uid = HashMap::<usize, u32>::with_capacity(selected_candidates.len() * 2);
+
+        for candidate in selected_candidates {
+            if let Some(player) = read_player(
+                &process,
+                candidate.uid,
+                candidate.person_address,
+                candidate.player_address,
+                candidate.ca,
+                candidate.pa,
+            ) {
+                if let Some(club) = player.owner_club_address {
+                    club_candidates.insert(club);
+                }
+                person_to_uid.insert(candidate.person_address, candidate.uid);
+                person_to_uid.insert(candidate.player_address, candidate.uid);
+                players.insert(candidate.uid, player);
+            }
+        }
+
         let squad_links = walk_club_squads(
             &process,
             &club_candidates,
@@ -754,7 +842,6 @@ mod windows_reader {
             }
         }
 
-        let derived_year = derive_game_year(players.values());
         let date_anchor = manager_team
             .and_then(|team| read_team_date_anchor(&process, team, derived_year))
             .or_else(|| choose_date_vote(&squad_links.date_votes, derived_year));
@@ -805,7 +892,18 @@ mod windows_reader {
         Ok(FmNativeDatabase {
             pid,
             profile: PROFILE_NAME.to_string(),
+            database_player_count,
             player_count: rows.len(),
+            managed_team,
+            managed_nation: Some(managed_nation),
+            managed_squad_gender: managed_gender.map(|female| {
+                if female {
+                    "Kobiety".to_string()
+                } else {
+                    "Mężczyźni".to_string()
+                }
+            }),
+            national_filter_applied: true,
             scan_region_count: regions.len(),
             scanned_bytes,
             scan_duration_ms: started.elapsed().as_millis(),
@@ -1582,6 +1680,186 @@ mod windows_reader {
             .filter(|name| plausible_label(name, 64))
     }
 
+    fn nation_name(process: &RemoteProcess, nation: usize) -> Option<String> {
+        process
+            .indirect_string(nation + 0x20)
+            .or_else(|| process.indirect_string(nation + 0x30))
+            .filter(|name| plausible_label(name, 64))
+    }
+
+    fn normalize_identity_label(value: &str) -> String {
+        value
+            .chars()
+            .filter(|character| character.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect()
+    }
+
+    fn labels_match(left: &str, right: &str) -> bool {
+        let left = normalize_identity_label(left);
+        let right = normalize_identity_label(right);
+        !left.is_empty()
+            && !right.is_empty()
+            && (left == right
+                || (left.len() >= 5 && right.contains(&left))
+                || (right.len() >= 5 && left.contains(&right)))
+    }
+
+    fn score_known_nation_pointers(
+        process: &RemoteProcess,
+        base: usize,
+        length: usize,
+        nation_counts: &HashMap<usize, usize>,
+        direct_weight: usize,
+        nested_weight: usize,
+        scores: &mut HashMap<usize, usize>,
+    ) {
+        let Some(bytes) = process.read(base, length) else {
+            return;
+        };
+
+        for offset in (0..bytes.len().saturating_sub(7)).step_by(8) {
+            let Some(pointer) = read_u64(&bytes, offset).map(|value| value as usize) else {
+                continue;
+            };
+            if pointer < 0x10_000 {
+                continue;
+            }
+
+            if let Some(population) = nation_counts.get(&pointer) {
+                *scores.entry(pointer).or_default() += direct_weight + (*population).min(250);
+                continue;
+            }
+
+            let Some(nested) = process.read(pointer, 0x100) else {
+                continue;
+            };
+            for nested_offset in (0..nested.len().saturating_sub(7)).step_by(8) {
+                let Some(nation_pointer) =
+                    read_u64(&nested, nested_offset).map(|value| value as usize)
+                else {
+                    continue;
+                };
+                if let Some(population) = nation_counts.get(&nation_pointer) {
+                    *scores.entry(nation_pointer).or_default() +=
+                        nested_weight + (*population).min(100);
+                }
+            }
+        }
+    }
+
+    fn resolve_managed_nation(
+        process: &RemoteProcess,
+        team: usize,
+        team_name: Option<&str>,
+        nation_counts: &HashMap<usize, usize>,
+    ) -> Option<(usize, String)> {
+        if nation_counts.is_empty() {
+            return None;
+        }
+
+        let mut scores = HashMap::<usize, usize>::new();
+        score_known_nation_pointers(
+            process,
+            team,
+            0x240,
+            nation_counts,
+            900,
+            120,
+            &mut scores,
+        );
+
+        if let Some(club) = process.read_ptr(team + TEAM_CLUB).filter(|value| *value != 0) {
+            score_known_nation_pointers(
+                process,
+                club,
+                0x300,
+                nation_counts,
+                1_200,
+                160,
+                &mut scores,
+            );
+        }
+
+        let mut nation_names = HashMap::<usize, String>::new();
+        for nation in nation_counts.keys().copied() {
+            let Some(name) = nation_name(process, nation) else {
+                continue;
+            };
+            if team_name
+                .map(|managed_team| labels_match(managed_team, &name))
+                .unwrap_or(false)
+            {
+                *scores.entry(nation).or_default() += 4_000;
+            }
+            nation_names.insert(nation, name);
+        }
+
+        scores
+            .into_iter()
+            .filter_map(|(nation, score)| {
+                nation_names
+                    .get(&nation)
+                    .cloned()
+                    .map(|name| (nation, name, score))
+            })
+            .max_by_key(|(_, _, score)| *score)
+            .map(|(nation, name, _)| (nation, name))
+            .or_else(|| {
+                let managed_team = team_name?;
+                nation_names
+                    .into_iter()
+                    .find(|(_, name)| labels_match(managed_team, name))
+            })
+    }
+
+    fn resolve_managed_squad_gender(
+        process: &RemoteProcess,
+        team: usize,
+        candidates: &HashMap<u32, PlayerCandidate>,
+    ) -> Option<bool> {
+        let mut address_to_gender = HashMap::<usize, bool>::with_capacity(candidates.len() * 2);
+        for candidate in candidates.values() {
+            address_to_gender.insert(candidate.person_address, candidate.female);
+            address_to_gender.insert(candidate.player_address, candidate.female);
+        }
+
+        let begin = process.read_ptr(team + 0x38)?;
+        let end = process.read_ptr(team + 0x40)?;
+        if end <= begin || (end - begin) % 8 != 0 {
+            return None;
+        }
+        let count = (end - begin) / 8;
+        if count == 0 || count > 200 {
+            return None;
+        }
+
+        let mut women = 0usize;
+        let mut men = 0usize;
+        for index in 0..count {
+            let Some(entry) = process.read_ptr(begin + index * 8).filter(|value| *value != 0)
+            else {
+                continue;
+            };
+            let gender = address_to_gender.get(&entry).copied().or_else(|| {
+                (0..=0x80).step_by(8).find_map(|offset| {
+                    let pointer = process.read_ptr(entry + offset)?;
+                    address_to_gender.get(&pointer).copied()
+                })
+            });
+            match gender {
+                Some(true) => women += 1,
+                Some(false) => men += 1,
+                None => {}
+            }
+        }
+
+        match (women, men) {
+            (0, 0) => None,
+            (women, men) => Some(women > men),
+        }
+    }
+
     fn competition_name(process: &RemoteProcess, team: usize) -> Option<String> {
         for offset in TEAM_COMPETITION {
             let Some(competition) = process.read_ptr(team + offset).filter(|value| *value != 0)
@@ -1611,7 +1889,9 @@ mod windows_reader {
             && !value.chars().any(char::is_control)
     }
 
-    fn derive_game_year<'a>(players: impl Iterator<Item = &'a PlayerRecord>) -> i32 {
+    fn derive_game_year_from_candidates<'a>(
+        players: impl Iterator<Item = &'a PlayerCandidate>,
+    ) -> i32 {
         let mut years = HashMap::<i32, usize>::new();
         for player in players {
             if let Some((year, _)) = decode_fm_date(player.birth_raw) {

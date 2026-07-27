@@ -1,267 +1,288 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  getFootballManagerDateStatus,
   isDesktopApp,
+  loadFootballManagerDatabase,
   probeFootballManagerMemory,
   type FmDatabaseLoadResult,
+  type FmDateStatus,
   type FmMemoryStatus,
 } from "../../services/fmConnection";
 
 import "./FmConnectionPanel.css";
-import {
-  FmDatabasePanel,
-  type FmDatabaseMonitorSummary,
-} from "./FmDatabasePanel";
 
-const CHECK_INTERVAL_MS = 2000;
+const PROCESS_CHECK_INTERVAL_MS = 2_500;
+const DATE_CHECK_INTERVAL_MS = 1_500;
 
 interface FmConnectionPanelProps {
+  currentGameDate: string | null;
+  loadedNation: string | null;
+  loadedPlayerCount: number;
   onDatabaseLoaded: (result: FmDatabaseLoadResult) => void;
 }
 
+function formatDuration(milliseconds: number): string {
+  return `${(milliseconds / 1000).toLocaleString("pl-PL", {
+    maximumFractionDigits: 1,
+  })} s`;
+}
+
 export function FmConnectionPanel({
+  currentGameDate,
+  loadedNation,
+  loadedPlayerCount,
   onDatabaseLoaded,
 }: FmConnectionPanelProps) {
   const desktopMode = isDesktopApp();
-
   const [status, setStatus] = useState<FmMemoryStatus | null>(null);
-
+  const [dateStatus, setDateStatus] = useState<FmDateStatus | null>(null);
+  const [result, setResult] = useState<FmDatabaseLoadResult | null>(null);
+  const [gameDateDraft, setGameDateDraft] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
   const [isChecking, setIsChecking] = useState(desktopMode);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [requestError, setRequestError] = useState<string | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
-  const [monitorSummary, setMonitorSummary] =
-    useState<FmDatabaseMonitorSummary | null>(null);
-
-  const handleDatabaseLoaded = useCallback(
-    (result: FmDatabaseLoadResult) => {
-      setCollapsed(true);
-      onDatabaseLoaded(result);
-    },
-    [onDatabaseLoaded],
-  );
-
-  const handleMonitorSummaryChange = useCallback(
-    (summary: FmDatabaseMonitorSummary | null) => {
-      setMonitorSummary(summary);
-    },
-    [],
-  );
+  const expectedGameDate = gameDateDraft || currentGameDate || "";
 
   const refreshStatus = useCallback(async () => {
-    if (!desktopMode) {
-      return;
-    }
+    if (!desktopMode) return;
 
     try {
-      setRequestError(null);
-
       const nextStatus = await probeFootballManagerMemory();
-
       setStatus(nextStatus);
+      if (nextStatus.error) setError(nextStatus.error);
     } catch (unknownError) {
-      const message =
+      setStatus(null);
+      setError(
         unknownError instanceof Error
           ? unknownError.message
-          : String(unknownError);
-
-      setRequestError(message);
-      setStatus(null);
+          : String(unknownError),
+      );
     } finally {
       setIsChecking(false);
     }
   }, [desktopMode]);
 
   useEffect(() => {
-    if (!desktopMode) {
-      return;
-    }
+    if (!desktopMode) return;
 
-    void refreshStatus();
-
-    const intervalId = window.setInterval(() => {
-      void refreshStatus();
-    }, CHECK_INTERVAL_MS);
-
+    const initialCheckId = window.setTimeout(() => void refreshStatus(), 0);
+    const intervalId = window.setInterval(
+      () => void refreshStatus(),
+      PROCESS_CHECK_INTERVAL_MS,
+    );
     return () => {
+      window.clearTimeout(initialCheckId);
       window.clearInterval(intervalId);
     };
   }, [desktopMode, refreshStatus]);
 
-  const effectiveError = requestError ?? status?.error ?? null;
+  useEffect(() => {
+    if (!result?.success) return;
 
-  const state = !desktopMode
-    ? "browser"
-    : effectiveError
-      ? "error"
-      : status?.memoryReadable
-        ? "detected"
-        : "not-detected";
+    let cancelled = false;
+    const refreshDate = async () => {
+      try {
+        const nextStatus = await getFootballManagerDateStatus();
+        if (!cancelled) setDateStatus(nextStatus);
+      } catch {
+        if (!cancelled) setDateStatus(null);
+      }
+    };
 
-  const statusLabel = (() => {
-    if (!desktopMode) {
-      return "Tryb przeglądarkowy";
+    void refreshDate();
+    const intervalId = window.setInterval(
+      () => void refreshDate(),
+      DATE_CHECK_INTERVAL_MS,
+    );
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [result?.pid, result?.success]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [isOpen]);
+
+  const connect = async () => {
+    if (!expectedGameDate) {
+      setError("Wpisz dokładną datę widoczną obecnie w FM26.");
+      return;
     }
 
-    if (isChecking && !status && !effectiveError) {
-      return "Sprawdzanie…";
-    }
+    try {
+      setIsLoading(true);
+      setError(null);
+      setDateStatus(null);
+      const nextResult = await loadFootballManagerDatabase(expectedGameDate);
+      setResult({ ...nextResult, rows: [], headers: [] });
 
-    if (requestError) {
-      return "Błąd backendu";
-    }
+      if (!nextResult.success) {
+        setError(nextResult.message);
+        return;
+      }
 
-    if (!status?.processDetected) {
-      return "Nie wykryto Football Managera";
+      onDatabaseLoaded(nextResult);
+      setIsOpen(false);
+    } catch (unknownError) {
+      setError(
+        unknownError instanceof Error
+          ? unknownError.message
+          : String(unknownError),
+      );
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    if (!status.memoryReadable) {
-      return "FM wykryty — brak odczytu pamięci";
-    }
-
-    return "Połączono z procesem FM";
-  })();
+  const processConnected = Boolean(status?.memoryReadable);
+  const dataStale = dateStatus?.dataStale ?? false;
+  const displayedDate =
+    dateStatus?.currentDate ?? currentGameDate ?? result?.gameDate ?? null;
+  const connectionLabel = isLoading
+    ? "Wczytywanie…"
+    : processConnected
+      ? loadedPlayerCount > 0
+        ? "Odśwież dane"
+        : "Połącz z grą"
+      : "Połącz z grą";
 
   return (
-    <section
-      className="fm-connection-panel"
-      data-state={state}
-      data-collapsed={collapsed}
-      aria-labelledby="fm-connection-title"
-    >
-      <div className="fm-connection-panel__header">
-        <div>
-          <p className="fm-connection-panel__eyebrow">INTEGRACJA DESKTOPOWA</p>
-
-          <h2 id="fm-connection-title" className="fm-connection-panel__title">
-            Połączenie z Football Managerem
-          </h2>
-        </div>
-
-        <div className="fm-connection-panel__header-actions">
-          {monitorSummary && (
-            <span
-              className="fm-connection-panel__date-status"
-              data-state={
-                monitorSummary.dataStale
-                  ? "stale"
-                  : monitorSummary.available
-                    ? "current"
-                    : "unknown"
-              }
-            >
-              <strong aria-hidden="true">
-                {monitorSummary.dataStale
-                  ? "!"
-                  : monitorSummary.available
-                    ? "✓"
-                    : "?"}
-              </strong>
-              {monitorSummary.dataStale
-                ? `Nieaktualne: ${monitorSummary.currentDate ?? "inna data"}`
-                : `Dane: ${monitorSummary.importedDate ?? "bez daty"}`}
-            </span>
-          )}
-
-          <div className="fm-connection-panel__status">
-            <span className="fm-connection-panel__dot" aria-hidden="true" />
-            <span>{statusLabel}</span>
-          </div>
-
-          <button
-            type="button"
-            className="fm-connection-panel__collapse"
-            onClick={() => setCollapsed((current) => !current)}
-            aria-expanded={!collapsed}
-          >
-            {collapsed ? "Pokaż import" : "Zwiń panel"}
-          </button>
-        </div>
-      </div>
-
-      <div className="fm-connection-panel__body">
-        {!desktopMode && (
-          <p className="fm-connection-panel__message">
-            Odczyt procesu jest dostępny tylko w wersji desktopowej Tauri.
-          </p>
-        )}
-
-        {desktopMode &&
-          !isChecking &&
-          !status?.processDetected &&
-          !requestError && (
-            <p className="fm-connection-panel__message">
-              Uruchom Football Managera. Aplikacja sprawdza obecność procesu
-              automatycznie co 2 sekundy.
-            </p>
-          )}
-
-        {desktopMode && effectiveError && (
-          <p className="fm-connection-panel__message">{effectiveError}</p>
-        )}
-
-        {desktopMode && status?.memoryReadable && (
-          <>
-            <p className="fm-connection-panel__message">
-              Proces Football Managera jest otwarty wyłącznie z prawami odczytu.
-              Pełna analiza buildu i bazy uruchamia się dopiero po kliknięciu
-              przycisku poniżej.
-            </p>
-
-            <dl className="fm-connection-panel__details">
-              <div>
-                <dt>Proces</dt>
-                <dd>{status.processName ?? "Nieznany"}</dd>
-              </div>
-
-              <div>
-                <dt>PID</dt>
-                <dd>{status.pid ?? "Brak"}</dd>
-              </div>
-
-              <div>
-                <dt>Dostęp</dt>
-                <dd>TYLKO ODCZYT</dd>
-              </div>
-
-              <div>
-                <dt>Moduł bazowy</dt>
-                <dd>{status.moduleBaseAddress ?? "Brak"}</dd>
-              </div>
-
-              <div>
-                <dt>Sygnatura</dt>
-                <dd>{status.executableSignature ?? "Brak"}</dd>
-              </div>
-
-              <div>
-                <dt>Ścieżka</dt>
-                <dd title={status.executablePath ?? undefined}>
-                  {status.executablePath ?? "Ścieżka niedostępna"}
-                </dd>
-              </div>
-            </dl>
-
-            <FmDatabasePanel
-              onDatabaseLoaded={handleDatabaseLoaded}
-              onMonitorSummaryChange={handleMonitorSummaryChange}
-            />
-          </>
-        )}
-      </div>
-
-      {desktopMode && (
-        <div className="fm-connection-panel__footer">
-          <button
-            type="button"
-            className="fm-connection-panel__refresh"
-            onClick={() => void refreshStatus()}
-            disabled={isChecking}
-          >
-            {isChecking ? "Sprawdzanie…" : "Sprawdź ponownie"}
-          </button>
-        </div>
+    <div className="fm-connect">
+      {loadedPlayerCount > 0 && (
+        <span
+          className="fm-connect__snapshot"
+          data-stale={dataStale || undefined}
+          title={
+            dataStale
+              ? "Data w FM zmieniła się od ostatniego wczytania."
+              : "Jednorazowy snapshot jest aktualny względem monitorowanej daty."
+          }
+        >
+          <strong>{dataStale ? "!" : loadedNation ?? "Kadra"}</strong>
+          <span>
+            {displayedDate ?? "bez daty"} ·{" "}
+            {loadedPlayerCount.toLocaleString("pl-PL")}
+          </span>
+        </span>
       )}
-    </section>
+
+      <button
+        type="button"
+        className="fm-connect__trigger"
+        data-connected={processConnected || undefined}
+        onClick={() => setIsOpen((current) => !current)}
+        disabled={isLoading}
+        aria-expanded={isOpen}
+      >
+        <span className="fm-connect__dot" aria-hidden="true" />
+        {connectionLabel}
+        <span aria-hidden="true">»</span>
+      </button>
+
+      {isOpen && (
+        <>
+          <button
+            type="button"
+            className="fm-connect__backdrop"
+            aria-label="Zamknij okno połączenia"
+            onClick={() => setIsOpen(false)}
+          />
+
+          <section
+            className="fm-connect__popover"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fm-connect-title"
+          >
+            <header>
+              <div>
+                <span>FM26</span>
+                <h2 id="fm-connect-title">Połącz z grą</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                aria-label="Zamknij"
+              >
+                ×
+              </button>
+            </header>
+
+            <div className="fm-connect__body">
+              <div className="fm-connect__process">
+                <span className="fm-connect__dot" aria-hidden="true" />
+                <div>
+                  <strong>
+                    {!desktopMode
+                      ? "Uruchom wersję desktopową"
+                      : isChecking
+                        ? "Szukanie Football Managera…"
+                        : processConnected
+                          ? "Football Manager jest gotowy"
+                          : "Nie wykryto uruchomionego FM26"}
+                  </strong>
+                  <small>
+                    {processConnected
+                      ? "Odczyt tylko z pamięci procesu — bez HTML i CSV."
+                      : "Wczytaj karierę reprezentacyjną w FM26 i spróbuj ponownie."}
+                  </small>
+                </div>
+              </div>
+
+              <label className="fm-connect__date">
+                <span>Data widoczna w grze</span>
+                <input
+                  type="date"
+                  value={expectedGameDate}
+                  onChange={(event) => setGameDateDraft(event.target.value)}
+                  disabled={isLoading}
+                />
+                <small>
+                  Służy wyłącznie do lekkiego sprawdzania, czy snapshot jest
+                  nieaktualny. Zawodnicy nie są ponownie skanowani.
+                </small>
+              </label>
+
+              {error && (
+                <p className="fm-connect__message" data-tone="error">
+                  {error}
+                </p>
+              )}
+
+              {result?.success && (
+                <p className="fm-connect__message" data-tone="success">
+                  {result.managedNation}:{" "}
+                  {result.playerCount.toLocaleString("pl-PL")} zawodników w{" "}
+                  {formatDuration(result.scanDurationMs)}.
+                </p>
+              )}
+
+              <button
+                type="button"
+                className="fm-connect__load"
+                onClick={() => void connect()}
+                disabled={!processConnected || isLoading}
+              >
+                {isLoading
+                  ? "Wczytywanie kandydatów…"
+                  : loadedPlayerCount > 0
+                    ? "Wczytaj nowy snapshot"
+                    : "Połącz i wczytaj zawodników"}
+              </button>
+            </div>
+          </section>
+        </>
+      )}
+    </div>
   );
 }

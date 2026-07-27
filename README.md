@@ -7,17 +7,19 @@ Football Managera 26 i dalszej analizy bez eksportu HTML/CSV.
 
 1. Uruchom FM26 na Windows i wczytaj karierę.
 2. Uruchom desktopową wersję FM Player Sorter.
-3. Przepisz dokładną datę widoczną w grze i kliknij **Wczytaj zapis z FM26**.
+3. Przepisz dokładną datę widoczną w grze i kliknij **Połącz z grą**.
 
-Pełny skan pamięci jest wykonywany tylko po kliknięciu przycisku. Po imporcie
-aplikacja zachowuje wynik w pamięci procesu i nie odczytuje ponownie wszystkich
-zawodników przy zmianie dnia w grze.
+Pełny skan pamięci jest wykonywany tylko po kliknięciu przycisku. Aplikacja
+rozpoznaje prowadzoną reprezentację, odrzuca zawodników innej narodowości jeszcze
+przed kosztownym odczytem pełnych rekordów i zapisuje gotowy snapshot kadry w
+lokalnej bazie IndexedDB. Zmiana dnia w grze nie uruchamia ponownego skanu.
 
 Czytnik otwiera `fm.exe` wyłącznie z prawami `PROCESS_VM_READ` i
 `PROCESS_QUERY_INFORMATION`. Nie wstrzykuje DLL, nie wymaga BepInEx i nie zapisuje
 niczego w pamięci gry.
 
-Aktualny profil obejmuje FM26 26.3.x i zwraca między innymi:
+Aktualny profil obejmuje FM26 26.3.x i dla kandydatów do prowadzonej
+reprezentacji zwraca między innymi:
 
 - UID, imię, nazwisko, płeć, narodowość, datę urodzenia i wiek;
 - klub, klub macierzysty, ligę, zespół i wszystkie pozycje;
@@ -44,8 +46,8 @@ pokazuje ten stan wprost zamiast wyświetlać nieprawidłową datę.
 
 ## Aktualizacje
 
-Wersja 0.2.0 zawiera updater Tauri korzystający z podpisanych plików GitHub
-Releases. W panelu bocznym można sprawdzić wersję i zainstalować nowsze wydanie
+Wersja 0.3.0 zawiera updater Tauri korzystający z podpisanych plików GitHub
+Releases. W górnym pasku można sprawdzić wersję i zainstalować nowsze wydanie
 bez ręcznego odinstalowywania aplikacji.
 
 Workflow `.github/workflows/release.yml` tworzy szkic wydania, instalator NSIS,

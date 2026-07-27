@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useId,
   useRef,
   useState,
   type Dispatch,
@@ -17,40 +16,27 @@ import { FOOT_FILTER_OPTIONS } from "./MainToolbar.config";
 import { mainToolbarStyles as styles } from "./MainToolbar.styles";
 
 type MainToolbarProps = {
-  fileName: string;
-
   searchTerm: string;
   setSearchTerm: Dispatch<SetStateAction<string>>;
-
   minAge: string;
   setMinAge: Dispatch<SetStateAction<string>>;
-
   maxAge: string;
   setMaxAge: Dispatch<SetStateAction<string>>;
-
   footFilter: FootFilter;
   setFootFilter: Dispatch<SetStateAction<FootFilter>>;
-
   showOnlySelectedPlayers: boolean;
   setShowOnlySelectedPlayers: Dispatch<SetStateAction<boolean>>;
-
   hideMarkedPlayers: boolean;
   setHideMarkedPlayers: Dispatch<SetStateAction<boolean>>;
-
   compactTableMode: boolean;
   setCompactTableMode: Dispatch<SetStateAction<boolean>>;
-
   selectedPlayersCount: number;
   selectedPlayersWithPositionCount: number;
   rejectedPlayersCount: number;
-
-  onFileUpload: (file: File) => void | Promise<void>;
-  onClearData: () => void;
   onClearPlayerSelection: () => void;
 };
 
 export function MainToolbar({
-  fileName,
   searchTerm,
   setSearchTerm,
   minAge,
@@ -68,17 +54,13 @@ export function MainToolbar({
   selectedPlayersCount,
   selectedPlayersWithPositionCount,
   rejectedPlayersCount,
-  onFileUpload,
-  onClearData,
   onClearPlayerSelection,
 }: MainToolbarProps) {
-  const fileInputId = useId();
   const [draftSearchTerm, setDraftSearchTerm] = useState(searchTerm);
   const lastCommittedSearchRef = useRef(searchTerm);
 
   useEffect(() => {
     if (searchTerm === lastCommittedSearchRef.current) return;
-
     lastCommittedSearchRef.current = searchTerm;
     setDraftSearchTerm(searchTerm);
   }, [searchTerm]);
@@ -89,7 +71,7 @@ export function MainToolbar({
     const timeoutId = window.setTimeout(() => {
       lastCommittedSearchRef.current = draftSearchTerm;
       setSearchTerm(draftSearchTerm);
-    }, 180);
+    }, 140);
 
     return () => window.clearTimeout(timeoutId);
   }, [draftSearchTerm, searchTerm, setSearchTerm]);
@@ -99,7 +81,6 @@ export function MainToolbar({
     minAge.trim() !== "" ||
     maxAge.trim() !== "" ||
     footFilter !== "any";
-
   const hasPlayerMarks = selectedPlayersCount > 0 || rejectedPlayersCount > 0;
 
   function clearFilters() {
@@ -111,62 +92,16 @@ export function MainToolbar({
   }
 
   return (
-    <section
-      style={styles.toolbar}
-      aria-labelledby="main-toolbar-title"
-    >
+    <section style={styles.toolbar} aria-labelledby="main-toolbar-title">
       <h2 id="main-toolbar-title" style={visuallyHiddenStyle}>
-        Import danych i filtry listy piłkarzy
+        Filtry listy piłkarzy
       </h2>
 
       <div style={styles.toolbarGrid}>
-        <div style={styles.filterField}>
-          <span id={`${fileInputId}-label`} style={styles.filterLabel}>
-            Plik HTML / CSV
-          </span>
-
-          <div style={styles.filePickerRow}>
-            <input
-              id={fileInputId}
-              type="file"
-              accept=".html,.htm,.csv"
-              aria-labelledby={`${fileInputId}-label`}
-              aria-describedby={`${fileInputId}-hint ${fileInputId}-status`}
-              style={styles.fileInput}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-
-                if (file) {
-                  onFileUpload(file);
-                }
-
-                event.target.value = "";
-              }}
-            />
-
-            <label htmlFor={fileInputId} style={styles.fileButton}>
-              Wybierz plik
-            </label>
-
-            <span
-              id={`${fileInputId}-status`}
-              style={styles.fileName}
-              aria-live="polite"
-              title={fileName || "Nie wybrano pliku"}
-            >
-              {fileName || "Nie wybrano pliku"}
-            </span>
-          </div>
-
-          <span id={`${fileInputId}-hint`} style={styles.helperText}>
-            Obsługiwane formaty: HTML, HTM albo CSV.
-          </span>
-        </div>
-
         <AppTextField
-          label="Wyszukiwarka"
-          type="text"
-          placeholder="Nazwisko, klub, liga, pozycja..."
+          label="Szukaj zawodnika"
+          type="search"
+          placeholder="Nazwisko, klub, pozycja…"
           value={draftSearchTerm}
           onChange={setDraftSearchTerm}
           autoComplete="off"
@@ -176,34 +111,32 @@ export function MainToolbar({
           inputStyle={styles.fieldInput}
         />
 
-        <div style={styles.ageGrid}>
-          <AppTextField
-            label="Wiek od"
-            type="number"
-            min="0"
-            placeholder="Od"
-            value={minAge}
-            onChange={setMinAge}
-            fieldStyle={styles.filterField}
-            labelStyle={styles.filterLabel}
-            inputStyle={styles.fieldInput}
-          />
+        <AppTextField
+          label="Wiek od"
+          type="number"
+          min="0"
+          placeholder="Od"
+          value={minAge}
+          onChange={setMinAge}
+          fieldStyle={styles.filterField}
+          labelStyle={styles.filterLabel}
+          inputStyle={styles.fieldInput}
+        />
 
-          <AppTextField
-            label="Wiek do"
-            type="number"
-            min="0"
-            placeholder="Do"
-            value={maxAge}
-            onChange={setMaxAge}
-            fieldStyle={styles.filterField}
-            labelStyle={styles.filterLabel}
-            inputStyle={styles.fieldInput}
-          />
-        </div>
+        <AppTextField
+          label="Wiek do"
+          type="number"
+          min="0"
+          placeholder="Do"
+          value={maxAge}
+          onChange={setMaxAge}
+          fieldStyle={styles.filterField}
+          labelStyle={styles.filterLabel}
+          inputStyle={styles.fieldInput}
+        />
 
         <AppSelectField
-          label="Noga"
+          label="Preferowana noga"
           value={footFilter}
           options={FOOT_FILTER_OPTIONS}
           onChange={(value) => setFootFilter(value as FootFilter)}
@@ -216,7 +149,7 @@ export function MainToolbar({
           <AppButton
             type="button"
             variant="neutral"
-            size="md"
+            size="compact"
             onClick={clearFilters}
             disabled={!hasActiveFilters}
           >
@@ -226,29 +159,23 @@ export function MainToolbar({
           <AppButton
             type="button"
             variant="danger"
-            size="md"
-            onClick={onClearData}
-            disabled={!fileName}
-          >
-            Wyczyść zapisany plik
-          </AppButton>
-
-          <AppButton
-            type="button"
-            variant="danger"
-            size="md"
+            size="compact"
             onClick={onClearPlayerSelection}
             disabled={!hasPlayerMarks}
           >
-            Wyczyść zaznaczenia
+            Wyczyść wybór
           </AppButton>
+        </div>
+      </div>
 
+      <div style={styles.toolbarBottom}>
+        <div style={styles.toolbarOptions}>
           <AppCheckbox
             checked={showOnlySelectedPlayers}
             onChange={setShowOnlySelectedPlayers}
             style={styles.toolbarCheckbox}
           >
-            Pokaż tylko wybranych
+            Tylko powołani
           </AppCheckbox>
 
           <AppCheckbox
@@ -257,22 +184,28 @@ export function MainToolbar({
             disabled={showOnlySelectedPlayers}
             style={styles.toolbarCheckbox}
           >
-            Ukryj wybranych i odrzuconych
+            Ukryj ocenionych
           </AppCheckbox>
-
-          <span style={styles.toolbarCounter} aria-live="polite">
-            Wybrani: <strong>{selectedPlayersCount}</strong> / z pozycją:{" "}
-            <strong>{selectedPlayersWithPositionCount}</strong> / odrzuceni:{" "}
-            <strong>{rejectedPlayersCount}</strong>
-          </span>
 
           <AppCheckbox
             checked={compactTableMode}
             onChange={setCompactTableMode}
             style={styles.toolbarCheckbox}
           >
-            Tabela kompaktowa
+            Widok kompaktowy
           </AppCheckbox>
+        </div>
+
+        <div style={styles.toolbarMeta}>
+          <span style={styles.toolbarCounter}>
+            Powołani <strong>{selectedPlayersCount}</strong>
+          </span>
+          <span style={styles.toolbarCounter}>
+            Z pozycją <strong>{selectedPlayersWithPositionCount}</strong>
+          </span>
+          <span style={styles.toolbarCounter}>
+            Odrzuceni <strong>{rejectedPlayersCount}</strong>
+          </span>
         </div>
       </div>
     </section>

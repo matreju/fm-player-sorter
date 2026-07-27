@@ -21,11 +21,14 @@ type UpdateState =
 
 export function AppUpdater() {
   const desktopMode = isDesktopApp();
-  const [currentVersion, setCurrentVersion] = useState("0.2.0");
+  const [currentVersion, setCurrentVersion] = useState("0.3.0");
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
   const [state, setState] = useState<UpdateState>("idle");
-  const [message, setMessage] = useState("Aktualizacje będą instalowane bez ponownego pobierania aplikacji.");
+  const [message, setMessage] = useState(
+    "Aplikacja automatycznie sprawdza podpisane wydania.",
+  );
   const [progress, setProgress] = useState<number | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
   const updateRef = useRef<Update | null>(null);
   const autoCheckStartedRef = useRef(false);
 
@@ -133,39 +136,69 @@ export function AppUpdater() {
   const busy = state === "checking" || state === "downloading" || state === "installing";
 
   return (
-    <section className="app-updater" data-state={state} aria-labelledby="app-updater-title">
-      <div className="app-updater__heading">
-        <strong id="app-updater-title">Aktualizacje</strong>
-        <span>v{currentVersion}</span>
-      </div>
+    <div className="app-updater" data-state={state}>
+      <button
+        type="button"
+        className="app-updater__trigger"
+        onClick={() => setIsOpen((current) => !current)}
+        aria-expanded={isOpen}
+        title="Aktualizacje aplikacji"
+      >
+        <span aria-hidden="true">↻</span>
+        v{currentVersion}
+        {state === "available" && <i aria-label="Dostępna aktualizacja" />}
+      </button>
 
-      <p>{message}</p>
-
-      {progress !== null && (
-        <div
-          className="app-updater__progress"
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={progress}
+      {isOpen && (
+        <section
+          className="app-updater__popover"
+          aria-labelledby="app-updater-title"
         >
-          <span style={{ width: `${progress}%` }} />
-        </div>
-      )}
+          <div className="app-updater__heading">
+            <strong id="app-updater-title">Aktualizacje</strong>
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              aria-label="Zamknij"
+            >
+              ×
+            </button>
+          </div>
 
-      {state === "available" ? (
-        <button type="button" onClick={() => void installUpdate()}>
-          Pobierz i zainstaluj v{availableUpdate?.version}
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={() => void checkForUpdates(true)}
-          disabled={busy}
-        >
-          {state === "checking" ? "Sprawdzanie…" : "Sprawdź aktualizacje"}
-        </button>
+          <p>{message}</p>
+
+          {progress !== null && (
+            <div
+              className="app-updater__progress"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={progress}
+            >
+              <span style={{ width: `${progress}%` }} />
+            </div>
+          )}
+
+          {state === "available" ? (
+            <button
+              type="button"
+              className="app-updater__action"
+              onClick={() => void installUpdate()}
+            >
+              Pobierz i zainstaluj v{availableUpdate?.version}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="app-updater__action"
+              onClick={() => void checkForUpdates(true)}
+              disabled={busy}
+            >
+              {state === "checking" ? "Sprawdzanie…" : "Sprawdź aktualizacje"}
+            </button>
+          )}
+        </section>
       )}
-    </section>
+    </div>
   );
 }

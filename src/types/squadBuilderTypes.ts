@@ -91,7 +91,7 @@ export type SlotCandidate = {
   roleResult: RoleScoreResult;
 
   /**
-   * OU / Obecne umiejętności z importu FM, zakres zwykle 0–200.
+   * OU / Obecne umiejętności z odczytu FM, zakres zwykle 0–200.
    */
   overallAbility?: number | null;
   campaignCallUps?: number;
