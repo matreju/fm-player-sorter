@@ -25,6 +25,7 @@ pub struct FmDatabaseLoadResult {
     pub scan_duration_ms: u128,
     pub game_date: Option<String>,
     pub game_date_source: String,
+    pub date_monitor_candidates: usize,
     pub data_stale: bool,
     pub headers: Vec<String>,
     pub rows: Vec<FmTableRow>,
@@ -49,6 +50,7 @@ impl FmDatabaseLoadResult {
             scan_duration_ms: 0,
             game_date: None,
             game_date_source: "unavailable".to_string(),
+            date_monitor_candidates: 0,
             data_stale: false,
             headers: Vec::new(),
             rows: Vec::new(),
@@ -58,13 +60,17 @@ impl FmDatabaseLoadResult {
 }
 
 #[tauri::command]
-pub async fn load_fm_database() -> Result<FmDatabaseLoadResult, String> {
-    tauri::async_runtime::spawn_blocking(load_fm_database_blocking)
+pub async fn load_fm_database(
+    expected_game_date: Option<String>,
+) -> Result<FmDatabaseLoadResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        load_fm_database_blocking(expected_game_date)
+    })
         .await
         .map_err(|error| format!("Wątek wczytywania bazy FM zakończył się błędem: {error}"))
 }
 
-fn load_fm_database_blocking() -> FmDatabaseLoadResult {
+fn load_fm_database_blocking(expected_game_date: Option<String>) -> FmDatabaseLoadResult {
     let process = detect_football_manager();
     if !process.detected {
         return FmDatabaseLoadResult::failed(
@@ -74,7 +80,7 @@ fn load_fm_database_blocking() -> FmDatabaseLoadResult {
         );
     }
 
-    match read_fm_native_database() {
+    match read_fm_native_database(expected_game_date) {
         Ok(database) => FmDatabaseLoadResult {
             success: true,
             stage: "database-loaded".to_string(),
@@ -94,6 +100,7 @@ fn load_fm_database_blocking() -> FmDatabaseLoadResult {
             scan_duration_ms: database.scan_duration_ms,
             game_date: database.game_date,
             game_date_source: database.game_date_source,
+            date_monitor_candidates: database.date_monitor_candidates,
             data_stale: false,
             headers: database.headers,
             rows: database.rows,

@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { HIDDEN_COLUMNS } from "./constants/columns";
 import { styles } from "./styles";
 import type { SortConfig, TableRow } from "./types/table";
@@ -87,8 +87,18 @@ import type {
 import { scorePlayerForSlot } from "./utils/squadBuilderScoring";
 import { FmConnectionPanel } from "./components/FmConnection/FmConnectionPanel";
 import type { FmDatabaseLoadResult } from "./services/fmConnection";
+import { AppUpdater } from "./components/AppUpdater/AppUpdater";
 
 type PlayerViewMode = "table" | "cards";
+
+const SEARCH_COLUMNS = [
+  "Nazwisko",
+  "Imię",
+  "Klub",
+  "Liga",
+  "Pozycja",
+  "Narodowość",
+] as const;
 
 type PlayerCardSortMode =
   | "current"
@@ -168,7 +178,6 @@ export default function App() {
   const [fileName, setFileName] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [minAge, setMinAge] = useState("");
 const [maxAge, setMaxAge] = useState("");
 const [footFilter, setFootFilter] = useState<FootFilter>("any");
@@ -273,38 +282,16 @@ const tableHeaders = useMemo(() => {
   return allHeaders.filter((header) => COMPACT_TABLE_COLUMNS.has(header));
 }, [headers.length, visibleHeaders, compactTableMode]);
 
-const filteredRows = useMemo(() => {
-const normalizedSearch = normalizeTextForSearch(deferredSearchTerm);
-  const minAgeNumber = minAge.trim() ? Number(minAge) : null;
-  const maxAgeNumber = maxAge.trim() ? Number(maxAge) : null;
+const searchIndex = useMemo(() => {
+  return rows.map((row) =>
+    normalizeTextForSearch(
+      SEARCH_COLUMNS.map((column) => row[column] ?? "").join("\u0000"),
+    ),
+  );
+}, [rows]);
 
-  return rows.filter((row) => {
-    const matchesSearch =
-      !normalizedSearch ||
-      visibleHeaders.some((header) => {
-        const value = row[header] ?? "";
-        return normalizeTextForSearch(value).includes(normalizedSearch);
-      });
-
-    const age = getSortableNumber(row["Wiek"] ?? "");
-
-    const matchesMinAge =
-      minAgeNumber === null ||
-      !Number.isFinite(minAgeNumber) ||
-      (age !== null && age >= minAgeNumber);
-
-    const matchesMaxAge =
-      maxAgeNumber === null ||
-      !Number.isFinite(maxAgeNumber) ||
-      (age !== null && age <= maxAgeNumber);
-
-    const matchesFoot = matchesFootFilter(row, footFilter);
-
-    return matchesSearch && matchesMinAge && matchesMaxAge && matchesFoot;
-  });
-}, [rows, deferredSearchTerm, visibleHeaders, minAge, maxAge, footFilter]);
 const scoredRows = useMemo<TableRow[]>(() => {
-  return filteredRows.map((row) => {
+  return rows.map((row) => {
     const clubFormImpact = calculateClubFormImpact(row);
     const effectivePhase = getPrimaryAnalysisPhase(
       analysisPhase,
@@ -389,20 +376,43 @@ const scoredRows = useMemo<TableRow[]>(() => {
     };
   });
 }, [
-  filteredRows,
   analysisPositionGroup,
   analysisPhase,
   analysisRoleId,
   rows,
 ]);
+
+const filteredRows = useMemo(() => {
+  const normalizedSearch = normalizeTextForSearch(searchTerm);
+  const minAgeNumber = minAge.trim() ? Number(minAge) : null;
+  const maxAgeNumber = maxAge.trim() ? Number(maxAge) : null;
+
+  return scoredRows.filter((row, rowIndex) => {
+    const matchesSearch =
+      !normalizedSearch || searchIndex[rowIndex]?.includes(normalizedSearch);
+    const age = getSortableNumber(row["Wiek"] ?? "");
+    const matchesMinAge =
+      minAgeNumber === null ||
+      !Number.isFinite(minAgeNumber) ||
+      (age !== null && age >= minAgeNumber);
+    const matchesMaxAge =
+      maxAgeNumber === null ||
+      !Number.isFinite(maxAgeNumber) ||
+      (age !== null && age <= maxAgeNumber);
+    const matchesFoot = matchesFootFilter(row, footFilter);
+
+    return matchesSearch && matchesMinAge && matchesMaxAge && matchesFoot;
+  });
+}, [scoredRows, searchTerm, searchIndex, minAge, maxAge, footFilter]);
+
 const roleFilteredRows = useMemo<TableRow[]>(() => {
   const minimumScore = getSortableNumber(minRoleScore) ?? 0;
 
   if (!onlyRoleMatches) {
-    return scoredRows;
+    return filteredRows;
   }
 
-  return scoredRows.filter((row) => {
+  return filteredRows.filter((row) => {
     const score = getSortableNumber(row[ROLE_SCORE_COLUMN] ?? "");
 
     if (score === null) {
@@ -411,7 +421,7 @@ const roleFilteredRows = useMemo<TableRow[]>(() => {
 
     return score >= minimumScore;
   });
-}, [scoredRows, minRoleScore, onlyRoleMatches]);
+}, [filteredRows, minRoleScore, onlyRoleMatches]);
 
 const analyzedRows = useMemo<TableRow[]>(() => {
   if (!showOnlySelectedPlayers && !hideMarkedPlayers) {
@@ -787,7 +797,10 @@ return (
           onClearData={handleClearData}
           onClearPlayerSelection={clearPlayerSelection}
         />
+        <AppUpdater />
       </aside>
+
+      <div style={styles.rightColumn}>
         <FmConnectionPanel onDatabaseLoaded={handleFmDatabaseLoaded} />
 
       <section style={styles.mainWorkspace} aria-labelledby="workspace-title">
@@ -994,6 +1007,7 @@ return (
   )}
 </div>
       </section>
+      </div>
     </div>
  {rows.length > 1 && (
   <PlayerCompare

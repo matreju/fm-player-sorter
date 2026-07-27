@@ -3,7 +3,7 @@
 ## Przepływ odczytu
 
 1. Wykrycie `fm.exe` i otwarcie procesu tylko do odczytu.
-2. Odczyt załadowanych `game_plugin.dll` oraz `GameAssembly.dll`.
+2. Odczyt załadowanych `fm.exe`, `game_plugin.dll` oraz `GameAssembly.dll`.
 3. Enumeracja prywatnych, zatwierdzonych regionów read/write.
 4. Skan wyrównanych wskaźników vtable i odczyt dynamicznego offsetu klasy z
    metadanych vtable.
@@ -48,12 +48,13 @@ skali 1–20.
 
 ## Data gry
 
-`[team + 0xA0] + 0x94` (alternatywnie `+0x18`) zawiera datę następnego meczu.
-Adres może być ponownie odczytywany bardzo tanio i służy obecnie jako
-wskaźnik zmiany snapshotu. Nie jest to centralny zegar gry: w przerwach między
-meczami może pozostać bez zmian mimo przejścia do kolejnego dnia.
+Pole `[team + 0xA0] + 0x94` (alternatywnie `+0x18`) jest terminem meczu, a nie
+centralnym zegarem świata. Służy jedynie jako wewnętrzne przybliżenie przy braku
+daty użytkownika i nie jest pokazywane jako bieżąca data gry.
 
-Profil IL2CPP potwierdza istnienie `FM.GamePlugin.GameDate` z pakowaną datą oraz
-zdarzenia `EventFmxDateChange`, ale stabilny zewnętrzny pointer-chain do bieżącej
-instancji nie został jeszcze potwierdzony. Do jego przypięcia potrzebny jest raport
-z tego samego procesu FM26 przed i po przejściu o jeden dzień.
+Przed importem użytkownik podaje dokładną datę z ekranu FM. Ten sam pełny skan
+wyszukuje jej reprezentację jako pakowaną datę FM oraz `.NET DateTime` w modułach
+i prywatnych regionach pamięci. Zapamiętywanych jest maksymalnie 2048 najlepiej
+ocenionych adresów, z pierwszeństwem dla pól statycznych modułów i obiektów z
+wiarygodnym vtable. Późniejsze kontrole czytają wyłącznie te adresy i głosują nad
+zmianą dnia; lista zawodników nie jest skanowana ponownie.

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "fm-player-sorter",
-  "version": "0.1.0",
+  "productName": "FM Player Sorter",
+  "version": "0.2.0",
   "identifier": "pl.fmplayersorter.desktop",
   "build": {
 "frontendDist": "../dist",
@@ -38,6 +38,17 @@
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgwOTU5MTE4REM2QzgwODkKUldTSmdHemNHSkdWZ0ZsZzFQMUdvdUhmcWNOd2UwRzQ5S3VHb3hqL3V2ZU1HbGV1Mm9UTEFJbXMK",
+      "endpoints": [
+        "https://github.com/matreju/fm-player-sorter/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

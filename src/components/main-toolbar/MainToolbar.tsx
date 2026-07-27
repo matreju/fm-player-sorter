@@ -1,4 +1,11 @@
-import { useId, type Dispatch, type SetStateAction } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import type { FootFilter } from "../../utils/filters";
 import {
   AppButton,
@@ -66,9 +73,29 @@ export function MainToolbar({
   onClearPlayerSelection,
 }: MainToolbarProps) {
   const fileInputId = useId();
+  const [draftSearchTerm, setDraftSearchTerm] = useState(searchTerm);
+  const lastCommittedSearchRef = useRef(searchTerm);
+
+  useEffect(() => {
+    if (searchTerm === lastCommittedSearchRef.current) return;
+
+    lastCommittedSearchRef.current = searchTerm;
+    setDraftSearchTerm(searchTerm);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    if (draftSearchTerm === searchTerm) return;
+
+    const timeoutId = window.setTimeout(() => {
+      lastCommittedSearchRef.current = draftSearchTerm;
+      setSearchTerm(draftSearchTerm);
+    }, 180);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [draftSearchTerm, searchTerm, setSearchTerm]);
 
   const hasActiveFilters =
-    searchTerm.trim() !== "" ||
+    draftSearchTerm.trim() !== "" ||
     minAge.trim() !== "" ||
     maxAge.trim() !== "" ||
     footFilter !== "any";
@@ -76,6 +103,7 @@ export function MainToolbar({
   const hasPlayerMarks = selectedPlayersCount > 0 || rejectedPlayersCount > 0;
 
   function clearFilters() {
+    setDraftSearchTerm("");
     setSearchTerm("");
     setMinAge("");
     setMaxAge("");
@@ -139,8 +167,10 @@ export function MainToolbar({
           label="Wyszukiwarka"
           type="text"
           placeholder="Nazwisko, klub, liga, pozycja..."
-          value={searchTerm}
-          onChange={setSearchTerm}
+          value={draftSearchTerm}
+          onChange={setDraftSearchTerm}
+          autoComplete="off"
+          spellCheck={false}
           fieldStyle={styles.filterField}
           labelStyle={styles.filterLabel}
           inputStyle={styles.fieldInput}

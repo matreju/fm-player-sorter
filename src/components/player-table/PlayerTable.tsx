@@ -1,4 +1,10 @@
-import type { AriaAttributes, CSSProperties } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type AriaAttributes,
+  type CSSProperties,
+} from "react";
 import type { PlayerMark } from "../../constants/selection";
 import { styles } from "../../styles";
 import type { SortConfig, TableRow } from "../../types/table";
@@ -22,6 +28,8 @@ type PlayerTableProps = {
   onSelectPlayer: (playerKey: string) => void;
   getMarkedCellStyle: (mark: PlayerMark | null) => CSSProperties;
 };
+
+const PAGE_SIZE = 250;
 
 function getColumnAriaSort(
   header: string,
@@ -48,11 +56,62 @@ export function PlayerTable({
   onSelectPlayer,
   getMarkedCellStyle,
 }: PlayerTableProps) {
+  const [page, setPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setPage(0), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [sortedRows]);
+
+  const visibleRows = useMemo(() => {
+    const start = safePage * PAGE_SIZE;
+    return sortedRows.slice(start, start + PAGE_SIZE);
+  }, [safePage, sortedRows]);
+
+  const firstVisible = sortedRows.length === 0 ? 0 : safePage * PAGE_SIZE + 1;
+  const lastVisible = Math.min((safePage + 1) * PAGE_SIZE, sortedRows.length);
+
   return (
-    <section style={styles.tableWrapper} aria-labelledby="players-table-title">
+    <section aria-labelledby="players-table-title">
       <h2 id="players-table-title" style={styles.visuallyHidden}>
         Lista piłkarzy
       </h2>
+
+      <div style={styles.tablePagination}>
+        <span>
+          Wiersze <strong>{firstVisible.toLocaleString("pl-PL")}</strong>–
+          <strong>{lastVisible.toLocaleString("pl-PL")}</strong> z {" "}
+          <strong>{sortedRows.length.toLocaleString("pl-PL")}</strong>
+        </span>
+
+        <div style={styles.tablePaginationActions}>
+          <button
+            type="button"
+            style={styles.tablePaginationButton}
+            onClick={() => setPage((current) => Math.max(0, current - 1))}
+            disabled={safePage === 0}
+          >
+            Poprzednia
+          </button>
+          <span>
+            {safePage + 1} / {pageCount}
+          </span>
+          <button
+            type="button"
+            style={styles.tablePaginationButton}
+            onClick={() =>
+              setPage((current) => Math.min(pageCount - 1, current + 1))
+            }
+            disabled={safePage >= pageCount - 1}
+          >
+            Następna
+          </button>
+        </div>
+      </div>
+
+      <div style={styles.tableWrapper}>
 
       <table style={styles.table}>
         <caption style={styles.visuallyHidden}>
@@ -100,12 +159,13 @@ export function PlayerTable({
         </thead>
 
         <tbody>
-          {sortedRows.map((row, rowIndex) => {
+          {visibleRows.map((row, rowIndex) => {
             const rowPlayerKey = getPlayerKey(row);
+            const absoluteRowIndex = safePage * PAGE_SIZE + rowIndex;
 
             return (
-              <tr key={`${rowPlayerKey}-${rowIndex}`}>
-                <td style={styles.indexTd}>{rowIndex + 1}</td>
+              <tr key={`${rowPlayerKey}-${absoluteRowIndex}`}>
+                <td style={styles.indexTd}>{absoluteRowIndex + 1}</td>
 
                 {tableHeaders.map((header) => {
                   const mark = getPlayerMark(row);
@@ -181,6 +241,7 @@ export function PlayerTable({
           })}
         </tbody>
       </table>
+      </div>
     </section>
   );
 }

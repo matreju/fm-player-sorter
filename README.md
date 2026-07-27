@@ -7,7 +7,7 @@ Football Managera 26 i dalszej analizy bez eksportu HTML/CSV.
 
 1. Uruchom FM26 na Windows i wczytaj karierę.
 2. Uruchom desktopową wersję FM Player Sorter.
-3. Kliknij **Wczytaj zapis z FM26**.
+3. Przepisz dokładną datę widoczną w grze i kliknij **Wczytaj zapis z FM26**.
 
 Pełny skan pamięci jest wykonywany tylko po kliknięciu przycisku. Po imporcie
 aplikacja zachowuje wynik w pamięci procesu i nie odczytuje ponownie wszystkich
@@ -33,15 +33,25 @@ błąd profilu zamiast pokazywać częściowe lub losowe dane.
 
 ### Wskaźnik daty
 
-Po imporcie aplikacja co 2,5 sekundy wykonuje lekki odczyt zapisanej kotwicy
-kalendarza. Nie uruchamia ponownie skanu zawodników. Ikona `!` pojawia się, gdy
-wartość kotwicy różni się od tej z chwili importu.
+Podana data kalibruje podczas pełnego skanu kandydatów centralnego zegara w
+`fm.exe`, `game_plugin.dll`, `GameAssembly.dll` i na stercie. Po imporcie
+aplikacja co 1,5 sekundy ponownie odczytuje tylko te adresy. Nie skanuje ponownie
+zawodników. Ikona `!` pojawia się, gdy wiarygodny kandydat zmieni dzień.
 
-W profilu 26.3.x dostępna publicznie, potwierdzona kotwica jest datą następnego
-meczu zespołu, a nie centralnym zegarem świata. Może więc nie zmieniać się
-codziennie podczas przerwy w rozgrywkach. Interfejs oznacza ten stan symbolem `~`
-i nie przedstawia go jako dokładnego potwierdzenia. Dokładny adres `GameDate`
-wymaga kalibracji na uruchomionym FM26 w dwóch kolejnych dniach gry.
+Data terminarza drużyny nie jest już prezentowana jako bieżąca data świata gry.
+Jeżeli w danym buildzie nie uda się znaleźć stabilnego kandydata, interfejs
+pokazuje ten stan wprost zamiast wyświetlać nieprawidłową datę.
+
+## Aktualizacje
+
+Wersja 0.2.0 zawiera updater Tauri korzystający z podpisanych plików GitHub
+Releases. W panelu bocznym można sprawdzić wersję i zainstalować nowsze wydanie
+bez ręcznego odinstalowywania aplikacji.
+
+Workflow `.github/workflows/release.yml` tworzy szkic wydania, instalator NSIS,
+podpis i `latest.json`. Repozytorium musi zawierać sekret Actions
+`TAURI_SIGNING_PRIVATE_KEY` odpowiadający kluczowi publicznemu z
+`src-tauri/tauri.conf.json`.
 
 ## Uruchomienie deweloperskie
 

@@ -8,7 +8,10 @@ import {
 } from "../../services/fmConnection";
 
 import "./FmConnectionPanel.css";
-import { FmDatabasePanel } from "./FmDatabasePanel";
+import {
+  FmDatabasePanel,
+  type FmDatabaseMonitorSummary,
+} from "./FmDatabasePanel";
 
 const CHECK_INTERVAL_MS = 2000;
 
@@ -26,6 +29,24 @@ export function FmConnectionPanel({
   const [isChecking, setIsChecking] = useState(desktopMode);
 
   const [requestError, setRequestError] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [monitorSummary, setMonitorSummary] =
+    useState<FmDatabaseMonitorSummary | null>(null);
+
+  const handleDatabaseLoaded = useCallback(
+    (result: FmDatabaseLoadResult) => {
+      setCollapsed(true);
+      onDatabaseLoaded(result);
+    },
+    [onDatabaseLoaded],
+  );
+
+  const handleMonitorSummaryChange = useCallback(
+    (summary: FmDatabaseMonitorSummary | null) => {
+      setMonitorSummary(summary);
+    },
+    [],
+  );
 
   const refreshStatus = useCallback(async () => {
     if (!desktopMode) {
@@ -105,6 +126,7 @@ export function FmConnectionPanel({
     <section
       className="fm-connection-panel"
       data-state={state}
+      data-collapsed={collapsed}
       aria-labelledby="fm-connection-title"
     >
       <div className="fm-connection-panel__header">
@@ -116,10 +138,44 @@ export function FmConnectionPanel({
           </h2>
         </div>
 
-        <div className="fm-connection-panel__status">
-          <span className="fm-connection-panel__dot" aria-hidden="true" />
+        <div className="fm-connection-panel__header-actions">
+          {monitorSummary && (
+            <span
+              className="fm-connection-panel__date-status"
+              data-state={
+                monitorSummary.dataStale
+                  ? "stale"
+                  : monitorSummary.available
+                    ? "current"
+                    : "unknown"
+              }
+            >
+              <strong aria-hidden="true">
+                {monitorSummary.dataStale
+                  ? "!"
+                  : monitorSummary.available
+                    ? "✓"
+                    : "?"}
+              </strong>
+              {monitorSummary.dataStale
+                ? `Nieaktualne: ${monitorSummary.currentDate ?? "inna data"}`
+                : `Dane: ${monitorSummary.importedDate ?? "bez daty"}`}
+            </span>
+          )}
 
-          <span>{statusLabel}</span>
+          <div className="fm-connection-panel__status">
+            <span className="fm-connection-panel__dot" aria-hidden="true" />
+            <span>{statusLabel}</span>
+          </div>
+
+          <button
+            type="button"
+            className="fm-connection-panel__collapse"
+            onClick={() => setCollapsed((current) => !current)}
+            aria-expanded={!collapsed}
+          >
+            {collapsed ? "Pokaż import" : "Zwiń panel"}
+          </button>
         </div>
       </div>
 
@@ -186,7 +242,10 @@ export function FmConnectionPanel({
               </div>
             </dl>
 
-            <FmDatabasePanel onDatabaseLoaded={onDatabaseLoaded} />
+            <FmDatabasePanel
+              onDatabaseLoaded={handleDatabaseLoaded}
+              onMonitorSummaryChange={handleMonitorSummaryChange}
+            />
           </>
         )}
       </div>

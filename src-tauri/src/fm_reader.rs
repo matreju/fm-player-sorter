@@ -22,6 +22,7 @@ pub struct FmNativeDatabase {
     pub scan_duration_ms: u128,
     pub game_date: Option<String>,
     pub game_date_source: String,
+    pub date_monitor_candidates: usize,
     pub headers: Vec<String>,
     pub rows: Vec<FmTableRow>,
     pub class_offsets: Vec<FmClassOffsetStat>,
@@ -36,6 +37,7 @@ pub struct FmDateStatus {
     pub current_date: Option<String>,
     pub data_stale: bool,
     pub source: String,
+    pub candidate_count: usize,
     pub error: Option<String>,
 }
 
@@ -48,6 +50,8 @@ mod windows_reader {
         sync::{Mutex, OnceLock},
         time::Instant,
     };
+
+    use memchr::memchr_iter;
 
     use windows::Win32::{
         Foundation::{CloseHandle, HANDLE},
@@ -74,6 +78,9 @@ mod windows_reader {
     const CHUNK_SIZE: usize = 16 * 1024 * 1024;
     const IMAGE_CHUNK_SIZE: usize = 8 * 1024 * 1024;
     const MAX_REGION_SIZE: usize = 512 * 1024 * 1024;
+    const MAX_MONITOR_DATE_CANDIDATES: usize = 2_048;
+    const DOTNET_TICKS_PER_DAY: u64 = 864_000_000_000;
+    const DOTNET_TICKS_MASK: u64 = (1_u64 << 62) - 1;
 
     const PLAYER_OFFSET: i32 = 0x288;
     const PLAYER_STAFF_OFFSET: i32 = 0x380;
@@ -280,6 +287,10 @@ mod windows_reader {
             read_u32(&self.read_exact(address, 4)?, 0)
         }
 
+        fn read_u64(&self, address: usize) -> Option<u64> {
+            read_u64(&self.read_exact(address, 8)?, 0)
+        }
+
         fn read_ptr(&self, address: usize) -> Option<usize> {
             read_u64(&self.read_exact(address, 8)?, 0).map(|value| value as usize)
         }
@@ -470,14 +481,28 @@ mod windows_reader {
         owner_club_address: Option<usize>,
     }
 
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    enum DateCandidateKind {
+        PackedFmDate,
+        DotNetTicks,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct DateCandidate {
+        address: usize,
+        kind: DateCandidateKind,
+        object_context: bool,
+        module_static: bool,
+    }
+
     #[derive(Clone)]
     struct DateMonitor {
         pid: u32,
-        manager_person: Option<usize>,
-        direct_date_address: Option<usize>,
+        candidates: Vec<DateCandidate>,
         imported_raw: u32,
         imported_date: String,
         source: String,
+        observed_current_raw: Option<u32>,
     }
 
     static DATE_MONITOR: OnceLock<Mutex<Option<DateMonitor>>> = OnceLock::new();
@@ -486,12 +511,18 @@ mod windows_reader {
         DATE_MONITOR.get_or_init(|| Mutex::new(None))
     }
 
-    pub(super) fn read_database() -> Result<FmNativeDatabase, String> {
+    pub(super) fn read_database(
+        expected_game_date: Option<String>,
+    ) -> Result<FmNativeDatabase, String> {
         if let Ok(mut guard) = monitor_slot().lock() {
             *guard = None;
         }
 
         let started = Instant::now();
+        let expected_raw = expected_game_date
+            .as_deref()
+            .map(parse_iso_fm_date)
+            .transpose()?;
         let detected = detect_football_manager();
         let pid = detected
             .pid
@@ -514,6 +545,10 @@ mod windows_reader {
             .ok_or_else(|| "Nie udało się odczytać adresu game_plugin.dll.".to_string())?;
         let game_assembly_base = parse_hex_address(&game_assembly_module.base_address)
             .ok_or_else(|| "Nie udało się odczytać adresu GameAssembly.dll.".to_string())?;
+        let executable_module = modules
+            .modules
+            .iter()
+            .find(|module| module.name.eq_ignore_ascii_case("fm.exe"));
 
         let process = RemoteProcess::open(pid)?;
         let regions = process.private_rw_regions();
@@ -531,6 +566,11 @@ mod windows_reader {
             game_assembly_base,
             game_assembly_module.memory_size as usize,
         );
+        let executable_image = expected_raw.and_then(|_| {
+            let module = executable_module?;
+            let base = parse_hex_address(&module.base_address)?;
+            Some(ModuleImage::load(&process, base, module.memory_size as usize))
+        });
         let resolver = MetaResolver {
             module_low: game_plugin.base.min(game_assembly.base),
             module_high: game_plugin.end.max(game_assembly.end),
@@ -543,7 +583,37 @@ mod windows_reader {
         let mut club_candidates = HashSet::<usize>::new();
         let mut manager_people = Vec::<usize>::new();
         let mut class_offset_histogram = HashMap::<i32, u64>::new();
+        let mut date_candidates = Vec::<DateCandidate>::new();
         let mut scanned_bytes = 0u64;
+
+        if let Some(target_raw) = expected_raw {
+            collect_date_candidates(
+                &resolver.game_plugin.bytes,
+                resolver.game_plugin.base,
+                target_raw,
+                &resolver,
+                true,
+                &mut date_candidates,
+            );
+            collect_date_candidates(
+                &resolver.game_assembly.bytes,
+                resolver.game_assembly.base,
+                target_raw,
+                &resolver,
+                true,
+                &mut date_candidates,
+            );
+            if let Some(image) = executable_image.as_ref() {
+                collect_date_candidates(
+                    &image.bytes,
+                    image.base,
+                    target_raw,
+                    &resolver,
+                    true,
+                    &mut date_candidates,
+                );
+            }
+        }
 
         for &(region_base, region_size) in &regions {
             let mut region_offset = 0usize;
@@ -555,6 +625,17 @@ mod windows_reader {
                     continue;
                 };
                 scanned_bytes = scanned_bytes.saturating_add(buffer.len() as u64);
+
+                if let Some(target_raw) = expected_raw {
+                    collect_date_candidates(
+                        &buffer,
+                        chunk_address,
+                        target_raw,
+                        &resolver,
+                        false,
+                        &mut date_candidates,
+                    );
+                }
 
                 let mut local = (8 - chunk_address % 8) % 8;
                 while local + 0x10 <= buffer.len() {
@@ -677,33 +758,39 @@ mod windows_reader {
         let date_anchor = manager_team
             .and_then(|team| read_team_date_anchor(&process, team, derived_year))
             .or_else(|| choose_date_vote(&squad_links.date_votes, derived_year));
+        let schedule_raw = date_anchor.as_ref().map(|anchor| anchor.raw);
+        let monitor_candidates = select_date_candidates(date_candidates);
+        let game_date = expected_raw.and_then(format_fm_date);
+        let game_date_source = if expected_raw.is_some() {
+            if monitor_candidates.is_empty() {
+                "manualReference"
+            } else {
+                "calibratedMemory"
+            }
+        } else {
+            "unavailable"
+        }
+        .to_string();
 
-        let (game_date, game_date_source, imported_raw, direct_date_address) = match date_anchor {
-            Some(anchor) => (
-                format_fm_date(anchor.raw),
-                anchor.source.to_string(),
-                anchor.raw,
-                anchor.address,
-            ),
-            None => (None, "unavailable".to_string(), 0, None),
-        };
-
-        if let (Some(imported_date), raw) = (game_date.clone(), imported_raw) {
-            if raw != 0 {
-                if let Ok(mut guard) = monitor_slot().lock() {
-                    *guard = Some(DateMonitor {
-                        pid,
-                        manager_person,
-                        direct_date_address,
-                        imported_raw: raw,
-                        imported_date,
-                        source: game_date_source.clone(),
-                    });
-                }
+        if let (Some(imported_date), Some(imported_raw)) =
+            (game_date.clone(), expected_raw)
+        {
+            if let Ok(mut guard) = monitor_slot().lock() {
+                *guard = Some(DateMonitor {
+                    pid,
+                    candidates: monitor_candidates.clone(),
+                    imported_raw,
+                    imported_date,
+                    source: game_date_source.clone(),
+                    observed_current_raw: None,
+                });
             }
         }
 
-        let current_raw = (imported_raw != 0).then_some(imported_raw);
+        // Dokładna data podana z ekranu FM ma pierwszeństwo. Kotwica terminarza
+        // pozostaje wyłącznie wewnętrznym przybliżeniem do obliczenia wieku i nie
+        // jest już prezentowana użytkownikowi jako data świata gry.
+        let current_raw = expected_raw.or(schedule_raw);
         let headers = table_headers();
         let mut rows = players
             .into_values()
@@ -724,6 +811,7 @@ mod windows_reader {
             scan_duration_ms: started.elapsed().as_millis(),
             game_date,
             game_date_source,
+            date_monitor_candidates: monitor_candidates.len(),
             headers,
             rows,
             class_offsets,
@@ -1014,8 +1102,6 @@ mod windows_reader {
 
     struct DateAnchor {
         raw: u32,
-        address: Option<usize>,
-        source: &'static str,
     }
 
     fn read_team_date_anchor(
@@ -1035,8 +1121,6 @@ mod windows_reader {
             if (expected_year - 1..=expected_year + 1).contains(&year) {
                 return Some(DateAnchor {
                     raw: normalize_fm_date(raw),
-                    address: Some(address),
-                    source: "teamSchedule",
                 });
             }
         }
@@ -1053,33 +1137,71 @@ mod windows_reader {
                     .then_some((*raw, *count))
             })
             .max_by_key(|(_, count)| *count)
-            .map(|(raw, _)| DateAnchor {
-                raw,
-                address: None,
-                source: "teamScheduleVote",
-            })
+            .map(|(raw, _)| DateAnchor { raw })
     }
 
-    fn read_monitor_raw(process: &RemoteProcess, monitor: &DateMonitor) -> Option<u32> {
-        if let Some(person) = monitor.manager_person {
-            if let Some(team) = contract_team(process, person) {
-                if let Some(schedule) = process.read_ptr(team + TEAM_SCHEDULE) {
-                    for offset in SCHEDULE_DATE {
-                        let Some(raw) = process.read_u32(schedule + offset) else {
-                            continue;
-                        };
-                        if decode_fm_date(raw).is_some() {
-                            return Some(normalize_fm_date(raw));
-                        }
-                    }
-                }
-            }
+    fn read_date_candidate(
+        process: &RemoteProcess,
+        candidate: DateCandidate,
+        expected_year: i32,
+    ) -> Option<u32> {
+        match candidate.kind {
+            DateCandidateKind::PackedFmDate => process
+                .read_u32(candidate.address)
+                .filter(|raw| decode_fm_date(*raw).is_some())
+                .map(normalize_fm_date),
+            DateCandidateKind::DotNetTicks => process
+                .read_u64(candidate.address)
+                .and_then(|value| fm_date_from_dotnet_ticks(value, expected_year)),
         }
-        monitor
-            .direct_date_address
-            .and_then(|address| process.read_u32(address))
-            .filter(|raw| decode_fm_date(*raw).is_some())
-            .map(normalize_fm_date)
+    }
+
+    fn observe_monitor_date(
+        process: &RemoteProcess,
+        monitor: &DateMonitor,
+    ) -> (usize, Option<u32>) {
+        let expected_year = decode_fm_date(monitor.imported_raw)
+            .map(|(year, _)| year)
+            .unwrap_or(2026);
+        let mut readable = 0usize;
+        let mut votes = HashMap::<u32, usize>::new();
+
+        for candidate in &monitor.candidates {
+            let Some(raw) = read_date_candidate(process, *candidate, expected_year) else {
+                continue;
+            };
+            readable += 1;
+            if raw == monitor.imported_raw {
+                continue;
+            }
+            let Some(distance) = date_distance_days(monitor.imported_raw, raw) else {
+                continue;
+            };
+            if !(-14..=31).contains(&distance) || distance == 0 {
+                continue;
+            }
+            let weight = if candidate.module_static {
+                6
+            } else {
+                match (candidate.object_context, candidate.kind) {
+                    (true, DateCandidateKind::DotNetTicks) => 4,
+                    (true, DateCandidateKind::PackedFmDate) => 3,
+                    (false, DateCandidateKind::DotNetTicks) => 2,
+                    (false, DateCandidateKind::PackedFmDate) => 1,
+                }
+            };
+            *votes.entry(raw).or_default() += weight;
+        }
+
+        let changed = votes
+            .into_iter()
+            .max_by_key(|(_, weight)| *weight)
+            .and_then(|(raw, weight)| {
+                let distance = date_distance_days(monitor.imported_raw, raw)?;
+                (distance.abs() == 1 || weight >= 2).then_some(raw)
+            });
+
+        (readable, changed)
     }
 
     pub(super) fn read_date_status() -> FmDateStatus {
@@ -1095,6 +1217,7 @@ mod windows_reader {
                 current_date: None,
                 data_stale: false,
                 source: "unavailable".to_string(),
+                candidate_count: 0,
                 error: None,
             };
         };
@@ -1106,8 +1229,9 @@ mod windows_reader {
                 available: false,
                 imported_date: Some(monitor.imported_date),
                 current_date: None,
-                data_stale: false,
+                data_stale: monitor.observed_current_raw.is_some(),
                 source: monitor.source,
+                candidate_count: monitor.candidates.len(),
                 error: Some("Proces FM użyty do importu nie jest już uruchomiony.".to_string()),
             };
         }
@@ -1120,24 +1244,56 @@ mod windows_reader {
                     available: false,
                     imported_date: Some(monitor.imported_date),
                     current_date: None,
-                    data_stale: false,
+                    data_stale: monitor.observed_current_raw.is_some(),
                     source: monitor.source,
+                    candidate_count: monitor.candidates.len(),
                     error: Some(error),
                 }
             }
         };
 
-        let Some(current_raw) = read_monitor_raw(&process, &monitor) else {
+        if monitor.candidates.is_empty() {
             return FmDateStatus {
                 process_detected: true,
                 available: false,
                 imported_date: Some(monitor.imported_date),
-                current_date: None,
-                data_stale: false,
+                current_date: monitor.observed_current_raw.and_then(format_fm_date),
+                data_stale: monitor.observed_current_raw.is_some(),
                 source: monitor.source,
-                error: Some("Nie udało się ponownie odczytać kotwicy daty zapisu.".to_string()),
+                candidate_count: 0,
+                error: Some(
+                    "Nie znaleziono jeszcze stabilnego punktu dokładnej daty w pamięci FM."
+                        .to_string(),
+                ),
             };
-        };
+        }
+
+        let (readable, changed_raw) = observe_monitor_date(&process, &monitor);
+        let current_raw = changed_raw
+            .or(monitor.observed_current_raw)
+            .unwrap_or(monitor.imported_raw);
+        if let Some(observed) = changed_raw {
+            if let Ok(mut guard) = monitor_slot().lock() {
+                if let Some(active) = guard.as_mut() {
+                    if active.pid == monitor.pid && active.imported_raw == monitor.imported_raw {
+                        active.observed_current_raw = Some(observed);
+                    }
+                }
+            }
+        }
+
+        if readable == 0 {
+            return FmDateStatus {
+                process_detected: true,
+                available: false,
+                imported_date: Some(monitor.imported_date),
+                current_date: format_fm_date(current_raw),
+                data_stale: current_raw != monitor.imported_raw,
+                source: monitor.source,
+                candidate_count: monitor.candidates.len(),
+                error: Some("Punkty monitora daty nie są już czytelne.".to_string()),
+            };
+        }
 
         FmDateStatus {
             process_detected: true,
@@ -1146,6 +1302,7 @@ mod windows_reader {
             current_date: format_fm_date(current_raw),
             data_stale: current_raw != monitor.imported_raw,
             source: monitor.source,
+            candidate_count: monitor.candidates.len(),
             error: None,
         }
     }
@@ -1472,6 +1629,182 @@ mod windows_reader {
             .unwrap_or(2026)
     }
 
+    fn parse_iso_fm_date(value: &str) -> Result<u32, String> {
+        let mut parts = value.trim().split('-');
+        let year = parts
+            .next()
+            .and_then(|part| part.parse::<i32>().ok())
+            .ok_or_else(|| "Podaj datę z FM w formacie RRRR-MM-DD.".to_string())?;
+        let month = parts
+            .next()
+            .and_then(|part| part.parse::<u32>().ok())
+            .ok_or_else(|| "Podaj datę z FM w formacie RRRR-MM-DD.".to_string())?;
+        let day = parts
+            .next()
+            .and_then(|part| part.parse::<u32>().ok())
+            .ok_or_else(|| "Podaj datę z FM w formacie RRRR-MM-DD.".to_string())?;
+        if parts.next().is_some() || !(1900..=2200).contains(&year) {
+            return Err("Podaj prawidłową datę z FM w formacie RRRR-MM-DD.".to_string());
+        }
+        let day_of_year = day_of_year(year, month, day)
+            .ok_or_else(|| "Podana data z FM nie istnieje.".to_string())?;
+        Ok(((year as u32) << 16) | day_of_year)
+    }
+
+    fn day_of_year(year: i32, month: u32, day: u32) -> Option<u32> {
+        let mut days = [31u32, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        if is_leap_year(year) {
+            days[1] = 29;
+        }
+        let month_index = usize::try_from(month.checked_sub(1)?).ok()?;
+        let month_days = *days.get(month_index)?;
+        if day == 0 || day > month_days {
+            return None;
+        }
+        Some(days[..month_index].iter().sum::<u32>() + day)
+    }
+
+    fn days_before_year(year: i32) -> Option<u64> {
+        if year < 1 {
+            return None;
+        }
+        let previous = u64::try_from(year - 1).ok()?;
+        Some(previous * 365 + previous / 4 - previous / 100 + previous / 400)
+    }
+
+    fn dotnet_ticks_for_fm_date(raw: u32) -> Option<u64> {
+        let (year, day) = decode_fm_date(raw)?;
+        let absolute_day = days_before_year(year)?.checked_add(u64::from(day - 1))?;
+        absolute_day.checked_mul(DOTNET_TICKS_PER_DAY)
+    }
+
+    fn fm_date_from_dotnet_ticks(value: u64, expected_year: i32) -> Option<u32> {
+        let ticks = value & DOTNET_TICKS_MASK;
+        let absolute_day = ticks / DOTNET_TICKS_PER_DAY;
+        for year in expected_year.saturating_sub(1)..=expected_year.saturating_add(1) {
+            let start = days_before_year(year)?;
+            let length = u64::from(days_in_year(year));
+            if (start..start + length).contains(&absolute_day) {
+                let day = u32::try_from(absolute_day - start + 1).ok()?;
+                return Some(((year as u32) << 16) | day);
+            }
+        }
+        None
+    }
+
+    fn date_distance_days(from: u32, to: u32) -> Option<i64> {
+        let (from_year, from_day) = decode_fm_date(from)?;
+        let (to_year, to_day) = decode_fm_date(to)?;
+        let from_absolute = i64::try_from(days_before_year(from_year)?).ok()?
+            + i64::from(from_day - 1);
+        let to_absolute = i64::try_from(days_before_year(to_year)?).ok()?
+            + i64::from(to_day - 1);
+        Some(to_absolute - from_absolute)
+    }
+
+    fn collect_date_candidates(
+        buffer: &[u8],
+        base_address: usize,
+        target_raw: u32,
+        resolver: &MetaResolver,
+        module_static: bool,
+        candidates: &mut Vec<DateCandidate>,
+    ) {
+        let Some((year, _)) = decode_fm_date(target_raw) else {
+            return;
+        };
+        let year_bytes = (year as u16).to_le_bytes();
+
+        for year_index in memchr_iter(year_bytes[0], buffer) {
+            if year_index < 2
+                || year_index + 1 >= buffer.len()
+                || buffer[year_index + 1] != year_bytes[1]
+            {
+                continue;
+            }
+            let local = year_index - 2;
+            let address = base_address.saturating_add(local);
+            if address % 2 != 0 {
+                continue;
+            }
+            let Some(raw) = read_u32(buffer, local) else {
+                continue;
+            };
+            if normalize_fm_date(raw) != target_raw {
+                continue;
+            }
+            candidates.push(DateCandidate {
+                address,
+                kind: DateCandidateKind::PackedFmDate,
+                object_context: has_object_context(buffer, base_address, local, resolver),
+                module_static,
+            });
+        }
+
+        let Some(ticks) = dotnet_ticks_for_fm_date(target_raw) else {
+            return;
+        };
+        for local in memchr_iter(ticks as u8, buffer) {
+            let address = base_address.saturating_add(local);
+            if address % 8 != 0 || local + 8 > buffer.len() {
+                continue;
+            }
+            let Some(value) = read_u64(buffer, local) else {
+                continue;
+            };
+            if value & DOTNET_TICKS_MASK != ticks {
+                continue;
+            }
+            candidates.push(DateCandidate {
+                address,
+                kind: DateCandidateKind::DotNetTicks,
+                object_context: has_object_context(buffer, base_address, local, resolver),
+                module_static,
+            });
+        }
+    }
+
+    fn has_object_context(
+        buffer: &[u8],
+        base_address: usize,
+        local: usize,
+        resolver: &MetaResolver,
+    ) -> bool {
+        let lower = local.saturating_sub(0x180);
+        let mut cursor = lower + (8 - base_address.saturating_add(lower) % 8) % 8;
+        while cursor + 8 <= local && cursor + 8 <= buffer.len() {
+            if read_u64(buffer, cursor)
+                .map(|value| resolver.is_module_pointer(value as usize))
+                .unwrap_or(false)
+            {
+                return true;
+            }
+            cursor += 8;
+        }
+        false
+    }
+
+    fn select_date_candidates(mut candidates: Vec<DateCandidate>) -> Vec<DateCandidate> {
+        candidates.sort_by(|left, right| {
+            date_candidate_rank(right)
+                .cmp(&date_candidate_rank(left))
+                .then_with(|| left.address.cmp(&right.address))
+        });
+        let mut seen = HashSet::<(usize, DateCandidateKind)>::new();
+        candidates.retain(|candidate| seen.insert((candidate.address, candidate.kind)));
+        candidates.truncate(MAX_MONITOR_DATE_CANDIDATES);
+        candidates
+    }
+
+    fn date_candidate_rank(candidate: &DateCandidate) -> u8 {
+        u8::from(candidate.module_static) * 8
+            + u8::from(candidate.object_context) * 4
+            + match candidate.kind {
+                DateCandidateKind::DotNetTicks => 2,
+                DateCandidateKind::PackedFmDate => 1,
+            }
+    }
+
     fn normalize_fm_date(raw: u32) -> u32 {
         ((raw >> 16) << 16) | (raw & 0x1FF)
     }
@@ -1583,12 +1916,16 @@ mod windows_reader {
 }
 
 #[cfg(target_os = "windows")]
-pub(crate) fn read_fm_native_database() -> Result<FmNativeDatabase, String> {
-    windows_reader::read_database()
+pub(crate) fn read_fm_native_database(
+    expected_game_date: Option<String>,
+) -> Result<FmNativeDatabase, String> {
+    windows_reader::read_database(expected_game_date)
 }
 
 #[cfg(not(target_os = "windows"))]
-pub(crate) fn read_fm_native_database() -> Result<FmNativeDatabase, String> {
+pub(crate) fn read_fm_native_database(
+    _expected_game_date: Option<String>,
+) -> Result<FmNativeDatabase, String> {
     Err("Zewnętrzny czytnik bazy FM26 jest dostępny tylko w aplikacji Windows.".to_string())
 }
 
@@ -1606,6 +1943,7 @@ pub(crate) fn read_fm_date_status() -> FmDateStatus {
         current_date: None,
         data_stale: false,
         source: "unavailable".to_string(),
+        candidate_count: 0,
         error: Some("Monitoring daty FM26 jest dostępny tylko w Windows.".to_string()),
     }
 }

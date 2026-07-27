@@ -235,6 +235,7 @@ export interface FmDatabaseLoadResult {
   scanDurationMs: number;
   gameDate: string | null;
   gameDateSource: string;
+  dateMonitorCandidates: number;
   dataStale: boolean;
   headers: string[];
   rows: Record<string, string>[];
@@ -248,6 +249,7 @@ export interface FmDateStatus {
   currentDate: string | null;
   dataStale: boolean;
   source: string;
+  candidateCount: number;
   error: string | null;
 }
 
@@ -261,14 +263,18 @@ export async function inspectFootballManagerReaderProfile(): Promise<FmReaderPro
   return invoke<FmReaderProfileStatus>("inspect_fm_reader_profile");
 }
 
-export async function loadFootballManagerDatabase(): Promise<FmDatabaseLoadResult> {
+export async function loadFootballManagerDatabase(
+  expectedGameDate: string | null,
+): Promise<FmDatabaseLoadResult> {
   if (!isTauri()) {
     throw new Error(
       "Wczytywanie bazy FM jest dostępne tylko w aplikacji desktopowej.",
     );
   }
 
-  return invoke<FmDatabaseLoadResult>("load_fm_database");
+  return invoke<FmDatabaseLoadResult>("load_fm_database", {
+    expectedGameDate,
+  });
 }
 
 export async function getFootballManagerDateStatus(): Promise<FmDateStatus> {
@@ -280,6 +286,7 @@ export async function getFootballManagerDateStatus(): Promise<FmDateStatus> {
       currentDate: null,
       dataStale: false,
       source: "unavailable",
+      candidateCount: 0,
       error: null,
     };
   }

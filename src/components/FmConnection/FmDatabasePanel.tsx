@@ -7,10 +7,19 @@ import {
   type FmDateStatus,
 } from "../../services/fmConnection";
 
-const DATE_CHECK_INTERVAL_MS = 2500;
+const DATE_CHECK_INTERVAL_MS = 1500;
+
+export interface FmDatabaseMonitorSummary {
+  importedDate: string | null;
+  currentDate: string | null;
+  dataStale: boolean;
+  available: boolean;
+  candidateCount: number;
+}
 
 interface FmDatabasePanelProps {
   onDatabaseLoaded: (result: FmDatabaseLoadResult) => void;
+  onMonitorSummaryChange: (summary: FmDatabaseMonitorSummary | null) => void;
 }
 
 function formatMegabytes(bytes: number): string {
@@ -26,18 +35,20 @@ function formatDuration(milliseconds: number): string {
 }
 
 function dateSourceLabel(source: string): string {
-  if (source === "teamSchedule") return "kotwica kalendarza zespołu";
-  if (source === "teamScheduleVote") return "kotwica kalendarza świata";
-  return "brak kotwicy daty";
+  if (source === "calibratedMemory") return "dokładny monitor pamięci";
+  if (source === "manualReference") return "data potwierdzona z ekranu FM";
+  return "monitor daty niedostępny";
 }
 
 export function FmDatabasePanel({
   onDatabaseLoaded,
+  onMonitorSummaryChange,
 }: FmDatabasePanelProps) {
   const [result, setResult] = useState<FmDatabaseLoadResult | null>(null);
   const [dateStatus, setDateStatus] = useState<FmDateStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expectedGameDate, setExpectedGameDate] = useState("");
 
   useEffect(() => {
     if (!result?.success) return;
@@ -65,13 +76,35 @@ export function FmDatabasePanel({
     };
   }, [result?.success, result?.pid]);
 
+  useEffect(() => {
+    if (!result?.success) {
+      onMonitorSummaryChange(null);
+      return;
+    }
+
+    onMonitorSummaryChange({
+      importedDate: dateStatus?.importedDate ?? result.gameDate,
+      currentDate: dateStatus?.currentDate ?? result.gameDate,
+      dataStale: dateStatus?.dataStale ?? false,
+      available:
+        dateStatus?.available ?? result.dateMonitorCandidates > 0,
+      candidateCount:
+        dateStatus?.candidateCount ?? result.dateMonitorCandidates,
+    });
+  }, [dateStatus, onMonitorSummaryChange, result]);
+
   const loadDatabase = async () => {
+    if (!expectedGameDate) {
+      setError("Najpierw wpisz dokładną datę widoczną obecnie w FM26.");
+      return;
+    }
+
     try {
       setIsLoading(true);
       setError(null);
       setDateStatus(null);
 
-      const nextResult = await loadFootballManagerDatabase();
+      const nextResult = await loadFootballManagerDatabase(expectedGameDate);
       setResult({ ...nextResult, headers: [], rows: [] });
 
       if (nextResult.success) {
@@ -111,9 +144,24 @@ export function FmDatabasePanel({
 
       <p className="fm-database-panel__description">
         Jeden pełny skan wczytuje wszystkich graczy, CA/PA, atrybuty widoczne,
-        bramkarskie i ukryte oraz dane kontraktu. Później aplikacja sprawdza
-        wyłącznie lekką kotwicę daty — nie skanuje ponownie zawodników.
+        bramkarskie i ukryte oraz dane kontraktu. Podana data służy do znalezienia
+        dokładnych punktów kalendarza w pamięci; później aplikacja sprawdza tylko
+        te punkty i nie skanuje ponownie zawodników.
       </p>
+
+      <label className="fm-database-panel__date-field">
+        <span>Data widoczna teraz w FM26</span>
+        <input
+          type="date"
+          value={expectedGameDate}
+          onChange={(event) => setExpectedGameDate(event.target.value)}
+          disabled={isLoading}
+        />
+        <small>
+          Przepisz datę z gry przed importem. Termin meczu nie jest już używany
+          jako data świata gry.
+        </small>
+      </label>
 
       <button
         type="button"
@@ -173,7 +221,7 @@ export function FmDatabasePanel({
                   {dateState === "stale"
                     ? "!"
                     : dateState === "watching"
-                      ? "~"
+                      ? "✓"
                       : "?"}
                 </span>
                 <div>
@@ -184,9 +232,9 @@ export function FmDatabasePanel({
                     {dataStale
                       ? `FM jest już przy dacie ${currentDate ?? "innej"} — dane są nieaktualne`
                       : dateStatus?.available
-                        ? "Kotwica kalendarza nie zmieniła się od importu"
+                        ? `Monitoring aktywny (${dateStatus.candidateCount.toLocaleString("pl-PL")} punktów pamięci)`
                         : dateStatus?.error ??
-                          "Monitoring daty oczekuje na czytelną kotwicę"}
+                          "Monitoring daty oczekuje na czytelny punkt pamięci"}
                   </small>
                 </div>
               </div>
