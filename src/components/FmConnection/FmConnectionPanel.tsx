@@ -39,7 +39,8 @@ export function FmConnectionPanel({
   const [isOpen, setIsOpen] = useState(false);
   const [isChecking, setIsChecking] = useState(desktopMode);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [probeError, setProbeError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const refreshStatus = useCallback(async () => {
     if (!desktopMode) return;
@@ -47,10 +48,10 @@ export function FmConnectionPanel({
     try {
       const nextStatus = await probeFootballManagerMemory();
       setStatus(nextStatus);
-      if (nextStatus.error) setError(nextStatus.error);
+      setProbeError(nextStatus.error);
     } catch (unknownError) {
       setStatus(null);
-      setError(
+      setProbeError(
         unknownError instanceof Error
           ? unknownError.message
           : String(unknownError),
@@ -111,20 +112,20 @@ export function FmConnectionPanel({
   const connect = async () => {
     try {
       setIsLoading(true);
-      setError(null);
+      setLoadError(null);
       setDateStatus(null);
       const nextResult = await loadFootballManagerDatabase();
       setResult({ ...nextResult, rows: [], headers: [] });
 
       if (!nextResult.success) {
-        setError(nextResult.message);
+        setLoadError(nextResult.message);
         return;
       }
 
       onDatabaseLoaded(nextResult);
       setIsOpen(false);
     } catch (unknownError) {
-      setError(
+      setLoadError(
         unknownError instanceof Error
           ? unknownError.message
           : String(unknownError),
@@ -135,6 +136,7 @@ export function FmConnectionPanel({
   };
 
   const processConnected = Boolean(status?.memoryReadable);
+  const displayedError = loadError ?? probeError;
   const dataStale = dateStatus?.dataStale ?? false;
   const displayedDate = dateStatus?.currentDate ?? result?.gameDate ?? null;
   const connectionLabel = isLoading
@@ -230,9 +232,9 @@ export function FmConnectionPanel({
                 </div>
               </div>
 
-              {error && (
+              {displayedError && (
                 <p className="fm-connect__message" data-tone="error">
-                  {error}
+                  {displayedError}
                 </p>
               )}
 

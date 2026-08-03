@@ -137,9 +137,6 @@ mod windows_reader {
     const COMPETITION_NAME: usize = 0x40;
     const COMPETITION_SHORT_NAME: usize = 0x48;
 
-    const STAFF_CA: usize = 0xDA;
-    const STAFF_PA: usize = 0xDC;
-
     const PLAYER_ATTRIBUTE_FIELDS: [(&str, usize); 47] = [
         ("Dośrodkowania", 0x00),
         ("Drybling", 0x01),
@@ -514,6 +511,21 @@ mod windows_reader {
     }
 
     #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    struct HumanManagerCandidate {
+        person_address: usize,
+        staff_address: usize,
+    }
+
+    #[derive(Debug, Default)]
+    struct ManagedTeamDiagnostics {
+        manager_count: usize,
+        club_count: usize,
+        team_count: usize,
+        manager_link_count: usize,
+        national_candidate_count: usize,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
     enum DateCandidateKind {
         PackedFmDate,
         DotNetTicks,
@@ -596,7 +608,7 @@ mod windows_reader {
 
         let mut player_candidates = HashMap::<u32, PlayerCandidate>::new();
         let mut club_candidates = HashSet::<usize>::new();
-        let mut manager_people = Vec::<usize>::new();
+        let mut human_managers = HashSet::<HumanManagerCandidate>::new();
         let mut class_offset_histogram = HashMap::<i32, u64>::new();
         let mut scanned_bytes = 0u64;
 
@@ -685,10 +697,15 @@ mod windows_reader {
                         let offset = dynamic_offset as usize;
                         if person_address >= offset {
                             let staff_address = person_address - offset;
-                            let ca = process.read_u16(staff_address + STAFF_CA).unwrap_or(0);
-                            let pa = process.read_u16(staff_address + STAFF_PA).unwrap_or(0);
-                            if (1..=200).contains(&ca) && (1..=200).contains(&pa) {
-                                manager_people.push(person_address);
+                            // W menedżerze utworzonym przez gracza CA/PA nie jest
+                            // wiarygodnym znacznikiem. To odrzucało poprawny obiekt
+                            // HumanManager w części zapisów. Nazwa osoby i właściwy
+                            // offset klasy są stabilniejszym potwierdzeniem.
+                            if looks_like_named_person(&process, person_address) {
+                                human_managers.insert(HumanManagerCandidate {
+                                    person_address,
+                                    staff_address,
+                                });
                             }
                         }
                     } else if dynamic_offset != STAFF_OFFSET {
@@ -725,16 +742,23 @@ mod windows_reader {
                 *counts.entry(candidate.nation_address).or_default() += 1;
                 counts
             });
-        let managed = resolve_user_national_team(
+        let (managed, managed_diagnostics) = resolve_user_national_team(
             &process,
             &club_candidates,
-            &manager_people,
+            &human_managers,
             &player_candidates,
             &nation_counts,
-        )
-            .ok_or_else(|| {
-                "Wykryto FM26, ale w aktywnym zapisie nie znaleziono reprezentacji prowadzonej przez Twojego menedżera. Upewnij się, że kariera jest wczytana i menedżer ma aktywną pracę w reprezentacji; aktualnie otwarty ekran gry nie ma znaczenia.".to_string()
-            })?;
+        );
+        let managed = managed.ok_or_else(|| {
+            format!(
+                "Wykryto FM26, ale nie udało się powiązać ludzkiego menedżera z prowadzoną reprezentacją. Otwarty ekran gry nie ma znaczenia. Kod diagnostyczny: M{}/K{}/D{}/H{}/R{}.",
+                managed_diagnostics.manager_count,
+                managed_diagnostics.club_count,
+                managed_diagnostics.team_count,
+                managed_diagnostics.manager_link_count,
+                managed_diagnostics.national_candidate_count,
+            )
+        })?;
         let manager_team = Some(managed.team_address);
         let managed_team = Some(managed.team_name);
         let managed_nation_address = managed.nation_address;
@@ -1594,16 +1618,37 @@ mod windows_reader {
         process.read_ptr(contract + CONTRACT_TEAM).filter(|team| *team != 0)
     }
 
+    fn looks_like_named_person(process: &RemoteProcess, person: usize) -> bool {
+        [PERSON_FIRST_NAME, PERSON_LAST_NAME, PERSON_COMMON_NAME]
+            .into_iter()
+            .any(|offset| {
+                process
+                    .nested_string(person + offset)
+                    .map(|name| plausible_label(&name, 80))
+                    .unwrap_or(false)
+            })
+    }
+
     fn resolve_user_national_team(
         process: &RemoteProcess,
         clubs: &HashSet<usize>,
-        manager_people: &[usize],
+        human_managers: &HashSet<HumanManagerCandidate>,
         candidates: &HashMap<u32, PlayerCandidate>,
         nation_counts: &HashMap<usize, usize>,
-    ) -> Option<ManagedTeamResolution> {
-        let manager_addresses = manager_people.iter().copied().collect::<HashSet<_>>();
+    ) -> (Option<ManagedTeamResolution>, ManagedTeamDiagnostics) {
+        let mut diagnostics = ManagedTeamDiagnostics {
+            manager_count: human_managers.len(),
+            club_count: clubs.len(),
+            ..ManagedTeamDiagnostics::default()
+        };
+        let manager_addresses = human_managers
+            .iter()
+            .flat_map(|manager| {
+                (manager.staff_address..=manager.person_address).step_by(8)
+            })
+            .collect::<HashSet<_>>();
         if manager_addresses.is_empty() {
-            return None;
+            return (None, diagnostics);
         }
 
         let mut address_to_nation = HashMap::<usize, usize>::with_capacity(candidates.len() * 2);
@@ -1616,7 +1661,8 @@ mod windows_reader {
         }
 
         let mut matches = Vec::<ManagedTeamResolution>::new();
-        let mut seen_teams = HashSet::<usize>::new();
+        let mut checked_teams = HashSet::<usize>::new();
+        let mut matched_teams = HashSet::<usize>::new();
 
         for &club in clubs {
             let Some(begin) = process.read_ptr(club + CLUB_TEAMS_BEGIN) else {
@@ -1638,15 +1684,14 @@ mod windows_reader {
                 else {
                     continue;
                 };
-                let Some(manager) = process
-                    .read_ptr(team + TEAM_MANAGER)
-                    .filter(|value| *value != 0)
-                else {
-                    continue;
-                };
-                if !points_to_human_manager(process, manager, &manager_addresses) {
+                if !checked_teams.insert(team) {
                     continue;
                 }
+                diagnostics.team_count += 1;
+                if !team_points_to_human_manager(process, team, &manager_addresses) {
+                    continue;
+                }
+                diagnostics.manager_link_count += 1;
                 if let Some(candidate) = build_managed_team_candidate(
                     process,
                     team,
@@ -1654,7 +1699,8 @@ mod windows_reader {
                     &address_to_nation,
                     nation_counts,
                 ) {
-                    seen_teams.insert(team);
+                    matched_teams.insert(team);
+                    diagnostics.national_candidate_count += 1;
                     matches.push(candidate);
                 }
             }
@@ -1663,11 +1709,11 @@ mod windows_reader {
         // Niektóre wersje zapisu przechowują aktywną pracę reprezentacyjną
         // wyłącznie na kontrakcie menedżera. To jest bezpieczny fallback, nadal
         // niezależny od ekranu otwartego w grze.
-        for manager in manager_addresses {
-            let Some(team) = contract_team(process, manager) else {
+        for manager in human_managers {
+            let Some(team) = contract_team(process, manager.person_address) else {
                 continue;
             };
-            if !seen_teams.insert(team) {
+            if !matched_teams.insert(team) {
                 continue;
             }
             let team_name = process
@@ -1680,11 +1726,43 @@ mod windows_reader {
                 &address_to_nation,
                 nation_counts,
             ) {
+                diagnostics.national_candidate_count += 1;
                 matches.push(candidate);
             }
         }
 
-        matches.into_iter().max_by_key(|candidate| candidate.score)
+        (
+            matches.into_iter().max_by_key(|candidate| candidate.score),
+            diagnostics,
+        )
+    }
+
+    fn team_points_to_human_manager(
+        process: &RemoteProcess,
+        team: usize,
+        manager_addresses: &HashSet<usize>,
+    ) -> bool {
+        if process
+            .read_ptr(team + TEAM_MANAGER)
+            .filter(|reference| {
+                points_to_human_manager(process, *reference, manager_addresses)
+            })
+            .is_some()
+        {
+            return true;
+        }
+
+        // TEAM_MANAGER zmieniało położenie między wariantami obiektu Team.
+        // Szukamy więc bezpośredniego odwołania do zakresu pod-obiektów
+        // tego samego HumanManagera (od bazy Staff do części Person) w małym,
+        // kontrolowanym nagłówku drużyny.
+        let Some(bytes) = process.read(team, 0x160) else {
+            return false;
+        };
+        (0..bytes.len().saturating_sub(7))
+            .step_by(8)
+            .filter_map(|offset| read_u64(&bytes, offset).map(|value| value as usize))
+            .any(|reference| manager_addresses.contains(&reference))
     }
 
     fn points_to_human_manager(
