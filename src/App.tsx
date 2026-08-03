@@ -654,7 +654,7 @@ export default function App() {
           </span>
           <span>
             <strong id="app-title">FM Player Sorter</strong>
-            <small>National Team Intelligence · v0.3.0</small>
+            <small>National Team Intelligence · v0.4.0</small>
           </span>
         </div>
 
@@ -663,7 +663,6 @@ export default function App() {
         <div className="desktop-header__actions">
           <AppUpdater />
           <FmConnectionPanel
-            currentGameDate={snapshot?.gameDate ?? null}
             loadedNation={snapshot?.managedNation ?? null}
             loadedPlayerCount={rows.length}
             onDatabaseLoaded={handleFmDatabaseLoaded}

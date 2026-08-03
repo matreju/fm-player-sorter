@@ -123,7 +123,13 @@ mod windows_reader {
 
     const CLUB_NAME: usize = 0xC0;
     const CLUB_SHORT_NAME: usize = 0xC8;
+    const CLUB_TEAMS_BEGIN: usize = 0x18;
+    const CLUB_TEAMS_END: usize = 0x20;
+    const TEAM_TYPE: usize = 0x28;
     const TEAM_CLUB: usize = 0x30;
+    const TEAM_PLAYERS_BEGIN: usize = 0x38;
+    const TEAM_PLAYERS_END: usize = 0x40;
+    const TEAM_MANAGER: usize = 0x80;
     const TEAM_COMPETITION: [usize; 2] = [0x50, 0x60];
     const TEAM_REPUTATION: usize = 0xA8;
     const TEAM_SCHEDULE: usize = 0xA0;
@@ -498,6 +504,15 @@ mod windows_reader {
         owner_club_address: Option<usize>,
     }
 
+    #[derive(Debug)]
+    struct ManagedTeamResolution {
+        team_address: usize,
+        team_name: String,
+        nation_address: usize,
+        nation_name: String,
+        score: usize,
+    }
+
     #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
     enum DateCandidateKind {
         PackedFmDate,
@@ -528,18 +543,12 @@ mod windows_reader {
         DATE_MONITOR.get_or_init(|| Mutex::new(None))
     }
 
-    pub(super) fn read_database(
-        expected_game_date: Option<String>,
-    ) -> Result<FmNativeDatabase, String> {
+    pub(super) fn read_database() -> Result<FmNativeDatabase, String> {
         if let Ok(mut guard) = monitor_slot().lock() {
             *guard = None;
         }
 
         let started = Instant::now();
-        let expected_raw = expected_game_date
-            .as_deref()
-            .map(parse_iso_fm_date)
-            .transpose()?;
         let detected = detect_football_manager();
         let pid = detected
             .pid
@@ -562,11 +571,6 @@ mod windows_reader {
             .ok_or_else(|| "Nie udało się odczytać adresu game_plugin.dll.".to_string())?;
         let game_assembly_base = parse_hex_address(&game_assembly_module.base_address)
             .ok_or_else(|| "Nie udało się odczytać adresu GameAssembly.dll.".to_string())?;
-        let executable_module = modules
-            .modules
-            .iter()
-            .find(|module| module.name.eq_ignore_ascii_case("fm.exe"));
-
         let process = RemoteProcess::open(pid)?;
         let regions = process.private_rw_regions();
         if regions.is_empty() {
@@ -583,11 +587,6 @@ mod windows_reader {
             game_assembly_base,
             game_assembly_module.memory_size as usize,
         );
-        let executable_image = expected_raw.and_then(|_| {
-            let module = executable_module?;
-            let base = parse_hex_address(&module.base_address)?;
-            Some(ModuleImage::load(&process, base, module.memory_size as usize))
-        });
         let resolver = MetaResolver {
             module_low: game_plugin.base.min(game_assembly.base),
             module_high: game_plugin.end.max(game_assembly.end),
@@ -599,37 +598,7 @@ mod windows_reader {
         let mut club_candidates = HashSet::<usize>::new();
         let mut manager_people = Vec::<usize>::new();
         let mut class_offset_histogram = HashMap::<i32, u64>::new();
-        let mut date_candidates = Vec::<DateCandidate>::new();
         let mut scanned_bytes = 0u64;
-
-        if let Some(target_raw) = expected_raw {
-            collect_date_candidates(
-                &resolver.game_plugin.bytes,
-                resolver.game_plugin.base,
-                target_raw,
-                &resolver,
-                true,
-                &mut date_candidates,
-            );
-            collect_date_candidates(
-                &resolver.game_assembly.bytes,
-                resolver.game_assembly.base,
-                target_raw,
-                &resolver,
-                true,
-                &mut date_candidates,
-            );
-            if let Some(image) = executable_image.as_ref() {
-                collect_date_candidates(
-                    &image.bytes,
-                    image.base,
-                    target_raw,
-                    &resolver,
-                    true,
-                    &mut date_candidates,
-                );
-            }
-        }
 
         for &(region_base, region_size) in &regions {
             let mut region_offset = 0usize;
@@ -641,17 +610,6 @@ mod windows_reader {
                     continue;
                 };
                 scanned_bytes = scanned_bytes.saturating_add(buffer.len() as u64);
-
-                if let Some(target_raw) = expected_raw {
-                    collect_date_candidates(
-                        &buffer,
-                        chunk_address,
-                        target_raw,
-                        &resolver,
-                        false,
-                        &mut date_candidates,
-                    );
-                }
 
                 let mut local = (8 - chunk_address % 8) % 8;
                 while local + 0x10 <= buffer.len() {
@@ -760,11 +718,6 @@ mod windows_reader {
             ));
         }
 
-        let manager_person = manager_people.first().copied();
-        let manager_team = manager_person.and_then(|person| contract_team(&process, person));
-        let managed_team = manager_team
-            .and_then(|team| process.read_ptr(team + TEAM_CLUB))
-            .and_then(|club| club_name(&process, club));
         let nation_counts = player_candidates
             .values()
             .filter(|candidate| candidate.nation_address != 0)
@@ -772,20 +725,22 @@ mod windows_reader {
                 *counts.entry(candidate.nation_address).or_default() += 1;
                 counts
             });
-        let (managed_nation_address, managed_nation) = manager_team
-            .and_then(|team| {
-                resolve_managed_nation(
-                    &process,
-                    team,
-                    managed_team.as_deref(),
-                    &nation_counts,
-                )
-            })
+        let managed = resolve_user_national_team(
+            &process,
+            &club_candidates,
+            &manager_people,
+            &player_candidates,
+            &nation_counts,
+        )
             .ok_or_else(|| {
-                "Wykryto FM26, ale nie udało się ustalić narodowości prowadzonej reprezentacji. Otwórz ekran swojej kadry narodowej w grze i spróbuj ponownie.".to_string()
+                "Wykryto FM26, ale w aktywnym zapisie nie znaleziono reprezentacji prowadzonej przez Twojego menedżera. Upewnij się, że kariera jest wczytana i menedżer ma aktywną pracę w reprezentacji; aktualnie otwarty ekran gry nie ma znaczenia.".to_string()
             })?;
-        let managed_gender = manager_team
-            .and_then(|team| resolve_managed_squad_gender(&process, team, &player_candidates));
+        let manager_team = Some(managed.team_address);
+        let managed_team = Some(managed.team_name);
+        let managed_nation_address = managed.nation_address;
+        let managed_nation = managed.nation_name;
+        let managed_gender =
+            resolve_managed_squad_gender(&process, managed.team_address, &player_candidates);
 
         let selected_candidates = player_candidates
             .values()
@@ -846,38 +801,14 @@ mod windows_reader {
             .and_then(|team| read_team_date_anchor(&process, team, derived_year))
             .or_else(|| choose_date_vote(&squad_links.date_votes, derived_year));
         let schedule_raw = date_anchor.as_ref().map(|anchor| anchor.raw);
-        let monitor_candidates = select_date_candidates(date_candidates);
-        let game_date = expected_raw.and_then(format_fm_date);
-        let game_date_source = if expected_raw.is_some() {
-            if monitor_candidates.is_empty() {
-                "manualReference"
-            } else {
-                "calibratedMemory"
-            }
-        } else {
-            "unavailable"
-        }
-        .to_string();
+        let monitor_candidates = Vec::<DateCandidate>::new();
+        let game_date = None;
+        let game_date_source = "unavailable".to_string();
 
-        if let (Some(imported_date), Some(imported_raw)) =
-            (game_date.clone(), expected_raw)
-        {
-            if let Ok(mut guard) = monitor_slot().lock() {
-                *guard = Some(DateMonitor {
-                    pid,
-                    candidates: monitor_candidates.clone(),
-                    imported_raw,
-                    imported_date,
-                    source: game_date_source.clone(),
-                    observed_current_raw: None,
-                });
-            }
-        }
-
-        // Dokładna data podana z ekranu FM ma pierwszeństwo. Kotwica terminarza
-        // pozostaje wyłącznie wewnętrznym przybliżeniem do obliczenia wieku i nie
-        // jest już prezentowana użytkownikowi jako data świata gry.
-        let current_raw = expected_raw.or(schedule_raw);
+        // Kotwica terminarza służy wyłącznie jako wewnętrzne przybliżenie wieku.
+        // Nie pokazujemy jej jako daty świata gry, ponieważ może wskazywać datę
+        // ostatniego lub następnego meczu.
+        let current_raw = schedule_raw;
         let headers = table_headers();
         let mut rows = players
             .into_values()
@@ -1663,9 +1594,210 @@ mod windows_reader {
         process.read_ptr(contract + CONTRACT_TEAM).filter(|team| *team != 0)
     }
 
+    fn resolve_user_national_team(
+        process: &RemoteProcess,
+        clubs: &HashSet<usize>,
+        manager_people: &[usize],
+        candidates: &HashMap<u32, PlayerCandidate>,
+        nation_counts: &HashMap<usize, usize>,
+    ) -> Option<ManagedTeamResolution> {
+        let manager_addresses = manager_people.iter().copied().collect::<HashSet<_>>();
+        if manager_addresses.is_empty() {
+            return None;
+        }
+
+        let mut address_to_nation = HashMap::<usize, usize>::with_capacity(candidates.len() * 2);
+        for candidate in candidates.values() {
+            if candidate.nation_address == 0 {
+                continue;
+            }
+            address_to_nation.insert(candidate.person_address, candidate.nation_address);
+            address_to_nation.insert(candidate.player_address, candidate.nation_address);
+        }
+
+        let mut matches = Vec::<ManagedTeamResolution>::new();
+        let mut seen_teams = HashSet::<usize>::new();
+
+        for &club in clubs {
+            let Some(begin) = process.read_ptr(club + CLUB_TEAMS_BEGIN) else {
+                continue;
+            };
+            let Some(end) = process.read_ptr(club + CLUB_TEAMS_END) else {
+                continue;
+            };
+            if end <= begin || (end - begin) % 8 != 0 {
+                continue;
+            }
+            let team_count = (end - begin) / 8;
+            if !(1..=64).contains(&team_count) {
+                continue;
+            }
+
+            for index in 0..team_count {
+                let Some(team) = process.read_ptr(begin + index * 8).filter(|value| *value != 0)
+                else {
+                    continue;
+                };
+                let Some(manager) = process
+                    .read_ptr(team + TEAM_MANAGER)
+                    .filter(|value| *value != 0)
+                else {
+                    continue;
+                };
+                if !points_to_human_manager(process, manager, &manager_addresses) {
+                    continue;
+                }
+                if let Some(candidate) = build_managed_team_candidate(
+                    process,
+                    team,
+                    club_name(process, club),
+                    &address_to_nation,
+                    nation_counts,
+                ) {
+                    seen_teams.insert(team);
+                    matches.push(candidate);
+                }
+            }
+        }
+
+        // Niektóre wersje zapisu przechowują aktywną pracę reprezentacyjną
+        // wyłącznie na kontrakcie menedżera. To jest bezpieczny fallback, nadal
+        // niezależny od ekranu otwartego w grze.
+        for manager in manager_addresses {
+            let Some(team) = contract_team(process, manager) else {
+                continue;
+            };
+            if !seen_teams.insert(team) {
+                continue;
+            }
+            let team_name = process
+                .read_ptr(team + TEAM_CLUB)
+                .and_then(|club| club_name(process, club));
+            if let Some(candidate) = build_managed_team_candidate(
+                process,
+                team,
+                team_name,
+                &address_to_nation,
+                nation_counts,
+            ) {
+                matches.push(candidate);
+            }
+        }
+
+        matches.into_iter().max_by_key(|candidate| candidate.score)
+    }
+
+    fn points_to_human_manager(
+        process: &RemoteProcess,
+        manager_reference: usize,
+        manager_addresses: &HashSet<usize>,
+    ) -> bool {
+        manager_addresses.contains(&manager_reference)
+            || (0..=0x40).step_by(8).any(|offset| {
+                process
+                    .read_ptr(manager_reference + offset)
+                    .map(|pointer| manager_addresses.contains(&pointer))
+                    .unwrap_or(false)
+            })
+    }
+
+    fn build_managed_team_candidate(
+        process: &RemoteProcess,
+        team: usize,
+        team_name: Option<String>,
+        address_to_nation: &HashMap<usize, usize>,
+        nation_counts: &HashMap<usize, usize>,
+    ) -> Option<ManagedTeamResolution> {
+        let team_name = team_name?;
+        let squad_votes = team_squad_nation_votes(process, team, address_to_nation);
+        let squad_total = squad_votes.values().sum::<usize>();
+        let dominant_squad_nation = squad_votes
+            .iter()
+            .max_by_key(|(_, count)| **count)
+            .map(|(nation, count)| (*nation, *count));
+
+        let graph_resolution =
+            resolve_managed_nation(process, team, Some(&team_name), nation_counts);
+        let squad_resolution = dominant_squad_nation.and_then(|(nation, count)| {
+            let strong_majority = squad_total >= 8 && count * 100 >= squad_total * 75;
+            strong_majority
+                .then(|| nation_name(process, nation).map(|name| (nation, name)))
+                .flatten()
+        });
+        let (nation_address, nation_name) = squad_resolution.or(graph_resolution)?;
+
+        let label_match = labels_match(&team_name, &nation_name);
+        let same_nation_players = squad_votes.get(&nation_address).copied().unwrap_or(0);
+        let strong_national_squad =
+            squad_total >= 8 && same_nation_players * 100 >= squad_total * 75;
+
+        // Klub prowadzony równolegle przez użytkownika nie może wygrać tylko
+        // dlatego, że ma wskaźnik kraju. Reprezentacja musi mieć nazwę kraju
+        // albo wyraźnie jednonarodowy skład.
+        if !label_match && !strong_national_squad {
+            return None;
+        }
+
+        let squad_ratio = if squad_total == 0 {
+            0
+        } else {
+            same_nation_players * 1_000 / squad_total
+        };
+        let label_score = if label_match { 100_000 } else { 0 };
+        let squad_score = if strong_national_squad { 40_000 } else { 0 };
+        let score =
+            label_score + squad_score + squad_ratio * 25 + same_nation_players.min(50) * 50;
+
+        Some(ManagedTeamResolution {
+            team_address: team,
+            team_name,
+            nation_address,
+            nation_name,
+            score,
+        })
+    }
+
+    fn team_squad_nation_votes(
+        process: &RemoteProcess,
+        team: usize,
+        address_to_nation: &HashMap<usize, usize>,
+    ) -> HashMap<usize, usize> {
+        let mut votes = HashMap::<usize, usize>::new();
+        let Some(begin) = process.read_ptr(team + TEAM_PLAYERS_BEGIN) else {
+            return votes;
+        };
+        let Some(end) = process.read_ptr(team + TEAM_PLAYERS_END) else {
+            return votes;
+        };
+        if end <= begin || (end - begin) % 8 != 0 {
+            return votes;
+        }
+        let player_count = (end - begin) / 8;
+        if player_count == 0 || player_count > 200 {
+            return votes;
+        }
+
+        for index in 0..player_count {
+            let Some(entry) = process.read_ptr(begin + index * 8).filter(|value| *value != 0)
+            else {
+                continue;
+            };
+            let nation = address_to_nation.get(&entry).copied().or_else(|| {
+                (0..=0x80).step_by(8).find_map(|offset| {
+                    let pointer = process.read_ptr(entry + offset)?;
+                    address_to_nation.get(&pointer).copied()
+                })
+            });
+            if let Some(nation) = nation {
+                *votes.entry(nation).or_default() += 1;
+            }
+        }
+        votes
+    }
+
     fn looks_like_club(process: &RemoteProcess, address: usize) -> bool {
-        let begin = process.read_ptr(address + 0x18).unwrap_or(0);
-        let end = process.read_ptr(address + 0x20).unwrap_or(0);
+        let begin = process.read_ptr(address + CLUB_TEAMS_BEGIN).unwrap_or(0);
+        let end = process.read_ptr(address + CLUB_TEAMS_END).unwrap_or(0);
         begin != 0
             && end > begin
             && (end - begin) % 8 == 0
@@ -2196,16 +2328,12 @@ mod windows_reader {
 }
 
 #[cfg(target_os = "windows")]
-pub(crate) fn read_fm_native_database(
-    expected_game_date: Option<String>,
-) -> Result<FmNativeDatabase, String> {
-    windows_reader::read_database(expected_game_date)
+pub(crate) fn read_fm_native_database() -> Result<FmNativeDatabase, String> {
+    windows_reader::read_database()
 }
 
 #[cfg(not(target_os = "windows"))]
-pub(crate) fn read_fm_native_database(
-    _expected_game_date: Option<String>,
-) -> Result<FmNativeDatabase, String> {
+pub(crate) fn read_fm_native_database() -> Result<FmNativeDatabase, String> {
     Err("Zewnętrzny czytnik bazy FM26 jest dostępny tylko w aplikacji Windows.".to_string())
 }
 

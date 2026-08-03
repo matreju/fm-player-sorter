@@ -21,7 +21,7 @@ type UpdateState =
 
 export function AppUpdater() {
   const desktopMode = isDesktopApp();
-  const [currentVersion, setCurrentVersion] = useState("0.3.0");
+  const [currentVersion, setCurrentVersion] = useState("0.4.0");
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
   const [state, setState] = useState<UpdateState>("idle");
   const [message, setMessage] = useState(
@@ -75,7 +75,7 @@ export function AppUpdater() {
                   ? unknownError.message
                   : String(unknownError)
               }`
-            : "Automatyczne aktualizacje są gotowe; pierwsze wydanie pojawi się po publikacji.",
+            : "Nie udało się połączyć z serwerem aktualizacji. Możesz ponowić sprawdzenie z menu wersji.",
         );
       }
     },

@@ -7,12 +7,14 @@ Football Managera 26 i dalszej analizy bez eksportu HTML/CSV.
 
 1. Uruchom FM26 na Windows i wczytaj karierę.
 2. Uruchom desktopową wersję FM Player Sorter.
-3. Przepisz dokładną datę widoczną w grze i kliknij **Połącz z grą**.
+3. Kliknij **Połącz z grą**. Nie trzeba otwierać konkretnego ekranu ani
+   przepisywać daty.
 
 Pełny skan pamięci jest wykonywany tylko po kliknięciu przycisku. Aplikacja
-rozpoznaje prowadzoną reprezentację, odrzuca zawodników innej narodowości jeszcze
-przed kosztownym odczytem pełnych rekordów i zapisuje gotowy snapshot kadry w
-lokalnej bazie IndexedDB. Zmiana dnia w grze nie uruchamia ponownego skanu.
+rozpoznaje drużynę po wskaźniku menedżera zapisanym w obiekcie zespołu, wybiera
+prowadzoną reprezentację, odrzuca zawodników innej narodowości jeszcze przed
+kosztownym odczytem pełnych rekordów i zapisuje gotowy snapshot kadry w lokalnej
+bazie IndexedDB. Odczyt nie zależy od aktualnie otwartej zakładki FM26.
 
 Czytnik otwiera `fm.exe` wyłącznie z prawami `PROCESS_VM_READ` i
 `PROCESS_QUERY_INFORMATION`. Nie wstrzykuje DLL, nie wymaga BepInEx i nie zapisuje
@@ -33,25 +35,18 @@ Wynik jest akceptowany dopiero po walidacji UID oraz CA/PA i znalezieniu co
 najmniej 500 spójnych rekordów. Po niezgodnej aktualizacji FM aplikacja zwraca
 błąd profilu zamiast pokazywać częściowe lub losowe dane.
 
-### Wskaźnik daty
-
-Podana data kalibruje podczas pełnego skanu kandydatów centralnego zegara w
-`fm.exe`, `game_plugin.dll`, `GameAssembly.dll` i na stercie. Po imporcie
-aplikacja co 1,5 sekundy ponownie odczytuje tylko te adresy. Nie skanuje ponownie
-zawodników. Ikona `!` pojawia się, gdy wiarygodny kandydat zmieni dzień.
-
-Data terminarza drużyny nie jest już prezentowana jako bieżąca data świata gry.
-Jeżeli w danym buildzie nie uda się znaleźć stabilnego kandydata, interfejs
-pokazuje ten stan wprost zamiast wyświetlać nieprawidłową datę.
+Data terminarza drużyny jest używana wyłącznie wewnętrznie do przybliżonego
+obliczenia wieku. Nie jest prezentowana jako bieżąca data świata gry, ponieważ
+może wskazywać termin meczu zamiast aktualnego dnia.
 
 ## Aktualizacje
 
-Wersja 0.3.0 zawiera updater Tauri korzystający z podpisanych plików GitHub
+Wersja 0.4.0 zawiera updater Tauri korzystający z podpisanych plików GitHub
 Releases. W górnym pasku można sprawdzić wersję i zainstalować nowsze wydanie
 bez ręcznego odinstalowywania aplikacji.
 
-Workflow `.github/workflows/release.yml` tworzy szkic wydania, instalator NSIS,
-podpis i `latest.json`. Repozytorium musi zawierać sekret Actions
+Workflow `.github/workflows/release.yml` publikuje wydanie, instalator NSIS,
+podpis i publiczny `latest.json`. Repozytorium musi zawierać sekret Actions
 `TAURI_SIGNING_PRIVATE_KEY` odpowiadający kluczowi publicznemu z
 `src-tauri/tauri.conf.json`.
 

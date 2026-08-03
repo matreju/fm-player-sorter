@@ -268,18 +268,14 @@ export async function inspectFootballManagerReaderProfile(): Promise<FmReaderPro
   return invoke<FmReaderProfileStatus>("inspect_fm_reader_profile");
 }
 
-export async function loadFootballManagerDatabase(
-  expectedGameDate: string | null,
-): Promise<FmDatabaseLoadResult> {
+export async function loadFootballManagerDatabase(): Promise<FmDatabaseLoadResult> {
   if (!isTauri()) {
     throw new Error(
       "Wczytywanie bazy FM jest dostępne tylko w aplikacji desktopowej.",
     );
   }
 
-  return invoke<FmDatabaseLoadResult>("load_fm_database", {
-    expectedGameDate,
-  });
+  return invoke<FmDatabaseLoadResult>("load_fm_database");
 }
 
 export async function getFootballManagerDateStatus(): Promise<FmDateStatus> {

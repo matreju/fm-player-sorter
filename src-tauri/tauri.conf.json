@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "FM Player Sorter",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "identifier": "pl.fmplayersorter.desktop",
   "build": {
 "frontendDist": "../dist",
@@ -13,11 +13,12 @@
     "windows": [
       {
   "title": "FM Player Sorter",
-  "width": 1584,
-  "height": 960,
-  "minWidth": 1180,
-  "minHeight": 720,
+  "width": 1360,
+  "height": 820,
+  "minWidth": 1000,
+  "minHeight": 640,
   "resizable": true,
+  "maximized": false,
   "fullscreen": false,
   "center": true
       }

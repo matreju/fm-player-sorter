@@ -70,17 +70,13 @@ impl FmDatabaseLoadResult {
 }
 
 #[tauri::command]
-pub async fn load_fm_database(
-    expected_game_date: Option<String>,
-) -> Result<FmDatabaseLoadResult, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        load_fm_database_blocking(expected_game_date)
-    })
+pub async fn load_fm_database() -> Result<FmDatabaseLoadResult, String> {
+    tauri::async_runtime::spawn_blocking(load_fm_database_blocking)
         .await
         .map_err(|error| format!("Wątek wczytywania bazy FM zakończył się błędem: {error}"))
 }
 
-fn load_fm_database_blocking(expected_game_date: Option<String>) -> FmDatabaseLoadResult {
+fn load_fm_database_blocking() -> FmDatabaseLoadResult {
     let process = detect_football_manager();
     if !process.detected {
         return FmDatabaseLoadResult::failed(
@@ -90,7 +86,7 @@ fn load_fm_database_blocking(expected_game_date: Option<String>) -> FmDatabaseLo
         );
     }
 
-    match read_fm_native_database(expected_game_date) {
+    match read_fm_native_database() {
         Ok(database) => FmDatabaseLoadResult {
             success: true,
             stage: "database-loaded".to_string(),

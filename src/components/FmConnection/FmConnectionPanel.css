@@ -172,31 +172,6 @@
   line-height: 1.4;
 }
 
-.fm-connect__date {
-  display: grid;
-  gap: 6px;
-  color: #c8cae0;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.fm-connect__date input {
-  min-height: 38px;
-  padding: 7px 10px;
-  border: 1px solid #353951;
-  border-radius: 7px;
-  background: #0d0f1b;
-  color: #eceef8;
-  color-scheme: dark;
-}
-
-.fm-connect__date small {
-  color: #85899f;
-  font-size: 10px;
-  font-weight: 500;
-  line-height: 1.4;
-}
-
 .fm-connect__message {
   margin: 0;
   padding: 9px 10px;

@@ -61,7 +61,7 @@ body {
 }
 
 .desktop-app {
-  min-width: 1120px;
+  min-width: 980px;
   min-height: 100vh;
   display: grid;
   grid-template-rows: 64px minmax(0, 1fr) 26px;

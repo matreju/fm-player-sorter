@@ -16,7 +16,6 @@ const PROCESS_CHECK_INTERVAL_MS = 2_500;
 const DATE_CHECK_INTERVAL_MS = 1_500;
 
 interface FmConnectionPanelProps {
-  currentGameDate: string | null;
   loadedNation: string | null;
   loadedPlayerCount: number;
   onDatabaseLoaded: (result: FmDatabaseLoadResult) => void;
@@ -29,7 +28,6 @@ function formatDuration(milliseconds: number): string {
 }
 
 export function FmConnectionPanel({
-  currentGameDate,
   loadedNation,
   loadedPlayerCount,
   onDatabaseLoaded,
@@ -38,13 +36,10 @@ export function FmConnectionPanel({
   const [status, setStatus] = useState<FmMemoryStatus | null>(null);
   const [dateStatus, setDateStatus] = useState<FmDateStatus | null>(null);
   const [result, setResult] = useState<FmDatabaseLoadResult | null>(null);
-  const [gameDateDraft, setGameDateDraft] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [isChecking, setIsChecking] = useState(desktopMode);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const expectedGameDate = gameDateDraft || currentGameDate || "";
 
   const refreshStatus = useCallback(async () => {
     if (!desktopMode) return;
@@ -114,16 +109,11 @@ export function FmConnectionPanel({
   }, [isOpen]);
 
   const connect = async () => {
-    if (!expectedGameDate) {
-      setError("Wpisz dokładną datę widoczną obecnie w FM26.");
-      return;
-    }
-
     try {
       setIsLoading(true);
       setError(null);
       setDateStatus(null);
-      const nextResult = await loadFootballManagerDatabase(expectedGameDate);
+      const nextResult = await loadFootballManagerDatabase();
       setResult({ ...nextResult, rows: [], headers: [] });
 
       if (!nextResult.success) {
@@ -146,8 +136,7 @@ export function FmConnectionPanel({
 
   const processConnected = Boolean(status?.memoryReadable);
   const dataStale = dateStatus?.dataStale ?? false;
-  const displayedDate =
-    dateStatus?.currentDate ?? currentGameDate ?? result?.gameDate ?? null;
+  const displayedDate = dateStatus?.currentDate ?? result?.gameDate ?? null;
   const connectionLabel = isLoading
     ? "Wczytywanie…"
     : processConnected
@@ -165,12 +154,14 @@ export function FmConnectionPanel({
           title={
             dataStale
               ? "Data w FM zmieniła się od ostatniego wczytania."
-              : "Jednorazowy snapshot jest aktualny względem monitorowanej daty."
+              : displayedDate
+                ? "Snapshot jest aktualny względem automatycznie wykrytej daty."
+                : "Snapshot ostatniego odczytu z FM26."
           }
         >
           <strong>{dataStale ? "!" : loadedNation ?? "Kadra"}</strong>
           <span>
-            {displayedDate ?? "bez daty"} ·{" "}
+            {displayedDate ? `${displayedDate} · ` : ""}
             {loadedPlayerCount.toLocaleString("pl-PL")}
           </span>
         </span>
@@ -238,20 +229,6 @@ export function FmConnectionPanel({
                   </small>
                 </div>
               </div>
-
-              <label className="fm-connect__date">
-                <span>Data widoczna w grze</span>
-                <input
-                  type="date"
-                  value={expectedGameDate}
-                  onChange={(event) => setGameDateDraft(event.target.value)}
-                  disabled={isLoading}
-                />
-                <small>
-                  Służy wyłącznie do lekkiego sprawdzania, czy snapshot jest
-                  nieaktualny. Zawodnicy nie są ponownie skanowani.
-                </small>
-              </label>
 
               {error && (
                 <p className="fm-connect__message" data-tone="error">
