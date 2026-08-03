@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.4.1"
+version = "0.4.2"
 description = "National-team scouting and Moneyball companion for Football Manager"
 authors = ["FM Player Sorter"]
 license = ""

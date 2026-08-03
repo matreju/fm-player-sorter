@@ -49,7 +49,7 @@ pub struct FmDateStatus {
 #[cfg(target_os = "windows")]
 mod windows_reader {
     use std::{
-        collections::{BTreeMap, HashMap, HashSet},
+        collections::{BTreeMap, HashMap, HashSet, VecDeque},
         ffi::c_void,
         mem::size_of,
         sync::{Mutex, OnceLock},
@@ -521,7 +521,9 @@ mod windows_reader {
         manager_count: usize,
         club_count: usize,
         team_count: usize,
-        manager_link_count: usize,
+        team_to_manager_link_count: usize,
+        manager_to_team_link_count: usize,
+        manager_graph_node_count: usize,
         national_candidate_count: usize,
     }
 
@@ -744,6 +746,7 @@ mod windows_reader {
             });
         let (managed, managed_diagnostics) = resolve_user_national_team(
             &process,
+            &regions,
             &club_candidates,
             &human_managers,
             &player_candidates,
@@ -751,11 +754,13 @@ mod windows_reader {
         );
         let managed = managed.ok_or_else(|| {
             format!(
-                "Wykryto FM26, ale nie udało się powiązać ludzkiego menedżera z prowadzoną reprezentacją. Otwarty ekran gry nie ma znaczenia. Kod diagnostyczny: M{}/K{}/D{}/H{}/R{}.",
+                "Wykryto FM26, ale nie udało się powiązać ludzkiego menedżera z prowadzoną reprezentacją. Otwarty ekran gry nie ma znaczenia. Kod diagnostyczny: M{}/K{}/D{}/F{}/B{}/G{}/R{}.",
                 managed_diagnostics.manager_count,
                 managed_diagnostics.club_count,
                 managed_diagnostics.team_count,
-                managed_diagnostics.manager_link_count,
+                managed_diagnostics.team_to_manager_link_count,
+                managed_diagnostics.manager_to_team_link_count,
+                managed_diagnostics.manager_graph_node_count,
                 managed_diagnostics.national_candidate_count,
             )
         })?;
@@ -1631,6 +1636,7 @@ mod windows_reader {
 
     fn resolve_user_national_team(
         process: &RemoteProcess,
+        regions: &[(usize, usize)],
         clubs: &HashSet<usize>,
         human_managers: &HashSet<HumanManagerCandidate>,
         candidates: &HashMap<u32, PlayerCandidate>,
@@ -1660,9 +1666,7 @@ mod windows_reader {
             address_to_nation.insert(candidate.player_address, candidate.nation_address);
         }
 
-        let mut matches = Vec::<ManagedTeamResolution>::new();
-        let mut checked_teams = HashSet::<usize>::new();
-        let mut matched_teams = HashSet::<usize>::new();
+        let mut team_clubs = HashMap::<usize, (usize, Option<String>)>::new();
 
         for &club in clubs {
             let Some(begin) = process.read_ptr(club + CLUB_TEAMS_BEGIN) else {
@@ -1678,63 +1682,234 @@ mod windows_reader {
             if !(1..=64).contains(&team_count) {
                 continue;
             }
+            let label = club_name(process, club);
 
             for index in 0..team_count {
                 let Some(team) = process.read_ptr(begin + index * 8).filter(|value| *value != 0)
                 else {
                     continue;
                 };
-                if !checked_teams.insert(team) {
-                    continue;
-                }
-                diagnostics.team_count += 1;
-                if !team_points_to_human_manager(process, team, &manager_addresses) {
-                    continue;
-                }
-                diagnostics.manager_link_count += 1;
-                if let Some(candidate) = build_managed_team_candidate(
-                    process,
-                    team,
-                    club_name(process, club),
-                    &address_to_nation,
-                    nation_counts,
-                ) {
-                    matched_teams.insert(team);
-                    diagnostics.national_candidate_count += 1;
-                    matches.push(candidate);
-                }
+                team_clubs
+                    .entry(team)
+                    .or_insert_with(|| (club, label.clone()));
             }
         }
+        diagnostics.team_count = team_clubs.len();
 
-        // Niektóre wersje zapisu przechowują aktywną pracę reprezentacyjną
-        // wyłącznie na kontrakcie menedżera. To jest bezpieczny fallback, nadal
-        // niezależny od ekranu otwartego w grze.
-        for manager in human_managers {
-            let Some(team) = contract_team(process, manager.person_address) else {
-                continue;
-            };
-            if !matched_teams.insert(team) {
-                continue;
-            }
-            let team_name = process
-                .read_ptr(team + TEAM_CLUB)
-                .and_then(|club| club_name(process, club));
+        let mut national_candidates = HashMap::<usize, ManagedTeamResolution>::new();
+        for (&team, (_, label)) in &team_clubs {
             if let Some(candidate) = build_managed_team_candidate(
                 process,
                 team,
-                team_name,
+                label.clone(),
                 &address_to_nation,
                 nation_counts,
             ) {
                 diagnostics.national_candidate_count += 1;
-                matches.push(candidate);
+                national_candidates.insert(team, candidate);
             }
+        }
+
+        let mut link_scores = HashMap::<usize, usize>::new();
+        for &team in team_clubs.keys() {
+            if team_points_to_human_manager(process, team, &manager_addresses) {
+                diagnostics.team_to_manager_link_count += 1;
+                keep_highest_link_score(&mut link_scores, team, 900_000);
+            }
+        }
+
+        let (manager_links, graph_nodes) = manager_to_team_graph_scores(
+            process,
+            regions,
+            human_managers,
+            &team_clubs,
+        );
+        diagnostics.manager_to_team_link_count = manager_links.len();
+        diagnostics.manager_graph_node_count = graph_nodes;
+        for (team, score) in manager_links {
+            keep_highest_link_score(&mut link_scores, team, score);
+        }
+
+        // Najkrótsza, najbardziej wiarygodna ścieżka to aktywny kontrakt
+        // zapisany przy części Person. Zachowujemy ją jako silny sygnał, ale
+        // nie zakładamy już, że jest jedynym miejscem przechowywania pracy.
+        for manager in human_managers {
+            let Some(team) = contract_team(process, manager.person_address) else {
+                continue;
+            };
+            keep_highest_link_score(&mut link_scores, team, 1_200_000);
+            if !national_candidates.contains_key(&team) {
+                let team_name = process
+                    .read_ptr(team + TEAM_CLUB)
+                    .and_then(|club| club_name(process, club));
+                if let Some(candidate) = build_managed_team_candidate(
+                    process,
+                    team,
+                    team_name,
+                    &address_to_nation,
+                    nation_counts,
+                ) {
+                    diagnostics.national_candidate_count += 1;
+                    national_candidates.insert(team, candidate);
+                }
+            }
+        }
+
+        let mut matches = Vec::<ManagedTeamResolution>::new();
+        for (team, mut candidate) in national_candidates {
+            let Some(link_score) = link_scores.get(&team).copied() else {
+                continue;
+            };
+            candidate.score = candidate.score.saturating_add(link_score);
+            matches.push(candidate);
         }
 
         (
             matches.into_iter().max_by_key(|candidate| candidate.score),
             diagnostics,
         )
+    }
+
+    fn keep_highest_link_score(
+        scores: &mut HashMap<usize, usize>,
+        team: usize,
+        score: usize,
+    ) {
+        scores
+            .entry(team)
+            .and_modify(|current| *current = (*current).max(score))
+            .or_insert(score);
+    }
+
+    fn manager_to_team_graph_scores(
+        process: &RemoteProcess,
+        regions: &[(usize, usize)],
+        human_managers: &HashSet<HumanManagerCandidate>,
+        team_clubs: &HashMap<usize, (usize, Option<String>)>,
+    ) -> (HashMap<usize, usize>, usize) {
+        const MANAGER_SUFFIX_LENGTH: usize = 0x180;
+        const FIRST_HOP_SCAN_LENGTH: usize = 0x240;
+        const SECOND_HOP_SCAN_LENGTH: usize = 0x100;
+        const MAX_GRAPH_NODES_PER_MANAGER: usize = 512;
+
+        let team_addresses = team_clubs.keys().copied().collect::<HashSet<_>>();
+        let mut club_teams = HashMap::<usize, Vec<usize>>::new();
+        for (&team, (club, _)) in team_clubs {
+            club_teams.entry(*club).or_default().push(team);
+        }
+
+        let mut scores = HashMap::<usize, usize>::new();
+        let mut scanned_nodes = 0usize;
+
+        for manager in human_managers {
+            let manager_end = manager.person_address.saturating_add(MANAGER_SUFFIX_LENGTH);
+            let manager_length = manager_end
+                .saturating_sub(manager.staff_address)
+                .min(0x800);
+            let Some(root) = process.read(manager.staff_address, manager_length) else {
+                continue;
+            };
+
+            let mut queue = VecDeque::<(usize, usize)>::new();
+            let mut visited = HashSet::<usize>::new();
+            for pointer in aligned_pointers(&root) {
+                if score_manager_graph_target(
+                    pointer,
+                    0,
+                    &team_addresses,
+                    &club_teams,
+                    &mut scores,
+                ) {
+                    continue;
+                }
+                if pointer >= manager.staff_address && pointer < manager_end {
+                    continue;
+                }
+                if pointer_in_regions(pointer, regions) && visited.insert(pointer) {
+                    queue.push_back((pointer, 1));
+                }
+            }
+
+            let mut manager_nodes = 0usize;
+            while let Some((address, depth)) = queue.pop_front() {
+                if manager_nodes >= MAX_GRAPH_NODES_PER_MANAGER {
+                    break;
+                }
+                manager_nodes += 1;
+                scanned_nodes += 1;
+                let scan_length = if depth == 1 {
+                    FIRST_HOP_SCAN_LENGTH
+                } else {
+                    SECOND_HOP_SCAN_LENGTH
+                };
+                let Some(bytes) = process.read(address, scan_length) else {
+                    continue;
+                };
+
+                for pointer in aligned_pointers(&bytes) {
+                    if score_manager_graph_target(
+                        pointer,
+                        depth,
+                        &team_addresses,
+                        &club_teams,
+                        &mut scores,
+                    ) {
+                        continue;
+                    }
+                    if depth >= 2
+                        || (pointer >= manager.staff_address && pointer < manager_end)
+                        || !pointer_in_regions(pointer, regions)
+                        || visited.len() >= MAX_GRAPH_NODES_PER_MANAGER
+                        || !visited.insert(pointer)
+                    {
+                        continue;
+                    }
+                    queue.push_back((pointer, depth + 1));
+                }
+            }
+        }
+
+        (scores, scanned_nodes)
+    }
+
+    fn aligned_pointers(bytes: &[u8]) -> impl Iterator<Item = usize> + '_ {
+        (0..bytes.len().saturating_sub(7))
+            .step_by(8)
+            .filter_map(|offset| read_u64(bytes, offset).map(|value| value as usize))
+            .filter(|pointer| *pointer >= 0x10_000)
+    }
+
+    fn pointer_in_regions(pointer: usize, regions: &[(usize, usize)]) -> bool {
+        regions.iter().any(|(base, length)| {
+            pointer >= *base && pointer < base.saturating_add(*length)
+        })
+    }
+
+    fn score_manager_graph_target(
+        pointer: usize,
+        depth: usize,
+        team_addresses: &HashSet<usize>,
+        club_teams: &HashMap<usize, Vec<usize>>,
+        scores: &mut HashMap<usize, usize>,
+    ) -> bool {
+        let team_score: usize = match depth {
+            0 => 1_000_000,
+            1 => 750_000,
+            _ => 400_000,
+        };
+        if team_addresses.contains(&pointer) {
+            keep_highest_link_score(scores, pointer, team_score);
+            return true;
+        }
+
+        let Some(teams) = club_teams.get(&pointer) else {
+            return false;
+        };
+        let club_score = team_score.saturating_sub(150_000);
+        for &team in teams {
+            keep_highest_link_score(scores, team, club_score);
+        }
+        true
     }
 
     fn team_points_to_human_manager(
@@ -1823,8 +1998,17 @@ mod windows_reader {
         };
         let label_score = if label_match { 100_000 } else { 0 };
         let squad_score = if strong_national_squad { 40_000 } else { 0 };
+        let senior_team_score = match process.read_u8(team + TEAM_TYPE) {
+            Some(0) => 30_000,
+            Some(1..=5) => 5_000,
+            _ => 0,
+        };
         let score =
-            label_score + squad_score + squad_ratio * 25 + same_nation_players.min(50) * 50;
+            label_score
+                + squad_score
+                + senior_team_score
+                + squad_ratio * 25
+                + same_nation_players.min(50) * 50;
 
         Some(ManagedTeamResolution {
             team_address: team,
