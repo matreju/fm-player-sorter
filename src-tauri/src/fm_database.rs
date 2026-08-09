@@ -91,7 +91,7 @@ fn load_fm_database_blocking() -> FmDatabaseLoadResult {
             success: true,
             stage: "database-loaded".to_string(),
             message: format!(
-                "Wczytano jednorazowo {} kandydatów do reprezentacji {} wraz z pełnymi atrybutami i danymi ukrytymi.",
+                "Wczytano jednorazowo {} zawodników z narodowej Bazy danych zawodników ({}) wraz z pełnymi atrybutami i danymi ukrytymi.",
                 database.player_count,
                 database.managed_nation.as_deref().unwrap_or("narodowej")
             ),

@@ -226,8 +226,8 @@ export function FmConnectionPanel({
                   </strong>
                   <small>
                     {processConnected
-                      ? "Odczyt tylko z pamięci procesu — bez HTML i CSV."
-                      : "Wczytaj karierę reprezentacyjną w FM26 i spróbuj ponownie."}
+                      ? "Odczyt narodowej bazy zawodników — bez HTML i CSV."
+                      : "Wczytaj zapis w FM26 i spróbuj ponownie."}
                   </small>
                 </div>
               </div>
@@ -253,7 +253,7 @@ export function FmConnectionPanel({
                 disabled={!processConnected || isLoading}
               >
                 {isLoading
-                  ? "Wczytywanie kandydatów…"
+                  ? "Wczytywanie bazy zawodników…"
                   : loadedPlayerCount > 0
                     ? "Wczytaj nowy snapshot"
                     : "Połącz i wczytaj zawodników"}

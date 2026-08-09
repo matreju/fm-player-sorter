@@ -79,10 +79,17 @@ mod windows_reader {
         },
     };
 
-    const PROFILE_NAME: &str = "FM26 26.3.x native database";
+    const PROFILE_NAME: &str = "FM26 26.3.x native national player database";
     const CHUNK_SIZE: usize = 16 * 1024 * 1024;
     const IMAGE_CHUNK_SIZE: usize = 8 * 1024 * 1024;
     const MAX_REGION_SIZE: usize = 512 * 1024 * 1024;
+    const MIN_NATIONAL_POOL_SIZE: usize = 500;
+    const MAX_PLAYER_POOL_SIZE: usize = 100_000;
+    const MIN_VIRTUALIZED_POOL_SIZE: usize = 48;
+    const MAX_WRAPPER_SAMPLE_SIZE: usize = 32;
+    const MAX_WRAPPER_GRAPH_NODES: usize = 20;
+    const MAX_WRAPPED_COLLECTION_PROBES: usize = 96;
+    const NATIONAL_POOL_PURITY_PER_MILLE: usize = 800;
     const MAX_MONITOR_DATE_CANDIDATES: usize = 2_048;
     const DOTNET_TICKS_PER_DAY: u64 = 864_000_000_000;
     const DOTNET_TICKS_MASK: u64 = (1_u64 << 62) - 1;
@@ -463,6 +470,27 @@ mod windows_reader {
     }
 
     #[derive(Debug)]
+    struct NationalPlayerPool {
+        exact_uids: Option<HashSet<u32>>,
+        nation_address: usize,
+        nation_name: String,
+        female: Option<bool>,
+        source: String,
+        declared_count: usize,
+        matched_count: usize,
+        purity_per_mille: usize,
+    }
+
+    #[derive(Debug, Default)]
+    struct PlayerPoolDiagnostics {
+        managed_array_candidates: usize,
+        native_vector_candidates: usize,
+        resolved_collections: usize,
+        wrapped_collections: usize,
+        scanned_bytes: u64,
+    }
+
+    #[derive(Debug)]
     struct PlayerRecord {
         uid: u32,
         first_name: Option<String>,
@@ -610,7 +638,6 @@ mod windows_reader {
 
         let mut player_candidates = HashMap::<u32, PlayerCandidate>::new();
         let mut club_candidates = HashSet::<usize>::new();
-        let mut human_managers = HashSet::<HumanManagerCandidate>::new();
         let mut class_offset_histogram = HashMap::<i32, u64>::new();
         let mut scanned_bytes = 0u64;
 
@@ -695,22 +722,9 @@ mod windows_reader {
                                 pa,
                             });
                         }
-                    } else if dynamic_offset == HUMAN_MANAGER_OFFSET {
-                        let offset = dynamic_offset as usize;
-                        if person_address >= offset {
-                            let staff_address = person_address - offset;
-                            // W menedżerze utworzonym przez gracza CA/PA nie jest
-                            // wiarygodnym znacznikiem. To odrzucało poprawny obiekt
-                            // HumanManager w części zapisów. Nazwa osoby i właściwy
-                            // offset klasy są stabilniejszym potwierdzeniem.
-                            if looks_like_named_person(&process, person_address) {
-                                human_managers.insert(HumanManagerCandidate {
-                                    person_address,
-                                    staff_address,
-                                });
-                            }
-                        }
-                    } else if dynamic_offset != STAFF_OFFSET {
+                    } else if dynamic_offset != STAFF_OFFSET
+                        && dynamic_offset != HUMAN_MANAGER_OFFSET
+                    {
                         if looks_like_club(&process, person_address) {
                             club_candidates.insert(person_address);
                         }
@@ -737,56 +751,54 @@ mod windows_reader {
             ));
         }
 
-        let nation_counts = player_candidates
-            .values()
-            .filter(|candidate| candidate.nation_address != 0)
-            .fold(HashMap::<usize, usize>::new(), |mut counts, candidate| {
-                *counts.entry(candidate.nation_address).or_default() += 1;
-                counts
-            });
-        let (managed, managed_diagnostics) = resolve_user_national_team(
+        let (national_pool, pool_diagnostics) = resolve_national_player_database(
             &process,
             &regions,
-            &club_candidates,
-            &human_managers,
+            &resolver,
             &player_candidates,
-            &nation_counts,
         );
-        let managed = managed.ok_or_else(|| {
+        scanned_bytes = scanned_bytes.saturating_add(pool_diagnostics.scanned_bytes);
+        let national_pool = national_pool.ok_or_else(|| {
             format!(
-                "Wykryto FM26, ale nie udało się powiązać ludzkiego menedżera z prowadzoną reprezentacją. Otwarty ekran gry nie ma znaczenia. Kod diagnostyczny: M{}/K{}/D{}/F{}/B{}/G{}/R{}.",
-                managed_diagnostics.manager_count,
-                managed_diagnostics.club_count,
-                managed_diagnostics.team_count,
-                managed_diagnostics.team_to_manager_link_count,
-                managed_diagnostics.manager_to_team_link_count,
-                managed_diagnostics.manager_graph_node_count,
-                managed_diagnostics.national_candidate_count,
+                "Wykryto FM26 i {} zawodników, ale nie znaleziono narodowej puli z Bazy danych zawodników. Jeżeli prowadzisz klub, aplikacja zgodnie z założeniem nie wczytuje tego zapisu. Kod diagnostyczny puli: A{}/V{}/R{}/W{}.",
+                player_candidates.len(),
+                pool_diagnostics.managed_array_candidates,
+                pool_diagnostics.native_vector_candidates,
+                pool_diagnostics.resolved_collections,
+                pool_diagnostics.wrapped_collections,
             )
         })?;
-        let manager_team = Some(managed.team_address);
-        let managed_team = Some(managed.team_name);
-        let managed_nation_address = managed.nation_address;
-        let managed_nation = managed.nation_name;
-        let managed_gender =
-            resolve_managed_squad_gender(&process, managed.team_address, &player_candidates);
+        let managed_team = Some("Baza danych zawodników".to_string());
+        let managed_nation_address = national_pool.nation_address;
+        let managed_nation = national_pool.nation_name.clone();
+        let managed_gender = national_pool.female;
 
-        let selected_candidates = player_candidates
-            .values()
-            .filter(|candidate| {
-                candidate.nation_address == managed_nation_address
-                    && managed_gender
-                        .map(|female| candidate.female == female)
-                        .unwrap_or(true)
-            })
-            .collect::<Vec<_>>();
+        let selected_candidates = match national_pool.exact_uids.as_ref() {
+            Some(exact_uids) => player_candidates
+                .values()
+                .filter(|candidate| exact_uids.contains(&candidate.uid))
+                .collect::<Vec<_>>(),
+            None => player_candidates
+                .values()
+                .filter(|candidate| {
+                    candidate.nation_address == managed_nation_address
+                        && managed_gender
+                            .map(|female| candidate.female == female)
+                            .unwrap_or(true)
+                })
+                .collect::<Vec<_>>(),
+        };
         if selected_candidates.is_empty() {
             return Err(format!(
-                "Rozpoznano reprezentację {managed_nation}, ale nie znaleziono żadnych uprawnionych zawodników w bazie."
+                "Rozpoznano narodową bazę {managed_nation}, ale nie udało się odczytać żadnego zawodnika."
             ));
         }
 
-        let database_player_count = player_candidates.len();
+        let database_player_count = if national_pool.exact_uids.is_some() {
+            national_pool.matched_count
+        } else {
+            selected_candidates.len()
+        };
         let derived_year = derive_game_year_from_candidates(player_candidates.values());
         let mut players = HashMap::<u32, PlayerRecord>::with_capacity(selected_candidates.len());
         let mut person_to_uid = HashMap::<usize, u32>::with_capacity(selected_candidates.len() * 2);
@@ -826,9 +838,7 @@ mod windows_reader {
             }
         }
 
-        let date_anchor = manager_team
-            .and_then(|team| read_team_date_anchor(&process, team, derived_year))
-            .or_else(|| choose_date_vote(&squad_links.date_votes, derived_year));
+        let date_anchor = choose_date_vote(&squad_links.date_votes, derived_year);
         let schedule_raw = date_anchor.as_ref().map(|anchor| anchor.raw);
         let monitor_candidates = Vec::<DateCandidate>::new();
         let game_date = None;
@@ -851,7 +861,14 @@ mod windows_reader {
 
         Ok(FmNativeDatabase {
             pid,
-            profile: PROFILE_NAME.to_string(),
+            profile: format!(
+                "{}; pool={}; declared={}; matched={}; purity={}‰",
+                PROFILE_NAME,
+                national_pool.source,
+                national_pool.declared_count,
+                national_pool.matched_count,
+                national_pool.purity_per_mille,
+            ),
             database_player_count,
             player_count: rows.len(),
             managed_team,
@@ -874,6 +891,428 @@ mod windows_reader {
             rows,
             class_offsets,
         })
+    }
+
+    fn resolve_national_player_database(
+        process: &RemoteProcess,
+        regions: &[(usize, usize)],
+        resolver: &MetaResolver,
+        candidates: &HashMap<u32, PlayerCandidate>,
+    ) -> (Option<NationalPlayerPool>, PlayerPoolDiagnostics) {
+        let mut diagnostics = PlayerPoolDiagnostics::default();
+        let mut best = None::<NationalPlayerPool>;
+        let mut reference_to_uid = HashMap::<usize, u32>::with_capacity(candidates.len() * 2);
+        for candidate in candidates.values() {
+            reference_to_uid.insert(candidate.person_address, candidate.uid);
+            reference_to_uid.insert(candidate.player_address, candidate.uid);
+        }
+
+        let mut seen_sequences = HashSet::<(usize, usize, usize)>::new();
+        let mut wrapper_cache = HashMap::<usize, Option<u32>>::new();
+        let mut wrapped_collection_probes = 0usize;
+
+        for &(region_base, region_size) in regions {
+            let mut region_offset = 0usize;
+            while region_offset < region_size {
+                let request_size = (region_size - region_offset).min(CHUNK_SIZE);
+                let chunk_address = region_base.saturating_add(region_offset);
+                let Some(buffer) = process.read(chunk_address, request_size) else {
+                    region_offset = region_offset.saturating_add(request_size);
+                    continue;
+                };
+                diagnostics.scanned_bytes = diagnostics
+                    .scanned_bytes
+                    .saturating_add(buffer.len() as u64);
+
+                let mut local = (8 - chunk_address % 8) % 8;
+                while local + 0x20 <= buffer.len() {
+                    let object_address = chunk_address.saturating_add(local);
+                    let class_pointer = read_u64(&buffer, local).unwrap_or(0) as usize;
+
+                    if resolver.is_module_pointer(class_pointer) {
+                        let array_length = read_u64(&buffer, local + 0x18)
+                            .and_then(|value| usize::try_from(value).ok())
+                            .unwrap_or(0);
+                        if (MIN_VIRTUALIZED_POOL_SIZE..=MAX_PLAYER_POOL_SIZE)
+                            .contains(&array_length)
+                        {
+                            let elements = object_address.saturating_add(0x20);
+                            if seen_sequences.insert((elements, 8, array_length)) {
+                                diagnostics.managed_array_candidates += 1;
+                                let allow_wrapped = wrapped_collection_probes
+                                    < MAX_WRAPPED_COLLECTION_PROBES;
+                                if allow_wrapped {
+                                    wrapped_collection_probes += 1;
+                                }
+                                if let Some(pool) = evaluate_pointer_sequence(
+                                    process,
+                                    regions,
+                                    elements,
+                                    array_length,
+                                    "managed-pointer-array",
+                                    allow_wrapped,
+                                    &reference_to_uid,
+                                    candidates,
+                                    &mut wrapper_cache,
+                                ) {
+                                    diagnostics.resolved_collections += 1;
+                                    if pool.source.contains("wrapped") {
+                                        diagnostics.wrapped_collections += 1;
+                                    }
+                                    keep_better_pool(&mut best, pool);
+                                }
+                            }
+                            if seen_sequences.insert((elements, 4, array_length)) {
+                                if let Some(pool) = evaluate_uid_sequence(
+                                    process,
+                                    elements,
+                                    array_length,
+                                    "managed-uid-array",
+                                    candidates,
+                                ) {
+                                    diagnostics.resolved_collections += 1;
+                                    keep_better_pool(&mut best, pool);
+                                }
+                            }
+                        }
+                    }
+
+                    let begin = read_u64(&buffer, local).unwrap_or(0) as usize;
+                    let end = read_u64(&buffer, local + 8).unwrap_or(0) as usize;
+                    let capacity = read_u64(&buffer, local + 16).unwrap_or(0) as usize;
+                    if begin >= 0x10_000
+                        && end > begin
+                        && capacity >= end
+                        && pointer_in_regions(begin, regions)
+                        && pointer_in_regions(end.saturating_sub(1), regions)
+                    {
+                        let byte_length = end - begin;
+                        let capacity_bytes = capacity - begin;
+                        if capacity_bytes <= byte_length.saturating_mul(4).saturating_add(4096) {
+                            if byte_length % 8 == 0 {
+                                let count = byte_length / 8;
+                                if (MIN_VIRTUALIZED_POOL_SIZE..=MAX_PLAYER_POOL_SIZE)
+                                    .contains(&count)
+                                    && seen_sequences.insert((begin, 8, count))
+                                {
+                                    diagnostics.native_vector_candidates += 1;
+                                    let allow_wrapped = wrapped_collection_probes
+                                        < MAX_WRAPPED_COLLECTION_PROBES;
+                                    if allow_wrapped {
+                                        wrapped_collection_probes += 1;
+                                    }
+                                    if let Some(pool) = evaluate_pointer_sequence(
+                                        process,
+                                        regions,
+                                        begin,
+                                        count,
+                                        "native-pointer-vector",
+                                        allow_wrapped,
+                                        &reference_to_uid,
+                                        candidates,
+                                        &mut wrapper_cache,
+                                    ) {
+                                        diagnostics.resolved_collections += 1;
+                                        if pool.source.contains("wrapped") {
+                                            diagnostics.wrapped_collections += 1;
+                                        }
+                                        keep_better_pool(&mut best, pool);
+                                    }
+                                }
+                            }
+                            if byte_length % 4 == 0 {
+                                let count = byte_length / 4;
+                                if (MIN_VIRTUALIZED_POOL_SIZE..=MAX_PLAYER_POOL_SIZE)
+                                    .contains(&count)
+                                    && seen_sequences.insert((begin, 4, count))
+                                {
+                                    diagnostics.native_vector_candidates += 1;
+                                    if let Some(pool) = evaluate_uid_sequence(
+                                        process,
+                                        begin,
+                                        count,
+                                        "native-uid-vector",
+                                        candidates,
+                                    ) {
+                                        diagnostics.resolved_collections += 1;
+                                        keep_better_pool(&mut best, pool);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    local += 8;
+                }
+                region_offset = region_offset.saturating_add(request_size);
+            }
+        }
+
+        (best, diagnostics)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn evaluate_pointer_sequence(
+        process: &RemoteProcess,
+        regions: &[(usize, usize)],
+        elements: usize,
+        count: usize,
+        source: &str,
+        allow_wrapped: bool,
+        reference_to_uid: &HashMap<usize, u32>,
+        candidates: &HashMap<u32, PlayerCandidate>,
+        wrapper_cache: &mut HashMap<usize, Option<u32>>,
+    ) -> Option<NationalPlayerPool> {
+        let bytes = process.read_exact(elements, count.checked_mul(8)?)?;
+        let pointers = (0..count)
+            .filter_map(|index| read_u64(&bytes, index * 8).map(|value| value as usize))
+            .collect::<Vec<_>>();
+        let direct_uids = pointers
+            .iter()
+            .filter_map(|pointer| reference_to_uid.get(pointer).copied())
+            .collect::<Vec<_>>();
+
+        if let Some(pool) = build_national_pool(
+            process,
+            candidates,
+            direct_uids,
+            count,
+            source,
+            true,
+        ) {
+            return Some(pool);
+        }
+
+        if !allow_wrapped {
+            return None;
+        }
+        let plausible_roots = pointers
+            .iter()
+            .filter(|pointer| **pointer >= 0x10_000 && pointer_in_regions(**pointer, regions))
+            .count();
+        if plausible_roots * 4 < count.saturating_mul(3) {
+            return None;
+        }
+
+        let sample_size = count.min(MAX_WRAPPER_SAMPLE_SIZE);
+        let mut wrapped_uids = Vec::<u32>::new();
+        for sample_index in 0..sample_size {
+            let index = if sample_size <= 1 {
+                0
+            } else {
+                sample_index.saturating_mul(count.saturating_sub(1)) / (sample_size - 1)
+            };
+            let Some(root) = pointers.get(index).copied().filter(|value| *value != 0) else {
+                continue;
+            };
+            if let Some(uid) = resolve_wrapped_player_uid(
+                process,
+                regions,
+                root,
+                reference_to_uid,
+                candidates,
+                wrapper_cache,
+            ) {
+                wrapped_uids.push(uid);
+            }
+        }
+        if wrapped_uids.len() * 2 < sample_size || wrapped_uids.len() < 12 {
+            return None;
+        }
+
+        build_national_pool(
+            process,
+            candidates,
+            wrapped_uids,
+            count,
+            &format!("{source}-wrapped"),
+            false,
+        )
+    }
+
+    fn evaluate_uid_sequence(
+        process: &RemoteProcess,
+        elements: usize,
+        count: usize,
+        source: &str,
+        candidates: &HashMap<u32, PlayerCandidate>,
+    ) -> Option<NationalPlayerPool> {
+        let bytes = process.read_exact(elements, count.checked_mul(4)?)?;
+        let uids = (0..count)
+            .filter_map(|index| read_u32(&bytes, index * 4))
+            .filter(|uid| candidates.contains_key(uid))
+            .collect::<Vec<_>>();
+        build_national_pool(process, candidates, uids, count, source, true)
+    }
+
+    fn build_national_pool(
+        process: &RemoteProcess,
+        candidates: &HashMap<u32, PlayerCandidate>,
+        uids: Vec<u32>,
+        declared_count: usize,
+        source: &str,
+        exact_source: bool,
+    ) -> Option<NationalPlayerPool> {
+        let unique_uids = uids.into_iter().collect::<HashSet<_>>();
+        let matched_count = unique_uids.len();
+        let exact_membership = exact_source
+            && declared_count >= MIN_NATIONAL_POOL_SIZE
+            && matched_count * 1_000 >= declared_count * 700;
+        if exact_source && declared_count >= MIN_NATIONAL_POOL_SIZE && !exact_membership {
+            return None;
+        }
+        if !exact_membership && matched_count < 12 {
+            return None;
+        }
+
+        let mut nation_counts = HashMap::<usize, usize>::new();
+        for uid in &unique_uids {
+            let Some(candidate) = candidates.get(uid) else {
+                continue;
+            };
+            if candidate.nation_address != 0 {
+                *nation_counts.entry(candidate.nation_address).or_default() += 1;
+            }
+        }
+        let (nation_address, dominant_count) = nation_counts
+            .into_iter()
+            .max_by_key(|(_, count)| *count)?;
+        let purity_per_mille = dominant_count * 1_000 / matched_count.max(1);
+        if purity_per_mille < NATIONAL_POOL_PURITY_PER_MILLE {
+            return None;
+        }
+        let nation_name = nation_name(process, nation_address)?;
+
+        let mut women = 0usize;
+        let mut men = 0usize;
+        for uid in &unique_uids {
+            let Some(candidate) = candidates.get(uid) else {
+                continue;
+            };
+            if candidate.nation_address != nation_address {
+                continue;
+            }
+            if candidate.female {
+                women += 1;
+            } else {
+                men += 1;
+            }
+        }
+        let gender_total = women + men;
+        let female = if gender_total == 0 {
+            None
+        } else if women * 1_000 >= gender_total * NATIONAL_POOL_PURITY_PER_MILLE {
+            Some(true)
+        } else if men * 1_000 >= gender_total * NATIONAL_POOL_PURITY_PER_MILLE {
+            Some(false)
+        } else {
+            None
+        };
+
+        Some(NationalPlayerPool {
+            exact_uids: exact_membership.then_some(unique_uids),
+            nation_address,
+            nation_name,
+            female,
+            source: source.to_string(),
+            declared_count,
+            matched_count,
+            purity_per_mille,
+        })
+    }
+
+    fn resolve_wrapped_player_uid(
+        process: &RemoteProcess,
+        regions: &[(usize, usize)],
+        root: usize,
+        reference_to_uid: &HashMap<usize, u32>,
+        candidates: &HashMap<u32, PlayerCandidate>,
+        cache: &mut HashMap<usize, Option<u32>>,
+    ) -> Option<u32> {
+        if let Some(cached) = cache.get(&root) {
+            return *cached;
+        }
+        if let Some(uid) = reference_to_uid.get(&root).copied() {
+            cache.insert(root, Some(uid));
+            return Some(uid);
+        }
+
+        let mut queue = VecDeque::<(usize, usize)>::from([(root, 0)]);
+        let mut visited = HashSet::<usize>::from([root]);
+        let mut result = None;
+
+        while let Some((address, depth)) = queue.pop_front() {
+            if visited.len() > MAX_WRAPPER_GRAPH_NODES {
+                break;
+            }
+            let Some(bytes) = process.read(address, 0x100) else {
+                continue;
+            };
+
+            for offset in (0..bytes.len().saturating_sub(7)).step_by(8) {
+                let Some(pointer) = read_u64(&bytes, offset).map(|value| value as usize) else {
+                    continue;
+                };
+                if let Some(uid) = reference_to_uid.get(&pointer).copied() {
+                    result = Some(uid);
+                    break;
+                }
+            }
+            if result.is_some() {
+                break;
+            }
+            for offset in (0..bytes.len().saturating_sub(3)).step_by(4) {
+                let Some(uid) = read_u32(&bytes, offset) else {
+                    continue;
+                };
+                if candidates.contains_key(&uid) {
+                    result = Some(uid);
+                    break;
+                }
+            }
+            if result.is_some() {
+                break;
+            }
+            if depth >= 2 {
+                continue;
+            }
+
+            for offset in (0..bytes.len().saturating_sub(7)).step_by(8) {
+                let Some(pointer) = read_u64(&bytes, offset).map(|value| value as usize) else {
+                    continue;
+                };
+                if pointer >= 0x10_000
+                    && pointer_in_regions(pointer, regions)
+                    && visited.insert(pointer)
+                    && visited.len() <= MAX_WRAPPER_GRAPH_NODES
+                {
+                    queue.push_back((pointer, depth + 1));
+                }
+            }
+        }
+
+        cache.insert(root, result);
+        result
+    }
+
+    fn keep_better_pool(best: &mut Option<NationalPlayerPool>, candidate: NationalPlayerPool) {
+        let candidate_rank = pool_rank(&candidate);
+        let should_replace = best
+            .as_ref()
+            .map(|current| candidate_rank > pool_rank(current))
+            .unwrap_or(true);
+        if should_replace {
+            *best = Some(candidate);
+        }
+    }
+
+    fn pool_rank(pool: &NationalPlayerPool) -> (usize, usize, usize, usize) {
+        (
+            pool.declared_count,
+            if pool.exact_uids.is_some() { 1 } else { 0 },
+            pool.matched_count,
+            pool.purity_per_mille,
+        )
     }
 
     fn read_player(

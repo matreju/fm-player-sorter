@@ -9,8 +9,12 @@
    metadanych vtable.
 5. Rozpoznanie klas `Player` (`0x288`) i `Player/Staff` (`0x380`).
 6. Walidacja UID oraz zakresów CA/PA przed odczytem rekordu.
-7. Powiązanie zawodników z klubami przez listy zespołów i kontrakty.
-8. Zbudowanie jednego niezmiennego snapshotu dla frontendu.
+7. Drugi, tylko do odczytu przebieg wykrywający tablice i wektory rekordów
+   narodowej **Bazy danych zawodników**.
+8. Walidacja liczebności puli, udziału rozpoznanych UID oraz dominującej
+   narodowości; duża mieszana pula klubowa jest odrzucana.
+9. Powiązanie wybranych zawodników z klubami przez listy zespołów i kontrakty.
+10. Zbudowanie jednego niezmiennego snapshotu dla frontendu.
 
 Skan nie zapisuje adresów ani wartości do procesu FM.
 
@@ -44,17 +48,12 @@ skali 1–20.
 - nieczytelny region lub wskaźnik jest pomijany;
 - rekord wymaga niezerowego UID oraz CA i PA w zakresie 1–200;
 - wynik poniżej 500 zawodników jest odrzucany w całości;
+- pełna pula wymaga co najmniej 70% rozpoznanych UID, a profil narodowy co
+  najmniej 80% jednej narodowości;
 - profil nie zwraca częściowego snapshotu po błędzie walidacji.
 
 ## Data gry
 
 Pole `[team + 0xA0] + 0x94` (alternatywnie `+0x18`) jest terminem meczu, a nie
-centralnym zegarem świata. Służy jedynie jako wewnętrzne przybliżenie przy braku
-daty użytkownika i nie jest pokazywane jako bieżąca data gry.
-
-Przed importem użytkownik podaje dokładną datę z ekranu FM. Ten sam pełny skan
-wyszukuje jej reprezentację jako pakowaną datę FM oraz `.NET DateTime` w modułach
-i prywatnych regionach pamięci. Zapamiętywanych jest maksymalnie 2048 najlepiej
-ocenionych adresów, z pierwszeństwem dla pól statycznych modułów i obiektów z
-wiarygodnym vtable. Późniejsze kontrole czytają wyłącznie te adresy i głosują nad
-zmianą dnia; lista zawodników nie jest skanowana ponownie.
+centralnym zegarem świata. Służy wyłącznie jako wewnętrzne przybliżenie wieku i
+nie jest pokazywane jako bieżąca data gry. Użytkownik nie podaje daty ręcznie.

@@ -11,18 +11,19 @@ Football Managera 26 i dalszej analizy bez eksportu HTML/CSV.
    przepisywać daty.
 
 Pełny skan pamięci jest wykonywany tylko po kliknięciu przycisku. Aplikacja
-wiąże pełny obiekt ludzkiego menedżera z aktywną drużyną w obu kierunkach,
-również przez kontrakt i listę zatrudnień, wybiera prowadzoną reprezentację,
-odrzuca zawodników innej narodowości jeszcze przed kosztownym odczytem pełnych
-rekordów i zapisuje gotowy snapshot kadry w lokalnej bazie IndexedDB. Odczyt
-nie zależy od aktualnie otwartej zakładki FM26.
+odnajduje dużą kolekcję rekordów należącą do narodowej **Bazy danych
+zawodników**, weryfikuje jej liczebność i profil narodowościowy, a następnie
+odczytuje pełne rekordy dokładnie tej puli. Nie zgaduje już prowadzonej drużyny
+na podstawie wskaźnika menedżera. Zapis klubowy z mieszaną bazą jest odrzucany.
+Gotowy snapshot trafia do lokalnej bazy IndexedDB. Odczyt nie zależy od
+aktualnie otwartej zakładki FM26.
 
 Czytnik otwiera `fm.exe` wyłącznie z prawami `PROCESS_VM_READ` i
 `PROCESS_QUERY_INFORMATION`. Nie wstrzykuje DLL, nie wymaga BepInEx i nie zapisuje
 niczego w pamięci gry.
 
-Aktualny profil obejmuje FM26 26.3.x i dla kandydatów do prowadzonej
-reprezentacji zwraca między innymi:
+Aktualny profil obejmuje FM26 26.3.x i dla zawodników z narodowej bazy zwraca
+między innymi:
 
 - UID, imię, nazwisko, płeć, narodowość, datę urodzenia i wiek;
 - klub, klub macierzysty, ligę, zespół i wszystkie pozycje;
@@ -42,7 +43,7 @@ może wskazywać termin meczu zamiast aktualnego dnia.
 
 ## Aktualizacje
 
-Wersja 0.4.2 korzysta z updatera Tauri i podpisanych plików GitHub
+Wersja 0.4.3 korzysta z updatera Tauri i podpisanych plików GitHub
 Releases. W górnym pasku można sprawdzić wersję i zainstalować nowsze wydanie
 bez ręcznego odinstalowywania aplikacji.
 
