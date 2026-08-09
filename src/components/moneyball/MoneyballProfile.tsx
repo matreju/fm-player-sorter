@@ -584,7 +584,7 @@ useEffect(() => {
       <div>
         <h3 style={styles.playerDuelTitle}>Porównanie Moneyball H2H</h3>
         <div style={styles.playerDuelSubtitle}>
-          Porównaj aktualnego zawodnika z konkretnym piłkarzem z importu
+          Porównaj aktualnego zawodnika z konkretnym piłkarzem z kadry
         </div>
       </div>
 

@@ -41,17 +41,26 @@ pub fn detect_football_manager() -> FmProcessStatus {
      * Nie wybieramy żadnych launcherów, crash reporterów,
      * helperów ani innych plików z folderu Football Managera.
      */
-    for process in system.processes().values() {
+    if let Some(process) = system
+        .processes()
+        .values()
+        .filter(|process| {
+            is_known_fm_process_name(&process.name().to_string_lossy().to_ascii_lowercase())
+        })
+        .max_by_key(|process| {
+            let is_game_path = process
+                .exe()
+                .map(|path| {
+                    path.to_string_lossy()
+                        .to_ascii_lowercase()
+                        .contains("football manager")
+                })
+                .unwrap_or(false);
+            (is_game_path, process.memory())
+        })
+    {
         let process_name = process.name().to_string_lossy().to_string();
-
-        let normalized_name = process_name.to_ascii_lowercase();
-
-        if !is_known_fm_process_name(&normalized_name) {
-            continue;
-        }
-
         let executable_path = process.exe().map(|path| path.to_string_lossy().to_string());
-
         return FmProcessStatus {
             detected: true,
             pid: Some(process.pid().as_u32()),
@@ -67,26 +76,28 @@ pub fn detect_football_manager() -> FmProcessStatus {
      * Ścieżka musi prowadzić do znanego pliku FM,
      * a nie do dowolnego programu w folderze gry.
      */
-    for process in system.processes().values() {
-        let Some(executable) = process.exe() else {
-            continue;
-        };
-
-        let normalized_path = executable.to_string_lossy().to_ascii_lowercase();
-
-        let executable_name = executable
-            .file_name()
-            .map(|name| name.to_string_lossy().to_ascii_lowercase());
-
-        let matched_executable = executable_name
-            .as_deref()
-            .map(is_known_fm_process_name)
-            .unwrap_or(false);
-
-        if !matched_executable || !normalized_path.contains("football manager") {
-            continue;
-        }
-
+    if let Some(process) = system
+        .processes()
+        .values()
+        .filter(|process| {
+            let Some(executable) = process.exe() else {
+                return false;
+            };
+            let normalized_path = executable.to_string_lossy().to_ascii_lowercase();
+            let executable_name = executable
+                .file_name()
+                .map(|name| name.to_string_lossy().to_ascii_lowercase());
+            executable_name
+                .as_deref()
+                .map(is_known_fm_process_name)
+                .unwrap_or(false)
+                && normalized_path.contains("football manager")
+        })
+        .max_by_key(|process| process.memory())
+    {
+        let executable = process
+            .exe()
+            .expect("proces został wcześniej odfiltrowany po ścieżce");
         let process_name = process.name().to_string_lossy().to_string();
 
         return FmProcessStatus {

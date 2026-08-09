@@ -4,10 +4,18 @@ mod fm_memory;
 mod fm_modules;
 mod fm_process;
 mod fm_profile;
+mod fm_reader;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
+        .setup(|app| {
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             fm_process::detect_football_manager,
             fm_memory::probe_fm_memory,
@@ -15,6 +23,7 @@ pub fn run() {
             fm_modules::inspect_fm_modules,
             fm_profile::inspect_fm_reader_profile,
             fm_database::load_fm_database,
+            fm_database::get_fm_date_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running FM Player Sorter");

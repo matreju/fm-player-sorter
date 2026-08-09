@@ -1,0 +1,57 @@
+name: Publish Windows release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/fm26-native-reader
+    paths:
+      - ".github/release-trigger"
+
+concurrency:
+  group: fm-player-sorter-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Verify updater signing key
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw "Brakuje sekretu Actions TAURI_SIGNING_PRIVATE_KEY. Dodaj prywatny klucz aktualizatora w Settings > Secrets and variables > Actions."
+          }
+
+      - name: Build, sign and publish installer
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: app-v__VERSION__
+          releaseName: FM Player Sorter v__VERSION__
+          releaseBody: |
+            Instalator Windows i pliki automatycznej aktualizacji FM Player Sorter.
+          releaseDraft: false
+          prerelease: false
+          updaterJsonPreferNsis: true
+          args: --bundles nsis --config src-tauri/tauri.release.conf.json

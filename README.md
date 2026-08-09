@@ -1,73 +1,79 @@
-# React + TypeScript + Vite
+# FM Player Sorter
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Desktopowa aplikacja Tauri do jednorazowego wczytywania zawodników z uruchomionego
+Football Managera 26 i dalszej analizy bez eksportu HTML/CSV.
 
-Currently, two official plugins are available:
+## Odczyt z FM26
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. Uruchom FM26 na Windows i wczytaj karierę.
+2. Uruchom desktopową wersję FM Player Sorter.
+3. Kliknij **Połącz z grą**. Nie trzeba otwierać konkretnego ekranu ani
+   przepisywać daty.
 
-## React Compiler
+Pełny skan pamięci jest wykonywany tylko po kliknięciu przycisku. Aplikacja
+odczytuje globalne powiązanie `humanTeam`, sprawdza stan `NationManager`, mapuje
+dokładny UID prowadzonej reprezentacji na rekord `Team`, a następnie odczytuje
+wszystkich zawodników właściwej narodowości. Zapis, w którym użytkownik prowadzi
+wyłącznie klub, jest odrzucany. Gotowy snapshot trafia do lokalnej bazy
+IndexedDB. Odczyt nie zależy od aktualnie otwartej zakładki FM26.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Czytnik otwiera `fm.exe` wyłącznie z prawami `PROCESS_VM_READ` i
+`PROCESS_QUERY_INFORMATION`. Nie wstrzykuje DLL, nie wymaga BepInEx i nie zapisuje
+niczego w pamięci gry.
 
-## Expanding the ESLint configuration
+Aktualny profil obejmuje FM26 26.3.x i dla zawodników prowadzonej reprezentacji zwraca
+między innymi:
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- UID, imię, nazwisko, płeć, narodowość, datę urodzenia i wiek;
+- klub, klub macierzysty, ligę, zespół i wszystkie pozycje;
+- OU, PA, reputację, kondycję, morale, wzrost i obie nogi;
+- 47 atrybutów piłkarskich i bramkarskich;
+- 5 ukrytych atrybutów piłkarza oraz 8 ukrytych cech osobowości;
+- wartość, cenę wywoławczą, pensję, datę końca kontraktu, numer
+  w składzie i status transferowy.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+Wynik jest akceptowany dopiero po walidacji UID oraz CA/PA i znalezieniu co
+najmniej 500 spójnych rekordów. Po niezgodnej aktualizacji FM aplikacja zwraca
+błąd profilu zamiast pokazywać częściowe lub losowe dane.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+Data terminarza drużyny jest używana wyłącznie wewnętrznie do przybliżonego
+obliczenia wieku. Nie jest prezentowana jako bieżąca data świata gry, ponieważ
+może wskazywać termin meczu zamiast aktualnego dnia.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Aktualizacje
+
+Wersja 0.4.5 korzysta z updatera Tauri i podpisanych plików GitHub
+Releases. W górnym pasku można sprawdzić wersję i zainstalować nowsze wydanie
+bez ręcznego odinstalowywania aplikacji.
+
+Workflow `.github/workflows/release.yml` publikuje wydanie, instalator NSIS,
+podpis i publiczny `latest.json`. Repozytorium musi zawierać sekret Actions
+`TAURI_SIGNING_PRIVATE_KEY` odpowiadający kluczowi publicznemu z
+`src-tauri/tauri.conf.json`.
+
+## Uruchomienie deweloperskie
+
+Wymagane są Node.js, Rust oraz Windows:
+
+```powershell
+npm ci
+npm run tauri dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Kontrole projektu:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```powershell
+npm run build
+cargo check --manifest-path src-tauri/Cargo.toml --locked
 ```
+
+## Profil pamięci
+
+Opis algorytmu, pól i zasad walidacji znajduje się w
+[`docs/fm26-memory-profile.md`](docs/fm26-memory-profile.md).
+
+Układ pamięci został zweryfikowany z publicznymi projektami
+[FMSuperScout](https://github.com/mavarobli/FMSuperScout),
+[FMScoutFramework](https://github.com/ThanosSiopoudis/FMScoutFramework) i
+[FM Explorer](https://github.com/robeady/fm-explorer). Implementacja czytnika w
+tym repozytorium jest zewnętrzna, tylko do odczytu i napisana niezależnie w Rust.

@@ -440,7 +440,7 @@ if (reliability.level === "very-low") {
     text:
       reliability.scope === "fixed"
         ? "Mała próba minut — traktuj liczby ostrożnie."
-        : "Mała próba względem ligi/importu — traktuj liczby ostrożnie.",
+        : "Mała próba względem ligi/kadry — traktuj liczby ostrożnie.",
   });
 } else if (reliability.level === "medium") {
   insights.push({
@@ -448,7 +448,7 @@ if (reliability.level === "very-low") {
     text:
       reliability.scope === "fixed"
         ? "Średnia próba minut — dane są użyteczne, ale jeszcze nie pełne."
-        : "Umiarkowana próba względem ligi/importu — dane są użyteczne, ale nie pełne.",
+        : "Umiarkowana próba względem ligi/kadry — dane są użyteczne, ale nie pełne.",
   });
 } else {
   insights.push({
@@ -456,7 +456,7 @@ if (reliability.level === "very-low") {
     text:
       reliability.scope === "fixed"
         ? "Dobra próba minut — statystyki są dość wiarygodne."
-        : "Dobra próba względem ligi/importu — statystyki są dość wiarygodne.",
+        : "Dobra próba względem ligi/kadry — statystyki są dość wiarygodne.",
   });
 }
 

@@ -63,6 +63,13 @@ appShell: {
   alignItems: "start",
 },
 
+rightColumn: {
+  display: "grid",
+  minWidth: 0,
+  gap: 12,
+  alignContent: "start",
+},
+
 leftSidebar: {
   position: "sticky",
   top: 12,
@@ -105,6 +112,37 @@ workspaceTop: {
 
 tableArea: {
   marginTop: 6,
+},
+
+tablePagination: {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+  padding: "8px 10px",
+  border: `1px solid ${colors.border}`,
+  borderBottom: "none",
+  borderRadius: `${radii.lg}px ${radii.lg}px 0 0`,
+  background: colors.panelSoft,
+  color: colors.textSoft,
+},
+
+tablePaginationActions: {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+},
+
+tablePaginationButton: {
+  minHeight: 28,
+  padding: "4px 9px",
+  border: `1px solid ${colors.borderStrong}`,
+  borderRadius: radii.sm,
+  background: colors.panelStrong,
+  color: colors.text,
+  font: "inherit",
+  fontWeight: 800,
+  cursor: "pointer",
 },
   header: {
     marginBottom: 20,
@@ -208,7 +246,7 @@ tableWrapper: {
   maxHeight: "calc(100vh - 192px)",
   overflow: "auto",
   border: `1px solid ${colors.border}`,
-  borderRadius: radii.lg,
+  borderRadius: `0 0 ${radii.lg}px ${radii.lg}px`,
   background: colors.table,
   boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
 },

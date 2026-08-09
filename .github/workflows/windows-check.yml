@@ -1,0 +1,40 @@
+name: Windows desktop checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - feat/tauri-desktop
+      - "agent/**"
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Check Windows backend
+        run: cargo check --manifest-path src-tauri/Cargo.toml --locked
+
+      - name: Build Windows installer
+        run: npm run tauri build -- --bundles nsis
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: fm-player-sorter-windows
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
