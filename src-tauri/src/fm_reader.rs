@@ -56,7 +56,7 @@ mod windows_reader {
         time::Instant,
     };
 
-    use memchr::memchr_iter;
+    use memchr::{memchr_iter, memmem};
 
     use windows::Win32::{
         Foundation::{CloseHandle, HANDLE},
@@ -136,6 +136,43 @@ mod windows_reader {
     const SCHEDULE_DATE: [usize; 2] = [0x94, 0x18];
     const COMPETITION_NAME: usize = 0x40;
     const COMPETITION_SHORT_NAME: usize = 0x48;
+
+    // FM26 26.3.2 IL2CPP layout (Cpp2IL profile for the supported build).
+    // BindingSubsystem derives directly from Bindings, so these offsets are
+    // relative to the managed BindingSubsystem object.
+    const BINDINGS_ROOT: usize = 0x40;
+    const BINDINGS_NODES: usize = 0x48;
+    const BINDINGS_DATA: usize = 0x78;
+    const BINDING_NODE_BINDINGS: usize = 0x10;
+    const BINDING_NODE_NAME: usize = 0x18;
+    const BINDING_NODE_FIRST_CHILD: usize = 0x28;
+    const BINDING_NODE_NEXT_SIBLING: usize = 0x30;
+    const BINDING_NODE_DATA_KEY: usize = 0x70;
+    const BINDING_DATA_VALUE: usize = 0x30;
+    const MANAGED_LIST_ITEMS: usize = 0x10;
+    const MANAGED_LIST_SIZE: usize = 0x18;
+    const MANAGED_ARRAY_LENGTH: usize = 0x18;
+    const MANAGED_ARRAY_DATA: usize = 0x20;
+    const TYPED_VALUE_VALUE: usize = 0x18;
+    const MANAGED_DICTIONARY_ENTRIES: usize = 0x18;
+    const MANAGED_DICTIONARY_COUNT: usize = 0x20;
+    const DICTIONARY_ENTRY_SIZE: usize = 0x18;
+    const DYNAMIC_REFERENCE_UID_PROPERTY: u32 = 1;
+    const MAX_BINDING_NODES: usize = 16_384;
+    const HUMAN_CONTEXT_SCAN_TAIL: usize = 0x5C8;
+
+    const HUMAN_JOB_NATION_MANAGER: u32 = 1;
+    const HUMAN_JOB_CLUB_MANAGER: u32 = 2;
+    const HUMAN_JOB_UNEMPLOYED: u32 = 4;
+
+    // Known UI owners of BindingSubsystem + CurrentHumanJobState in FM.UI.
+    // Multiple layouts are intentionally sampled; agreement between instances
+    // is evidence that the binding belongs to the active game world.
+    const HUMAN_CONTEXT_LAYOUTS: [(usize, usize); 3] = [
+        (0x208, 0x230), // GameWorldTabsAndBookmarksModule
+        (0x90, 0x74),  // FM.UI.IGEModule
+        (0x5B0, 0x5C0), // FM.UI.TileSearchPanel
+    ];
 
     const PLAYER_ATTRIBUTE_FIELDS: [(&str, usize); 47] = [
         ("Dośrodkowania", 0x00),
@@ -531,6 +568,39 @@ mod windows_reader {
         staff_address: usize,
     }
 
+    #[derive(Clone, Copy, Debug)]
+    struct UidObjectCandidate {
+        uid: u32,
+        address: usize,
+        dynamic_offset: usize,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    struct HumanContextCandidate {
+        object_address: usize,
+        binding_address: usize,
+        job_state: u32,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct HumanBindingResolution {
+        human_team_uid: u32,
+        nation_manager_evidence: usize,
+    }
+
+    #[derive(Debug, Default)]
+    struct HumanBindingDiagnostics {
+        context_candidate_count: usize,
+        binding_candidate_count: usize,
+        validated_binding_count: usize,
+        human_team_node_count: usize,
+        decoded_uid_count: usize,
+        nation_manager_context_count: usize,
+        other_job_context_count: usize,
+        uid_object_match_count: usize,
+        national_resolution_count: usize,
+    }
+
     #[derive(Debug, Default)]
     struct ManagedTeamDiagnostics {
         manager_count: usize,
@@ -626,6 +696,9 @@ mod windows_reader {
         let mut player_candidates = HashMap::<u32, PlayerCandidate>::new();
         let mut club_candidates = HashSet::<usize>::new();
         let mut human_managers = HashSet::<HumanManagerCandidate>::new();
+        let mut uid_objects = Vec::<UidObjectCandidate>::new();
+        let mut binding_candidates = HashSet::<usize>::new();
+        let mut human_context_candidates = HashSet::<HumanContextCandidate>::new();
         let mut class_offset_histogram = HashMap::<i32, u64>::new();
         let mut scanned_bytes = 0u64;
 
@@ -634,14 +707,27 @@ mod windows_reader {
             while region_offset < region_size {
                 let request_size = (region_size - region_offset).min(CHUNK_SIZE);
                 let chunk_address = region_base.saturating_add(region_offset);
-                let Some(buffer) = process.read(chunk_address, request_size) else {
+                let read_size = (region_size - region_offset)
+                    .min(request_size.saturating_add(HUMAN_CONTEXT_SCAN_TAIL));
+                let Some(buffer) = process.read(chunk_address, read_size) else {
                     region_offset = region_offset.saturating_add(request_size);
                     continue;
                 };
-                scanned_bytes = scanned_bytes.saturating_add(buffer.len() as u64);
+                let scan_size = request_size.min(buffer.len());
+                scanned_bytes = scanned_bytes.saturating_add(scan_size as u64);
+
+                collect_human_context_candidates(
+                    &buffer,
+                    scan_size,
+                    chunk_address,
+                    &regions,
+                    &resolver,
+                    &mut binding_candidates,
+                    &mut human_context_candidates,
+                );
 
                 let mut local = (8 - chunk_address % 8) % 8;
-                while local + 0x10 <= buffer.len() {
+                while local + 0x10 <= scan_size {
                     let Some(vtable) = read_u64(&buffer, local).map(|value| value as usize) else {
                         local += 8;
                         continue;
@@ -654,14 +740,33 @@ mod windows_reader {
                         continue;
                     }
 
-                    let Some(dynamic_offset) = resolver.dynamic_offset(vtable) else {
-                        local += 8;
-                        continue;
-                    };
+                    collect_human_binding_candidate(
+                        &buffer,
+                        local,
+                        chunk_address,
+                        &regions,
+                        &mut binding_candidates,
+                    );
+
                     let person_address = chunk_address.saturating_add(local);
                     let uid = read_u32(&buffer, local + OBJ_UID)
                         .or_else(|| process.read_u32(person_address + OBJ_UID))
                         .unwrap_or(0);
+                    let dynamic_offset = resolver.dynamic_offset(vtable);
+                    if uid != 0 && uid != u32::MAX {
+                        uid_objects.push(UidObjectCandidate {
+                            uid,
+                            address: person_address,
+                            dynamic_offset: dynamic_offset
+                                .map(|offset| offset as usize)
+                                .unwrap_or(0),
+                        });
+                    }
+
+                    let Some(dynamic_offset) = dynamic_offset else {
+                        local += 8;
+                        continue;
+                    };
                     if uid == 0 || uid == u32::MAX {
                         local += 8;
                         continue;
@@ -755,24 +860,36 @@ mod windows_reader {
                 *counts.entry(candidate.nation_address).or_default() += 1;
                 counts
             });
-        let (managed, managed_diagnostics) = resolve_user_national_team(
+        let (human_binding, mut binding_diagnostics) = resolve_human_team_binding(
             &process,
             &regions,
-            &club_candidates,
-            &human_managers,
-            &player_candidates,
-            &nation_counts,
+            &binding_candidates,
+            &human_context_candidates,
         );
+        let managed = human_binding.and_then(|binding| {
+            resolve_bound_national_team(
+                &process,
+                binding,
+                &uid_objects,
+                &club_candidates,
+                &player_candidates,
+                &nation_counts,
+                &mut binding_diagnostics,
+            )
+        });
         let managed = managed.ok_or_else(|| {
             format!(
-                "Wykryto FM26, ale nie udało się jednoznacznie powiązać ludzkiego menedżera z prowadzoną reprezentacją. Jeżeli prowadzisz klub, aplikacja celowo nie wczytuje zawodników. Kod diagnostyczny: M{}/K{}/D{}/F{}/B{}/G{}/R{}.",
-                managed_diagnostics.manager_count,
-                managed_diagnostics.club_count,
-                managed_diagnostics.team_count,
-                managed_diagnostics.team_to_manager_link_count,
-                managed_diagnostics.manager_to_team_link_count,
-                managed_diagnostics.manager_graph_node_count,
-                managed_diagnostics.national_candidate_count,
+                "Wykryto FM26, ale nie udało się odczytać aktywnej reprezentacji z globalnego powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/U{}/J{}/X{}/O{}/R{}/M{}.",
+                binding_diagnostics.context_candidate_count,
+                binding_diagnostics.binding_candidate_count,
+                binding_diagnostics.validated_binding_count,
+                binding_diagnostics.human_team_node_count,
+                binding_diagnostics.decoded_uid_count,
+                binding_diagnostics.nation_manager_context_count,
+                binding_diagnostics.other_job_context_count,
+                binding_diagnostics.uid_object_match_count,
+                binding_diagnostics.national_resolution_count,
+                human_managers.len(),
             )
         })?;
         let manager_team = Some(managed.team_address);
@@ -1686,6 +1803,515 @@ mod windows_reader {
                     .map(|name| plausible_label(&name, 80))
                     .unwrap_or(false)
             })
+    }
+
+    fn collect_human_context_candidates(
+        buffer: &[u8],
+        scan_size: usize,
+        chunk_address: usize,
+        regions: &[(usize, usize)],
+        resolver: &MetaResolver,
+        binding_candidates: &mut HashSet<usize>,
+        context_candidates: &mut HashSet<HumanContextCandidate>,
+    ) {
+        for job_state in [
+            HUMAN_JOB_NATION_MANAGER,
+            HUMAN_JOB_CLUB_MANAGER,
+            HUMAN_JOB_UNEMPLOYED,
+        ] {
+            let needle = job_state.to_le_bytes();
+            for state_local in memmem::find_iter(buffer, &needle) {
+                for (binding_offset, state_offset) in HUMAN_CONTEXT_LAYOUTS {
+                    let Some(local) = state_local.checked_sub(state_offset) else {
+                        continue;
+                    };
+                    if local >= scan_size
+                        || chunk_address.saturating_add(local) % 8 != 0
+                    {
+                        continue;
+                    }
+                    let object_type = read_u64(buffer, local)
+                        .map(|value| value as usize)
+                        .unwrap_or(0);
+                    if !pointer_in_regions(object_type, regions)
+                        && !resolver.is_module_pointer(object_type)
+                    {
+                        continue;
+                    }
+                    let Some(binding_address) = read_u64(
+                        buffer,
+                        local.saturating_add(binding_offset),
+                    )
+                    .map(|value| value as usize)
+                    .filter(|value| pointer_in_regions(*value, regions))
+                    else {
+                        continue;
+                    };
+
+                    let object_address = chunk_address.saturating_add(local);
+                    binding_candidates.insert(binding_address);
+                    context_candidates.insert(HumanContextCandidate {
+                        object_address,
+                        binding_address,
+                        job_state,
+                    });
+                }
+            }
+        }
+    }
+
+    fn collect_human_binding_candidate(
+        buffer: &[u8],
+        local: usize,
+        chunk_address: usize,
+        regions: &[(usize, usize)],
+        binding_candidates: &mut HashSet<usize>,
+    ) {
+        let object_address = chunk_address.saturating_add(local);
+
+        let root = read_u64(buffer, local.saturating_add(BINDINGS_ROOT))
+            .map(|value| value as usize)
+            .unwrap_or(0);
+        let nodes = read_u64(buffer, local.saturating_add(BINDINGS_NODES))
+            .map(|value| value as usize)
+            .unwrap_or(0);
+        let data = read_u64(buffer, local.saturating_add(BINDINGS_DATA))
+            .map(|value| value as usize)
+            .unwrap_or(0);
+        if pointer_in_regions(root, regions)
+            && pointer_in_regions(nodes, regions)
+            && pointer_in_regions(data, regions)
+        {
+            binding_candidates.insert(object_address);
+        }
+    }
+
+    fn resolve_human_team_binding(
+        process: &RemoteProcess,
+        regions: &[(usize, usize)],
+        binding_candidates: &HashSet<usize>,
+        context_candidates: &HashSet<HumanContextCandidate>,
+    ) -> (Option<HumanBindingResolution>, HumanBindingDiagnostics) {
+        let mut diagnostics = HumanBindingDiagnostics {
+            context_candidate_count: context_candidates.len(),
+            ..HumanBindingDiagnostics::default()
+        };
+        let mut bindings = binding_candidates.clone();
+        bindings.extend(
+            context_candidates
+                .iter()
+                .map(|candidate| candidate.binding_address),
+        );
+        diagnostics.binding_candidate_count = bindings.len();
+
+        let mut decoded = Vec::<(HumanBindingResolution, usize)>::new();
+        for binding in bindings {
+            if !pointer_in_regions(binding, regions) {
+                continue;
+            }
+            let Some(root) = process
+                .read_ptr(binding + BINDINGS_ROOT)
+                .filter(|value| pointer_in_regions(*value, regions))
+            else {
+                continue;
+            };
+            let valid_root = process
+                .read_ptr(root + BINDING_NODE_BINDINGS)
+                .map(|owner| owner == binding)
+                .unwrap_or(false);
+            let valid_nodes = process
+                .read_ptr(binding + BINDINGS_NODES)
+                .map(|value| pointer_in_regions(value, regions))
+                .unwrap_or(false);
+            let valid_data = process
+                .read_ptr(binding + BINDINGS_DATA)
+                .map(|value| pointer_in_regions(value, regions))
+                .unwrap_or(false);
+            if !valid_root || !valid_nodes || !valid_data {
+                continue;
+            }
+            diagnostics.validated_binding_count += 1;
+
+            let Some(human_team_node) = find_binding_node(process, binding, "humanTeam")
+            else {
+                continue;
+            };
+            diagnostics.human_team_node_count += 1;
+            let Some(human_team_uid) =
+                binding_node_dynamic_reference_uid(process, binding, human_team_node)
+            else {
+                continue;
+            };
+            diagnostics.decoded_uid_count += 1;
+
+            let nation_manager_evidence = context_candidates
+                .iter()
+                .filter(|candidate| {
+                    candidate.binding_address == binding
+                        && candidate.job_state == HUMAN_JOB_NATION_MANAGER
+                })
+                .count();
+            let other_job_evidence = context_candidates
+                .iter()
+                .filter(|candidate| {
+                    candidate.binding_address == binding
+                        && matches!(
+                            candidate.job_state,
+                            HUMAN_JOB_CLUB_MANAGER | HUMAN_JOB_UNEMPLOYED
+                        )
+                })
+                .count();
+            diagnostics.nation_manager_context_count += nation_manager_evidence;
+            diagnostics.other_job_context_count += other_job_evidence;
+            decoded.push((
+                HumanBindingResolution {
+                    human_team_uid,
+                    nation_manager_evidence,
+                },
+                other_job_evidence,
+            ));
+        }
+
+        let has_nation_context = decoded
+            .iter()
+            .any(|(candidate, _)| candidate.nation_manager_evidence > 0);
+        let mut eligible = decoded
+            .into_iter()
+            .filter(|(candidate, other_job_evidence)| {
+                if has_nation_context {
+                    candidate.nation_manager_evidence > 0
+                } else {
+                    *other_job_evidence == 0
+                }
+            })
+            .collect::<Vec<_>>();
+        if eligible.is_empty() {
+            return (None, diagnostics);
+        }
+        let expected_uid = eligible[0].0.human_team_uid;
+        if eligible
+            .iter()
+            .any(|(candidate, _)| candidate.human_team_uid != expected_uid)
+        {
+            return (None, diagnostics);
+        }
+        eligible.sort_by(|left, right| {
+            right
+                .0
+                .nation_manager_evidence
+                .cmp(&left.0.nation_manager_evidence)
+        });
+        (eligible.first().map(|candidate| candidate.0), diagnostics)
+    }
+
+    fn find_binding_node(
+        process: &RemoteProcess,
+        binding: usize,
+        expected_name: &str,
+    ) -> Option<usize> {
+        let root = process.read_ptr(binding + BINDINGS_ROOT)?;
+        let mut queue = VecDeque::<usize>::from([root]);
+        let mut visited = HashSet::<usize>::new();
+
+        while let Some(node) = queue.pop_front() {
+            if node < 0x10_000
+                || visited.len() >= MAX_BINDING_NODES
+                || !visited.insert(node)
+            {
+                continue;
+            }
+            if process.read_ptr(node + BINDING_NODE_BINDINGS) != Some(binding) {
+                continue;
+            }
+            let node_name = process
+                .read_ptr(node + BINDING_NODE_NAME)
+                .and_then(|address| read_managed_string(process, address, 96));
+            if node_name
+                .as_deref()
+                .map(|name| name.eq_ignore_ascii_case(expected_name))
+                .unwrap_or(false)
+            {
+                return Some(node);
+            }
+
+            if let Some(child) = process
+                .read_ptr(node + BINDING_NODE_FIRST_CHILD)
+                .filter(|value| *value >= 0x10_000)
+            {
+                queue.push_back(child);
+            }
+            if let Some(sibling) = process
+                .read_ptr(node + BINDING_NODE_NEXT_SIBLING)
+                .filter(|value| *value >= 0x10_000)
+            {
+                queue.push_back(sibling);
+            }
+        }
+        None
+    }
+
+    fn read_managed_string(
+        process: &RemoteProcess,
+        address: usize,
+        max_characters: usize,
+    ) -> Option<String> {
+        let length = process.read_u32(address + 0x10)? as usize;
+        if length == 0 || length > max_characters {
+            return None;
+        }
+        let bytes = process.read_exact(address + 0x14, length.checked_mul(2)?)?;
+        let utf16 = bytes
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect::<Vec<_>>();
+        String::from_utf16(&utf16).ok()
+    }
+
+    fn binding_node_dynamic_reference_uid(
+        process: &RemoteProcess,
+        binding: usize,
+        node: usize,
+    ) -> Option<u32> {
+        let data_key = process.read_u64(node + BINDING_NODE_DATA_KEY)?;
+        let raw_index = (data_key & u64::from(u32::MAX)) as usize;
+        let data_list = process.read_ptr(binding + BINDINGS_DATA)?;
+        let mut indices = vec![raw_index];
+        if raw_index > 0 {
+            indices.push(raw_index - 1);
+        }
+
+        for index in indices {
+            let Some(data) = managed_list_reference(process, data_list, index) else {
+                continue;
+            };
+            let Some(typed_value) = process
+                .read_ptr(data + BINDING_DATA_VALUE)
+                .filter(|value| *value >= 0x10_000)
+            else {
+                continue;
+            };
+            let Some(dynamic_reference) = process
+                .read_ptr(typed_value + TYPED_VALUE_VALUE)
+                .filter(|value| *value >= 0x10_000)
+            else {
+                continue;
+            };
+            if let Some(uid) = dynamic_reference_uid(process, dynamic_reference) {
+                return Some(uid);
+            }
+        }
+        None
+    }
+
+    fn managed_list_reference(
+        process: &RemoteProcess,
+        list: usize,
+        index: usize,
+    ) -> Option<usize> {
+        let size = process.read_u32(list + MANAGED_LIST_SIZE)? as usize;
+        if index >= size || size > 1_000_000 {
+            return None;
+        }
+        let items = process.read_ptr(list + MANAGED_LIST_ITEMS)?;
+        let capacity = process.read_u64(items + MANAGED_ARRAY_LENGTH)? as usize;
+        if index >= capacity || capacity > 1_000_000 {
+            return None;
+        }
+        process
+            .read_ptr(items + MANAGED_ARRAY_DATA + index * 8)
+            .filter(|value| *value >= 0x10_000)
+    }
+
+    fn dynamic_reference_uid(
+        process: &RemoteProcess,
+        dynamic_reference: usize,
+    ) -> Option<u32> {
+        let entries = process.read_ptr(dynamic_reference + MANAGED_DICTIONARY_ENTRIES)?;
+        let count = process.read_u32(dynamic_reference + MANAGED_DICTIONARY_COUNT)? as usize;
+        let capacity = process.read_u64(entries + MANAGED_ARRAY_LENGTH)? as usize;
+        let entry_count = count.min(capacity);
+        if entry_count == 0 || entry_count > 256 || capacity > 4_096 {
+            return None;
+        }
+        let bytes = process.read_exact(
+            entries + MANAGED_ARRAY_DATA,
+            entry_count.checked_mul(DICTIONARY_ENTRY_SIZE)?,
+        )?;
+
+        for entry in bytes.chunks_exact(DICTIONARY_ENTRY_SIZE) {
+            let key = read_u32(entry, 0x08)?;
+            if key != DYNAMIC_REFERENCE_UID_PROPERTY {
+                continue;
+            }
+            let typed_value = read_u64(entry, 0x10)? as usize;
+            let raw = process.read_u64(typed_value + TYPED_VALUE_VALUE)?;
+            let kind = process.read_u8(typed_value + TYPED_VALUE_VALUE + 8)?;
+            if matches!(kind, 0 | 1) && raw > 0 && raw <= u64::from(u32::MAX) {
+                return Some(raw as u32);
+            }
+        }
+        None
+    }
+
+    fn resolve_bound_national_team(
+        process: &RemoteProcess,
+        binding: HumanBindingResolution,
+        uid_objects: &[UidObjectCandidate],
+        clubs: &HashSet<usize>,
+        candidates: &HashMap<u32, PlayerCandidate>,
+        nation_counts: &HashMap<usize, usize>,
+        diagnostics: &mut HumanBindingDiagnostics,
+    ) -> Option<ManagedTeamResolution> {
+        let mut team_addresses = HashSet::<usize>::new();
+        for object in uid_objects
+            .iter()
+            .filter(|object| object.uid == binding.human_team_uid)
+        {
+            team_addresses.insert(object.address);
+            if object.dynamic_offset > 0 && object.address >= object.dynamic_offset {
+                team_addresses.insert(object.address - object.dynamic_offset);
+            }
+        }
+        for &club in clubs {
+            let Some(begin) = process.read_ptr(club + CLUB_TEAMS_BEGIN) else {
+                continue;
+            };
+            let Some(end) = process.read_ptr(club + CLUB_TEAMS_END) else {
+                continue;
+            };
+            if end <= begin || (end - begin) % 8 != 0 || (end - begin) / 8 > 64 {
+                continue;
+            }
+            for index in 0..((end - begin) / 8) {
+                let Some(team) = process.read_ptr(begin + index * 8) else {
+                    continue;
+                };
+                if record_uid(process, team) == Some(binding.human_team_uid) {
+                    team_addresses.insert(team);
+                }
+            }
+        }
+        diagnostics.uid_object_match_count = team_addresses.len();
+
+        let mut address_to_nation = HashMap::<usize, usize>::with_capacity(candidates.len() * 2);
+        for candidate in candidates.values() {
+            if candidate.nation_address == 0 {
+                continue;
+            }
+            address_to_nation.insert(candidate.person_address, candidate.nation_address);
+            address_to_nation.insert(candidate.player_address, candidate.nation_address);
+        }
+
+        let mut matches = team_addresses
+            .into_iter()
+            .filter(|team| looks_like_team_record(process, *team))
+            .filter_map(|team| {
+                build_bound_national_team_candidate(
+                    process,
+                    team,
+                    &address_to_nation,
+                    nation_counts,
+                )
+            })
+            .collect::<Vec<_>>();
+        diagnostics.national_resolution_count = matches.len();
+        for candidate in &mut matches {
+            candidate.score = candidate
+                .score
+                .saturating_add(binding.nation_manager_evidence.saturating_mul(25_000));
+        }
+        matches.sort_by(|left, right| right.score.cmp(&left.score));
+        let best = matches.first()?;
+        let has_conflict = matches.iter().skip(1).any(|candidate| {
+            candidate.nation_address != best.nation_address
+                && candidate.score.saturating_add(50_000) >= best.score
+        });
+        (!has_conflict).then(|| matches.remove(0))
+    }
+
+    fn looks_like_team_record(process: &RemoteProcess, team: usize) -> bool {
+        let team_type = process.read_u8(team + TEAM_TYPE).unwrap_or(u8::MAX);
+        let begin = process.read_ptr(team + TEAM_PLAYERS_BEGIN).unwrap_or(0);
+        let end = process.read_ptr(team + TEAM_PLAYERS_END).unwrap_or(0);
+        team_type <= 32
+            && begin >= 0x10_000
+            && end > begin
+            && (end - begin) % 8 == 0
+            && (end - begin) / 8 <= 200
+    }
+
+    fn build_bound_national_team_candidate(
+        process: &RemoteProcess,
+        team: usize,
+        address_to_nation: &HashMap<usize, usize>,
+        nation_counts: &HashMap<usize, usize>,
+    ) -> Option<ManagedTeamResolution> {
+        let squad_votes = team_squad_nation_votes(process, team, address_to_nation);
+        let squad_total = squad_votes.values().sum::<usize>();
+        let dominant_squad_nation = squad_votes
+            .iter()
+            .max_by_key(|(_, count)| **count)
+            .map(|(nation, count)| (*nation, *count));
+        let strong_squad_resolution = dominant_squad_nation.and_then(|(nation, count)| {
+            (squad_total >= 8 && count * 100 >= squad_total * 75)
+                .then(|| nation_name(process, nation).map(|name| (nation, name, count)))
+                .flatten()
+        });
+
+        let owner_labels = process
+            .read_ptr(team + TEAM_CLUB)
+            .filter(|value| *value != 0)
+            .map(|owner| {
+                [club_name(process, owner), nation_name(process, owner)]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let graph_resolution = resolve_managed_nation(
+            process,
+            team,
+            owner_labels.first().map(String::as_str),
+            nation_counts,
+        );
+        let (nation_address, nation_name, same_nation_players) =
+            if let Some(resolution) = strong_squad_resolution {
+                resolution
+            } else {
+                let (nation, name) = graph_resolution?;
+                let count = squad_votes.get(&nation).copied().unwrap_or(0);
+                (nation, name, count)
+            };
+        let label = owner_labels
+            .iter()
+            .find(|label| labels_match(label, &nation_name))
+            .cloned();
+        let strong_national_squad = squad_total >= 8
+            && same_nation_players * 100 >= squad_total * 75;
+        if label.is_none() && !strong_national_squad {
+            return None;
+        }
+
+        let squad_ratio = if squad_total == 0 {
+            0
+        } else {
+            same_nation_players * 1_000 / squad_total
+        };
+        let senior_score = match process.read_u8(team + TEAM_TYPE) {
+            Some(0) => 30_000,
+            Some(1..=5) => 5_000,
+            _ => 0,
+        };
+        Some(ManagedTeamResolution {
+            team_address: team,
+            team_name: label.unwrap_or_else(|| nation_name.clone()),
+            nation_address,
+            nation_name,
+            score: 2_000_000
+                + usize::from(strong_national_squad) * 100_000
+                + senior_score
+                + squad_ratio * 25,
+        })
     }
 
     fn resolve_user_national_team(

@@ -5,7 +5,7 @@ const DATABASE_NAME = "fm-player-sorter";
 const DATABASE_VERSION = 1;
 const STORE_NAME = "fm-snapshots";
 const CURRENT_SNAPSHOT_KEY = "current-national-team";
-const CURRENT_SNAPSHOT_SCHEMA = 2;
+const CURRENT_SNAPSHOT_SCHEMA = 3;
 
 export type StoredFmSnapshot = {
   key: typeof CURRENT_SNAPSHOT_KEY;

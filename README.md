@@ -11,11 +11,11 @@ Football Managera 26 i dalszej analizy bez eksportu HTML/CSV.
    przepisywać daty.
 
 Pełny skan pamięci jest wykonywany tylko po kliknięciu przycisku. Aplikacja
-rozpoznaje obiekt ludzkiego menedżera, wiąże go z aktualnym zatrudnieniem po
-wskaźniku lub UID, potwierdza, że prowadzona drużyna jest reprezentacją, a
-następnie odczytuje wszystkich zawodników właściwej narodowości. Zapis, w którym
-użytkownik prowadzi wyłącznie klub, jest odrzucany. Gotowy snapshot trafia do
-lokalnej bazy IndexedDB. Odczyt nie zależy od aktualnie otwartej zakładki FM26.
+odczytuje globalne powiązanie `humanTeam`, sprawdza stan `NationManager`, mapuje
+dokładny UID prowadzonej reprezentacji na rekord `Team`, a następnie odczytuje
+wszystkich zawodników właściwej narodowości. Zapis, w którym użytkownik prowadzi
+wyłącznie klub, jest odrzucany. Gotowy snapshot trafia do lokalnej bazy
+IndexedDB. Odczyt nie zależy od aktualnie otwartej zakładki FM26.
 
 Czytnik otwiera `fm.exe` wyłącznie z prawami `PROCESS_VM_READ` i
 `PROCESS_QUERY_INFORMATION`. Nie wstrzykuje DLL, nie wymaga BepInEx i nie zapisuje
@@ -42,7 +42,7 @@ może wskazywać termin meczu zamiast aktualnego dnia.
 
 ## Aktualizacje
 
-Wersja 0.4.4 korzysta z updatera Tauri i podpisanych plików GitHub
+Wersja 0.4.5 korzysta z updatera Tauri i podpisanych plików GitHub
 Releases. W górnym pasku można sprawdzić wersję i zainstalować nowsze wydanie
 bez ręcznego odinstalowywania aplikacji.
 
