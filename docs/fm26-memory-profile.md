@@ -9,12 +9,13 @@
    metadanych vtable.
 5. Rozpoznanie klas `Player` (`0x288`) i `Player/Staff` (`0x380`).
 6. Walidacja UID oraz zakresów CA/PA przed odczytem rekordu.
-7. Drugi, tylko do odczytu przebieg wykrywający tablice i wektory rekordów
-   narodowej **Bazy danych zawodników**.
-8. Walidacja liczebności puli, udziału rozpoznanych UID oraz dominującej
-   narodowości; duża mieszana pula klubowa jest odrzucana.
-9. Powiązanie wybranych zawodników z klubami przez listy zespołów i kontrakty.
-10. Zbudowanie jednego niezmiennego snapshotu dla frontendu.
+7. Rozpoznanie `HumanManager` (`0x450`) i powiązanie go z aktualną drużyną po
+   bezpośrednim wskaźniku albo UID zapisanym w kontrakcie/zatrudnieniu.
+8. Potwierdzenie reprezentacji na podstawie nazwy kraju, jej wskaźnika/UID oraz
+   profilu narodowościowego składu; klub jest odrzucany.
+9. Odfiltrowanie kandydatów do narodowości i płci prowadzonej reprezentacji.
+10. Powiązanie wybranych zawodników z klubami przez listy zespołów i kontrakty.
+11. Zbudowanie jednego niezmiennego snapshotu dla frontendu.
 
 Skan nie zapisuje adresów ani wartości do procesu FM.
 
@@ -33,7 +34,7 @@ Skan nie zapisuje adresów ani wartości do procesu FM.
 | Player | wartość / cena wywoławcza | `0x234` / `0x238` |
 | Player | kondycja | `0x258` |
 | Player | reputacja | `0x25E–0x262` |
-| Player | CA / PA | `0x264` / `0x266` |
+| Player | OU / PA | `0x264` / `0x266` |
 | Player | morale | `0x26C` |
 | Contract | klub / pensja / koniec / status / numer | `0x10` / `0x20` / `0x48` / `0x57` / `0x5D` |
 
@@ -46,10 +47,10 @@ skali 1–20.
 - proces jest otwierany bez `PROCESS_VM_WRITE` i bez `PROCESS_CREATE_THREAD`;
 - każdy wskaźnik jest czytany przez `ReadProcessMemory`;
 - nieczytelny region lub wskaźnik jest pomijany;
-- rekord wymaga niezerowego UID oraz CA i PA w zakresie 1–200;
+- rekord wymaga niezerowego UID oraz OU i PA w zakresie 1–200;
 - wynik poniżej 500 zawodników jest odrzucany w całości;
-- pełna pula wymaga co najmniej 70% rozpoznanych UID, a profil narodowy co
-  najmniej 80% jednej narodowości;
+- prowadzona reprezentacja musi mieć jednoznaczne powiązanie z ludzkim
+  menedżerem; niejednoznaczny wynik jest odrzucany zamiast zgadywania kraju;
 - profil nie zwraca częściowego snapshotu po błędzie walidacji.
 
 ## Data gry

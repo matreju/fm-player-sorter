@@ -1,5 +1,6 @@
 export const PLAYER_MARK_COLUMN = "Wybór";
 export const ROLE_SCORE_COLUMN = "Dopasowanie";
+export const OVERALL_ABILITY_COLUMN = "OU";
 export const CLUB_FORM_COLUMN = "Forma klubu";
 export const MONEYBALL_COLUMN = "Moneyball";
 export const CANDIDATE_TYPE_COLUMN = "Typ kandydata";
@@ -31,39 +32,34 @@ export const ROLE_ANALYSIS_COLUMNS = [
   OVERALL_SCORE_COLUMN,
 ];
 
-export const COMPACT_TABLE_COLUMNS = new Set([
+export const BASE_TABLE_COLUMNS = [
   PLAYER_MARK_COLUMN,
   "Nazwisko",
   ROLE_SCORE_COLUMN,
-  CLUB_FORM_COLUMN,
-  MONEYBALL_COLUMN,
-  CANDIDATE_TYPE_COLUMN,
-  ROLE_BEST_ROLE_COLUMN,
-  ROLE_PHASE_COLUMN,
-  "Pozycja",
+  OVERALL_ABILITY_COLUMN,
   "Wiek",
+  "Pozycja",
   "Klub",
   "Liga",
-  "Minuty",
-]);
+] as const;
 
 export function insertRoleAnalysisColumns(headers: string[]): string[] {
   const cleanHeaders = headers.filter(
     (header) =>
-      header !== PLAYER_MARK_COLUMN && !ROLE_ANALYSIS_COLUMNS.includes(header)
+      header !== PLAYER_MARK_COLUMN &&
+      header !== "CA" &&
+      header !== OVERALL_ABILITY_COLUMN &&
+      !ROLE_ANALYSIS_COLUMNS.includes(header)
+  );
+  const additionalAnalysisColumns = ROLE_ANALYSIS_COLUMNS.filter(
+    (header) => header !== ROLE_SCORE_COLUMN,
   );
 
-  const nameIndex = cleanHeaders.indexOf("Nazwisko");
-
-  if (nameIndex === -1) {
-    return [PLAYER_MARK_COLUMN, ...ROLE_ANALYSIS_COLUMNS, ...cleanHeaders];
-  }
-
-  return [
-    ...cleanHeaders.slice(0, nameIndex),
-    PLAYER_MARK_COLUMN,
-    cleanHeaders[nameIndex],
-    ...ROLE_ANALYSIS_COLUMNS,
-    ...cleanHeaders.slice(nameIndex + 1),
-  ];
+  return Array.from(
+    new Set([
+      ...BASE_TABLE_COLUMNS,
+      ...additionalAnalysisColumns,
+      ...cleanHeaders,
+    ]),
+  );
 }

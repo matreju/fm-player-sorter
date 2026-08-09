@@ -5,9 +5,11 @@ const DATABASE_NAME = "fm-player-sorter";
 const DATABASE_VERSION = 1;
 const STORE_NAME = "fm-snapshots";
 const CURRENT_SNAPSHOT_KEY = "current-national-team";
+const CURRENT_SNAPSHOT_SCHEMA = 2;
 
 export type StoredFmSnapshot = {
   key: typeof CURRENT_SNAPSHOT_KEY;
+  schemaVersion: typeof CURRENT_SNAPSHOT_SCHEMA;
   savedAt: string;
   gameDate: string | null;
   managedTeam: string | null;
@@ -43,6 +45,7 @@ export async function saveFmSnapshot(
 ): Promise<StoredFmSnapshot> {
   const snapshot: StoredFmSnapshot = {
     key: CURRENT_SNAPSHOT_KEY,
+    schemaVersion: CURRENT_SNAPSHOT_SCHEMA,
     savedAt: new Date().toISOString(),
     gameDate: result.gameDate,
     managedTeam: result.managedTeam,
@@ -80,8 +83,20 @@ export async function loadFmSnapshot(): Promise<StoredFmSnapshot | null> {
       const request = transaction
         .objectStore(STORE_NAME)
         .get(CURRENT_SNAPSHOT_KEY);
-      request.onsuccess = () =>
-        resolve((request.result as StoredFmSnapshot | undefined) ?? null);
+      request.onsuccess = () => {
+        const snapshot = request.result as
+          | Partial<StoredFmSnapshot>
+          | undefined;
+        if (
+          !snapshot ||
+          snapshot.schemaVersion !== CURRENT_SNAPSHOT_SCHEMA ||
+          snapshot.managedTeam === "Baza danych zawodników"
+        ) {
+          resolve(null);
+          return;
+        }
+        resolve(snapshot as StoredFmSnapshot);
+      };
       request.onerror = () =>
         reject(request.error ?? new Error("Nie udało się odczytać danych FM."));
     });

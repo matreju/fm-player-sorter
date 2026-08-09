@@ -226,7 +226,7 @@ export function FmConnectionPanel({
                   </strong>
                   <small>
                     {processConnected
-                      ? "Odczyt narodowej bazy zawodników — bez HTML i CSV."
+                      ? "Odczyt prowadzonej reprezentacji — bez HTML i CSV."
                       : "Wczytaj zapis w FM26 i spróbuj ponownie."}
                   </small>
                 </div>
@@ -253,7 +253,7 @@ export function FmConnectionPanel({
                 disabled={!processConnected || isLoading}
               >
                 {isLoading
-                  ? "Wczytywanie bazy zawodników…"
+                  ? "Wykrywanie reprezentacji i zawodników…"
                   : loadedPlayerCount > 0
                     ? "Wczytaj nowy snapshot"
                     : "Połącz i wczytaj zawodników"}

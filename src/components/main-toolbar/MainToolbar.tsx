@@ -7,12 +7,21 @@ import {
 } from "react";
 import type { FootFilter } from "../../utils/filters";
 import {
+  getRolePhaseLabel,
+  type RoleDefinition,
+} from "../../constants/roles";
+import type { RolePhaseFilter } from "../../utils/roleScoring";
+import {
   AppButton,
   AppCheckbox,
   AppSelectField,
   AppTextField,
 } from "../ui";
 import { FOOT_FILTER_OPTIONS } from "./MainToolbar.config";
+import {
+  ROLE_PHASE_OPTIONS,
+  isRolePhaseFilter,
+} from "../role-analysis-toolbar/RoleAnalysisToolbar.config";
 import { mainToolbarStyles as styles } from "./MainToolbar.styles";
 
 type MainToolbarProps = {
@@ -24,12 +33,22 @@ type MainToolbarProps = {
   setMaxAge: Dispatch<SetStateAction<string>>;
   footFilter: FootFilter;
   setFootFilter: Dispatch<SetStateAction<FootFilter>>;
+  rolePositionOptions: string[];
+  availableAnalysisRoles: RoleDefinition[];
+  analysisPositionGroup: string;
+  setAnalysisPositionGroup: Dispatch<SetStateAction<string>>;
+  analysisPhase: RolePhaseFilter;
+  setAnalysisPhase: Dispatch<SetStateAction<RolePhaseFilter>>;
+  analysisRoleId: string;
+  setAnalysisRoleId: Dispatch<SetStateAction<string>>;
+  minRoleScore: string;
+  setMinRoleScore: Dispatch<SetStateAction<string>>;
+  onlyRoleMatches: boolean;
+  setOnlyRoleMatches: Dispatch<SetStateAction<boolean>>;
   showOnlySelectedPlayers: boolean;
   setShowOnlySelectedPlayers: Dispatch<SetStateAction<boolean>>;
   hideMarkedPlayers: boolean;
   setHideMarkedPlayers: Dispatch<SetStateAction<boolean>>;
-  compactTableMode: boolean;
-  setCompactTableMode: Dispatch<SetStateAction<boolean>>;
   selectedPlayersCount: number;
   selectedPlayersWithPositionCount: number;
   rejectedPlayersCount: number;
@@ -45,12 +64,22 @@ export function MainToolbar({
   setMaxAge,
   footFilter,
   setFootFilter,
+  rolePositionOptions,
+  availableAnalysisRoles,
+  analysisPositionGroup,
+  setAnalysisPositionGroup,
+  analysisPhase,
+  setAnalysisPhase,
+  analysisRoleId,
+  setAnalysisRoleId,
+  minRoleScore,
+  setMinRoleScore,
+  onlyRoleMatches,
+  setOnlyRoleMatches,
   showOnlySelectedPlayers,
   setShowOnlySelectedPlayers,
   hideMarkedPlayers,
   setHideMarkedPlayers,
-  compactTableMode,
-  setCompactTableMode,
   selectedPlayersCount,
   selectedPlayersWithPositionCount,
   rejectedPlayersCount,
@@ -80,7 +109,14 @@ export function MainToolbar({
     draftSearchTerm.trim() !== "" ||
     minAge.trim() !== "" ||
     maxAge.trim() !== "" ||
-    footFilter !== "any";
+    footFilter !== "any" ||
+    analysisPositionGroup !== "any" ||
+    analysisPhase !== "any" ||
+    analysisRoleId !== "any" ||
+    minRoleScore !== "60" ||
+    !onlyRoleMatches ||
+    showOnlySelectedPlayers ||
+    hideMarkedPlayers;
   const hasPlayerMarks = selectedPlayersCount > 0 || rejectedPlayersCount > 0;
 
   function clearFilters() {
@@ -89,7 +125,29 @@ export function MainToolbar({
     setMinAge("");
     setMaxAge("");
     setFootFilter("any");
+    setAnalysisPositionGroup("any");
+    setAnalysisPhase("any");
+    setAnalysisRoleId("any");
+    setMinRoleScore("60");
+    setOnlyRoleMatches(true);
+    setShowOnlySelectedPlayers(false);
+    setHideMarkedPlayers(false);
   }
+
+  const positionOptions = [
+    { value: "any", label: "Wszyscy" },
+    ...rolePositionOptions.map((positionGroup) => ({
+      value: positionGroup,
+      label: positionGroup,
+    })),
+  ];
+  const roleOptions = [
+    { value: "any", label: "Dowolna rola" },
+    ...availableAnalysisRoles.map((role) => ({
+      value: role.id,
+      label: `${getRolePhaseLabel(role.phase)} — ${role.name}`,
+    })),
+  ];
 
   return (
     <section style={styles.toolbar} aria-labelledby="main-toolbar-title">
@@ -186,14 +244,6 @@ export function MainToolbar({
           >
             Ukryj ocenionych
           </AppCheckbox>
-
-          <AppCheckbox
-            checked={compactTableMode}
-            onChange={setCompactTableMode}
-            style={styles.toolbarCheckbox}
-          >
-            Widok kompaktowy
-          </AppCheckbox>
         </div>
 
         <div style={styles.toolbarMeta}>
@@ -206,6 +256,68 @@ export function MainToolbar({
           <span style={styles.toolbarCounter}>
             Odrzuceni <strong>{rejectedPlayersCount}</strong>
           </span>
+        </div>
+      </div>
+
+      <div style={styles.analysisGrid}>
+        <AppSelectField
+          label="Szukana pozycja"
+          value={analysisPositionGroup}
+          options={positionOptions}
+          onChange={(value) => {
+            setAnalysisPositionGroup(value);
+            setAnalysisRoleId("any");
+          }}
+          fieldStyle={styles.filterField}
+          labelStyle={styles.filterLabel}
+          selectStyle={styles.fieldInput}
+        />
+
+        <AppSelectField
+          label="Faza"
+          value={analysisPhase}
+          options={ROLE_PHASE_OPTIONS}
+          onChange={(value) => {
+            if (!isRolePhaseFilter(value)) return;
+            setAnalysisPhase(value);
+            setAnalysisRoleId("any");
+          }}
+          fieldStyle={styles.filterField}
+          labelStyle={styles.filterLabel}
+          selectStyle={styles.fieldInput}
+        />
+
+        <AppSelectField
+          label="Rola"
+          value={analysisRoleId}
+          options={roleOptions}
+          onChange={setAnalysisRoleId}
+          fieldStyle={styles.filterField}
+          labelStyle={styles.filterLabel}
+          selectStyle={styles.fieldInput}
+        />
+
+        <AppTextField
+          label="Minimalny wynik"
+          type="number"
+          min="0"
+          max="100"
+          placeholder="60"
+          value={minRoleScore}
+          onChange={setMinRoleScore}
+          fieldStyle={styles.filterField}
+          labelStyle={styles.filterLabel}
+          inputStyle={styles.fieldInput}
+        />
+
+        <div style={styles.analysisCheckboxWrap}>
+          <AppCheckbox
+            checked={onlyRoleMatches}
+            onChange={setOnlyRoleMatches}
+            style={styles.analysisCheckbox}
+          >
+            Pokaż tylko powyżej progu
+          </AppCheckbox>
         </div>
       </div>
     </section>

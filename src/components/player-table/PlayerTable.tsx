@@ -6,6 +6,7 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { BASE_TABLE_COLUMNS } from "../../constants/appColumns";
 import type { PlayerMark } from "../../constants/selection";
 import { styles } from "../../styles";
 import type { SortConfig, TableRow } from "../../types/table";
@@ -40,9 +41,9 @@ type ColumnGroup = {
 };
 
 const PAGE_SIZE = 100;
-const COLUMN_STORAGE_KEY = "fm-player-sorter.table-columns.v3";
+const COLUMN_STORAGE_KEY = "fm-player-sorter.table-columns.v4";
 const WIDTH_STORAGE_KEY = "fm-player-sorter.table-widths.v2";
-const LOCKED_COLUMNS = new Set(["Nazwisko"]);
+const LOCKED_COLUMNS = new Set<string>(BASE_TABLE_COLUMNS);
 
 const ATTRIBUTE_COLUMNS = new Set([
   "Dośrodkowania",
@@ -144,6 +145,7 @@ const GENERAL_COLUMNS = new Set([
   "Liga",
   "Zespół",
   "Pozycja",
+  "OU",
   "CA",
   "PA",
   "Reputacja w ojczyźnie",
@@ -260,13 +262,17 @@ export function PlayerTable({
     () => new Set(availableHeaders),
     [availableHeaders],
   );
+  const baseHeaders = useMemo(
+    () => tableHeaders.filter((header) => allowedHeaders.has(header)),
+    [allowedHeaders, tableHeaders],
+  );
   const effectiveHeaders = useMemo(() => {
-    const saved = customColumns.filter((header) => allowedHeaders.has(header));
-    const required = tableHeaders.filter(
-      (header) => LOCKED_COLUMNS.has(header) && !saved.includes(header),
+    const savedAdditional = customColumns.filter(
+      (header) =>
+        allowedHeaders.has(header) && !LOCKED_COLUMNS.has(header),
     );
-    return saved.length > 0 ? [...required, ...saved] : tableHeaders;
-  }, [allowedHeaders, customColumns, tableHeaders]);
+    return [...baseHeaders, ...savedAdditional];
+  }, [allowedHeaders, baseHeaders, customColumns]);
 
   const columnGroups = useMemo(
     () => getColumnGroups(availableHeaders),
@@ -303,6 +309,8 @@ export function PlayerTable({
   useEffect(() => {
     if (customColumns.length > 0) {
       localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(customColumns));
+    } else {
+      localStorage.removeItem(COLUMN_STORAGE_KEY);
     }
   }, [customColumns]);
 
@@ -317,22 +325,17 @@ export function PlayerTable({
 
   const firstVisible = sortedRows.length === 0 ? 0 : safePage * PAGE_SIZE + 1;
   const lastVisible = Math.min((safePage + 1) * PAGE_SIZE, sortedRows.length);
-  const tableWidth =
-    48 +
-    effectiveHeaders.reduce(
-      (total, header) =>
-        total + (columnWidths[header] ?? getDefaultColumnWidth(header)),
-      0,
-    );
+  const tableWidth = effectiveHeaders.reduce(
+    (total, header) =>
+      total + (columnWidths[header] ?? getDefaultColumnWidth(header)),
+    0,
+  );
 
   function updateColumns(nextColumns: string[]) {
     const unique = Array.from(new Set(nextColumns)).filter((header) =>
       allowedHeaders.has(header),
     );
-    const withRequired = availableHeaders.filter(
-      (header) => LOCKED_COLUMNS.has(header) && !unique.includes(header),
-    );
-    setCustomColumns([...withRequired, ...unique]);
+    setCustomColumns(unique.filter((header) => !LOCKED_COLUMNS.has(header)));
   }
 
   function toggleColumn(header: string) {
@@ -350,19 +353,33 @@ export function PlayerTable({
   }
 
   function moveColumn(header: string, direction: -1 | 1) {
+    if (LOCKED_COLUMNS.has(header)) return;
     const index = effectiveHeaders.indexOf(header);
     const target = index + direction;
-    if (index < 0 || target < 0 || target >= effectiveHeaders.length) return;
+    if (
+      index < baseHeaders.length ||
+      target < baseHeaders.length ||
+      target >= effectiveHeaders.length
+    ) {
+      return;
+    }
     const next = [...effectiveHeaders];
     [next[index], next[target]] = [next[target], next[index]];
     updateColumns(next);
   }
 
   function dropColumn(target: string) {
-    if (!draggedColumn || draggedColumn === target) return;
+    if (
+      !draggedColumn ||
+      draggedColumn === target ||
+      LOCKED_COLUMNS.has(draggedColumn) ||
+      LOCKED_COLUMNS.has(target)
+    ) {
+      return;
+    }
     const next = effectiveHeaders.filter((column) => column !== draggedColumn);
     const targetIndex = next.indexOf(target);
-    next.splice(Math.max(0, targetIndex), 0, draggedColumn);
+    next.splice(Math.max(baseHeaders.length, targetIndex), 0, draggedColumn);
     updateColumns(next);
     setDraggedColumn(null);
   }
@@ -409,7 +426,7 @@ export function PlayerTable({
             onClick={() => setColumnManagerOpen((current) => !current)}
             aria-expanded={columnManagerOpen}
           >
-            Kolumny ({effectiveHeaders.length})
+            Kolumny dodatkowe ({effectiveHeaders.length - baseHeaders.length})
           </button>
           <button
             type="button"
@@ -441,8 +458,8 @@ export function PlayerTable({
             <div>
               <strong>Kolumny tabeli</strong>
               <span>
-                Zaznacz pola, zmień kolejność i dopasuj szerokość bezpośrednio
-                w nagłówku.
+                Osiem kolumn bazowych jest zawsze widocznych. Pozostałe możesz
+                wyszukać, dodać i ustawić w wybranej kolejności.
               </span>
             </div>
             <button type="button" onClick={() => setColumnManagerOpen(false)}>
@@ -471,21 +488,25 @@ export function PlayerTable({
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={() => dropColumn(header)}
               >
-                <button
-                  type="button"
-                  onClick={() => moveColumn(header, -1)}
-                  aria-label={`Przesuń ${header} w lewo`}
-                >
-                  ‹
-                </button>
+                {!LOCKED_COLUMNS.has(header) && (
+                  <button
+                    type="button"
+                    onClick={() => moveColumn(header, -1)}
+                    aria-label={`Przesuń ${header} w lewo`}
+                  >
+                    ‹
+                  </button>
+                )}
                 {header}
-                <button
-                  type="button"
-                  onClick={() => moveColumn(header, 1)}
-                  aria-label={`Przesuń ${header} w prawo`}
-                >
-                  ›
-                </button>
+                {!LOCKED_COLUMNS.has(header) && (
+                  <button
+                    type="button"
+                    onClick={() => moveColumn(header, 1)}
+                    aria-label={`Przesuń ${header} w prawo`}
+                  >
+                    ›
+                  </button>
+                )}
               </span>
             ))}
           </div>
@@ -515,7 +536,7 @@ export function PlayerTable({
         <table
           style={{
             ...styles.table,
-            width: Math.max(tableWidth, 980),
+            width: Math.max(tableWidth, 900),
             tableLayout: "fixed",
           }}
         >
@@ -525,10 +546,6 @@ export function PlayerTable({
 
           <thead>
             <tr>
-              <th scope="col" style={{ ...styles.indexTh, width: 48 }}>
-                #
-              </th>
-
               {effectiveHeaders.map((header) => {
                 const width =
                   columnWidths[header] ?? getDefaultColumnWidth(header);
@@ -601,8 +618,6 @@ export function PlayerTable({
                     onSelectPlayer(rowPlayerKey);
                   }}
                 >
-                  <td style={styles.indexTd}>{absoluteRowIndex + 1}</td>
-
                   {effectiveHeaders.map((header) => {
                     const mark = getPlayerMark(row);
                     const width =

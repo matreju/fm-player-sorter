@@ -226,7 +226,7 @@ export function PlayerFmOverview({ player }: PlayerFmOverviewProps) {
           </div>
         </div>
         <div className="fm-profile__summary">
-          <Detail label="CA" value={player["CA"]} accent />
+          <Detail label="OU" value={player["OU"] ?? player["CA"]} accent />
           <Detail label="PA" value={player["PA"]} />
           <Detail label="Wartość" value={player["Wartość"]} />
           <Detail label="Pensja" value={player["Pensja"]} />

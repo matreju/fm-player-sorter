@@ -11,23 +11,22 @@ Football Managera 26 i dalszej analizy bez eksportu HTML/CSV.
    przepisywać daty.
 
 Pełny skan pamięci jest wykonywany tylko po kliknięciu przycisku. Aplikacja
-odnajduje dużą kolekcję rekordów należącą do narodowej **Bazy danych
-zawodników**, weryfikuje jej liczebność i profil narodowościowy, a następnie
-odczytuje pełne rekordy dokładnie tej puli. Nie zgaduje już prowadzonej drużyny
-na podstawie wskaźnika menedżera. Zapis klubowy z mieszaną bazą jest odrzucany.
-Gotowy snapshot trafia do lokalnej bazy IndexedDB. Odczyt nie zależy od
-aktualnie otwartej zakładki FM26.
+rozpoznaje obiekt ludzkiego menedżera, wiąże go z aktualnym zatrudnieniem po
+wskaźniku lub UID, potwierdza, że prowadzona drużyna jest reprezentacją, a
+następnie odczytuje wszystkich zawodników właściwej narodowości. Zapis, w którym
+użytkownik prowadzi wyłącznie klub, jest odrzucany. Gotowy snapshot trafia do
+lokalnej bazy IndexedDB. Odczyt nie zależy od aktualnie otwartej zakładki FM26.
 
 Czytnik otwiera `fm.exe` wyłącznie z prawami `PROCESS_VM_READ` i
 `PROCESS_QUERY_INFORMATION`. Nie wstrzykuje DLL, nie wymaga BepInEx i nie zapisuje
 niczego w pamięci gry.
 
-Aktualny profil obejmuje FM26 26.3.x i dla zawodników z narodowej bazy zwraca
+Aktualny profil obejmuje FM26 26.3.x i dla zawodników prowadzonej reprezentacji zwraca
 między innymi:
 
 - UID, imię, nazwisko, płeć, narodowość, datę urodzenia i wiek;
 - klub, klub macierzysty, ligę, zespół i wszystkie pozycje;
-- CA, PA, reputację, kondycję, morale, wzrost i obie nogi;
+- OU, PA, reputację, kondycję, morale, wzrost i obie nogi;
 - 47 atrybutów piłkarskich i bramkarskich;
 - 5 ukrytych atrybutów piłkarza oraz 8 ukrytych cech osobowości;
 - wartość, cenę wywoławczą, pensję, datę końca kontraktu, numer
@@ -43,7 +42,7 @@ może wskazywać termin meczu zamiast aktualnego dnia.
 
 ## Aktualizacje
 
-Wersja 0.4.3 korzysta z updatera Tauri i podpisanych plików GitHub
+Wersja 0.4.4 korzysta z updatera Tauri i podpisanych plików GitHub
 Releases. W górnym pasku można sprawdzić wersję i zainstalować nowsze wydanie
 bez ręcznego odinstalowywania aplikacji.
 

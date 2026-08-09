@@ -10,9 +10,10 @@ import {
 } from "react";
 import {
   CANDIDATE_TYPE_COLUMN,
+  BASE_TABLE_COLUMNS,
   CLUB_FORM_COLUMN,
-  COMPACT_TABLE_COLUMNS,
   MONEYBALL_COLUMN,
+  OVERALL_ABILITY_COLUMN,
   OVERALL_POSITION_COLUMN,
   OVERALL_ROLE_COLUMN,
   OVERALL_SCORE_COLUMN,
@@ -39,7 +40,6 @@ import { AppSideDock } from "./components/app-shell";
 import { MainToolbar } from "./components/main-toolbar";
 import { PlayerCardGrid } from "./components/player-cards";
 import { PlayerTable } from "./components/player-table";
-import { RoleAnalysisToolbar } from "./components/role-analysis-toolbar";
 import { SquadDepthDrawer } from "./components/squad-depth";
 import { usePlayerSelection } from "./hooks/usePlayerSelection";
 import { useSquadDepth } from "./hooks/useSquadDepth";
@@ -199,7 +199,6 @@ export default function App() {
   const [onlyRoleMatches, setOnlyRoleMatches] = useState(true);
   const [showOnlySelectedPlayers, setShowOnlySelectedPlayers] = useState(false);
   const [hideMarkedPlayers, setHideMarkedPlayers] = useState(false);
-  const [compactTableMode, setCompactTableMode] = useState(true);
   const [playerViewMode, setPlayerViewMode] =
     useState<PlayerViewMode>("table");
   const [compactCardMode, setCompactCardMode] = useState(false);
@@ -296,13 +295,15 @@ export default function App() {
     () => insertRoleAnalysisColumns(visibleHeaders),
     [visibleHeaders],
   );
-  const tableHeaders = useMemo(() => {
-    if (headers.length === 0) return [];
-    if (!compactTableMode) return availableTableHeaders;
-    return availableTableHeaders.filter((header) =>
-      COMPACT_TABLE_COLUMNS.has(header),
-    );
-  }, [availableTableHeaders, compactTableMode, headers.length]);
+  const tableHeaders = useMemo(
+    () =>
+      headers.length === 0
+        ? []
+        : BASE_TABLE_COLUMNS.filter((header) =>
+            availableTableHeaders.includes(header),
+          ),
+    [availableTableHeaders, headers.length],
+  );
 
   const searchIndex = useMemo(
     () =>
@@ -385,6 +386,8 @@ export default function App() {
 
       return {
         ...row,
+        [OVERALL_ABILITY_COLUMN]:
+          row[OVERALL_ABILITY_COLUMN] ?? row["CA"] ?? "-",
         [ROLE_SCORE_COLUMN]: selectedCandidate
           ? formatRoleScore(getCandidateRoleScore(selectedCandidate))
           : "-",
@@ -594,6 +597,13 @@ export default function App() {
         setMinAge("");
         setMaxAge("");
         setFootFilter("any");
+        setAnalysisPositionGroup("any");
+        setAnalysisPhase("any");
+        setAnalysisRoleId("any");
+        setMinRoleScore("60");
+        setOnlyRoleMatches(true);
+        setShowOnlySelectedPlayers(false);
+        setHideMarkedPlayers(false);
         setSelectedPlayerKey(null);
         setError("");
       });
@@ -654,7 +664,7 @@ export default function App() {
           </span>
           <span>
             <strong id="app-title">FM Player Sorter</strong>
-            <small>National Team Intelligence · v0.4.3</small>
+            <small>National Team Intelligence · v0.4.4</small>
           </span>
         </div>
 
@@ -680,12 +690,22 @@ export default function App() {
           setMaxAge={setMaxAge}
           footFilter={footFilter}
           setFootFilter={setFootFilter}
+          rolePositionOptions={rolePositionOptions}
+          availableAnalysisRoles={availableAnalysisRoles}
+          analysisPositionGroup={analysisPositionGroup}
+          setAnalysisPositionGroup={setAnalysisPositionGroup}
+          analysisPhase={analysisPhase}
+          setAnalysisPhase={setAnalysisPhase}
+          analysisRoleId={analysisRoleId}
+          setAnalysisRoleId={setAnalysisRoleId}
+          minRoleScore={minRoleScore}
+          setMinRoleScore={setMinRoleScore}
+          onlyRoleMatches={onlyRoleMatches}
+          setOnlyRoleMatches={setOnlyRoleMatches}
           showOnlySelectedPlayers={showOnlySelectedPlayers}
           setShowOnlySelectedPlayers={setShowOnlySelectedPlayers}
           hideMarkedPlayers={hideMarkedPlayers}
           setHideMarkedPlayers={setHideMarkedPlayers}
-          compactTableMode={compactTableMode}
-          setCompactTableMode={setCompactTableMode}
           selectedPlayersCount={selectedPlayersCount}
           selectedPlayersWithPositionCount={
             selectedPlayersWithPositionCount
@@ -693,23 +713,6 @@ export default function App() {
           rejectedPlayersCount={rejectedPlayersCount}
           onClearPlayerSelection={clearPlayerSelection}
         />
-
-        {rows.length > 0 && (
-          <RoleAnalysisToolbar
-            rolePositionOptions={rolePositionOptions}
-            availableAnalysisRoles={availableAnalysisRoles}
-            analysisPositionGroup={analysisPositionGroup}
-            setAnalysisPositionGroup={setAnalysisPositionGroup}
-            analysisPhase={analysisPhase}
-            setAnalysisPhase={setAnalysisPhase}
-            analysisRoleId={analysisRoleId}
-            setAnalysisRoleId={setAnalysisRoleId}
-            minRoleScore={minRoleScore}
-            setMinRoleScore={setMinRoleScore}
-            onlyRoleMatches={onlyRoleMatches}
-            setOnlyRoleMatches={setOnlyRoleMatches}
-          />
-        )}
 
         <div className="desktop-context-bar" role="status">
           <span>
