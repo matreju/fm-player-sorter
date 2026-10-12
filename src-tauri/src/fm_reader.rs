@@ -159,6 +159,7 @@ mod windows_reader {
     const DICTIONARY_ENTRY_SIZE: usize = 0x18;
     const DYNAMIC_REFERENCE_UID_PROPERTY: u32 = 1;
     const MAX_BINDING_NODES: usize = 16_384;
+    const MAX_DYNAMIC_REFERENCE_PROPERTIES: usize = 256;
     const HUMAN_CONTEXT_SCAN_TAIL: usize = 0x5C8;
 
     const HUMAN_JOB_NATION_MANAGER: u32 = 1;
@@ -594,6 +595,12 @@ mod windows_reader {
         binding_candidate_count: usize,
         validated_binding_count: usize,
         human_team_node_count: usize,
+        known_team_uid_count: usize,
+        matched_data_count: usize,
+        typed_value_count: usize,
+        reference_value_count: usize,
+        record_array_count: usize,
+        uid_property_count: usize,
         decoded_uid_count: usize,
         nation_manager_context_count: usize,
         other_job_context_count: usize,
@@ -860,11 +867,17 @@ mod windows_reader {
                 *counts.entry(candidate.nation_address).or_default() += 1;
                 counts
             });
+        let known_team_uids = collect_known_team_uids(
+            &process,
+            &uid_objects,
+            &club_candidates,
+        );
         let (human_binding, mut binding_diagnostics) = resolve_human_team_binding(
             &process,
             &regions,
             &binding_candidates,
             &human_context_candidates,
+            &known_team_uids,
         );
         let managed = human_binding.and_then(|binding| {
             resolve_bound_national_team(
@@ -879,11 +892,17 @@ mod windows_reader {
         });
         let managed = managed.ok_or_else(|| {
             format!(
-                "Wykryto FM26, ale nie udało się odczytać aktywnej reprezentacji z globalnego powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/U{}/J{}/X{}/O{}/R{}/M{}.",
+                "Wykryto FM26, ale nie udało się odczytać aktywnej reprezentacji z globalnego powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/K{}/D{}/T{}/Q{}/A{}/P{}/U{}/J{}/X{}/O{}/R{}/M{}.",
                 binding_diagnostics.context_candidate_count,
                 binding_diagnostics.binding_candidate_count,
                 binding_diagnostics.validated_binding_count,
                 binding_diagnostics.human_team_node_count,
+                binding_diagnostics.known_team_uid_count,
+                binding_diagnostics.matched_data_count,
+                binding_diagnostics.typed_value_count,
+                binding_diagnostics.reference_value_count,
+                binding_diagnostics.record_array_count,
+                binding_diagnostics.uid_property_count,
                 binding_diagnostics.decoded_uid_count,
                 binding_diagnostics.nation_manager_context_count,
                 binding_diagnostics.other_job_context_count,
@@ -1891,9 +1910,11 @@ mod windows_reader {
         regions: &[(usize, usize)],
         binding_candidates: &HashSet<usize>,
         context_candidates: &HashSet<HumanContextCandidate>,
+        known_team_uids: &HashSet<u32>,
     ) -> (Option<HumanBindingResolution>, HumanBindingDiagnostics) {
         let mut diagnostics = HumanBindingDiagnostics {
             context_candidate_count: context_candidates.len(),
+            known_team_uid_count: known_team_uids.len(),
             ..HumanBindingDiagnostics::default()
         };
         let mut bindings = binding_candidates.clone();
@@ -1937,8 +1958,14 @@ mod windows_reader {
                 continue;
             };
             diagnostics.human_team_node_count += 1;
-            let Some(human_team_uid) =
-                binding_node_dynamic_reference_uid(process, binding, human_team_node)
+            let Some(human_team_uid) = binding_node_dynamic_reference_uid(
+                process,
+                regions,
+                binding,
+                human_team_node,
+                known_team_uids,
+                &mut diagnostics,
+            )
             else {
                 continue;
             };
@@ -2069,38 +2096,86 @@ mod windows_reader {
 
     fn binding_node_dynamic_reference_uid(
         process: &RemoteProcess,
+        regions: &[(usize, usize)],
         binding: usize,
         node: usize,
+        known_team_uids: &HashSet<u32>,
+        diagnostics: &mut HumanBindingDiagnostics,
     ) -> Option<u32> {
         let data_key = process.read_u64(node + BINDING_NODE_DATA_KEY)?;
         let raw_index = (data_key & u64::from(u32::MAX)) as usize;
         let data_list = process.read_ptr(binding + BINDINGS_DATA)?;
-        let mut indices = vec![raw_index];
+        let data_size = process.read_u32(data_list + MANAGED_LIST_SIZE)? as usize;
+        if data_size == 0 || data_size > MAX_BINDING_NODES * 4 {
+            return None;
+        }
+
+        let mut indices = Vec::<usize>::from([raw_index]);
         if raw_index > 0 {
             indices.push(raw_index - 1);
         }
+        if raw_index + 1 < data_size {
+            indices.push(raw_index + 1);
+        }
+
+        // DataKey contains both a version and an index. The index is normally
+        // sufficient, but matching the full key makes the reader resilient to
+        // a recycled list slot and to small layout differences between builds.
+        for index in 0..data_size {
+            let Some(data) = managed_list_reference(process, data_list, index) else {
+                continue;
+            };
+            if process.read_u64(data + 0x10) == Some(data_key) {
+                indices.push(index);
+            }
+        }
+        indices.sort_unstable();
+        indices.dedup();
+
+        let mut decoded = HashSet::<u32>::new();
 
         for index in indices {
             let Some(data) = managed_list_reference(process, data_list, index) else {
                 continue;
             };
+            diagnostics.matched_data_count += 1;
             let Some(typed_value) = process
                 .read_ptr(data + BINDING_DATA_VALUE)
-                .filter(|value| *value >= 0x10_000)
+                .filter(|value| pointer_in_regions(*value, regions))
             else {
                 continue;
             };
-            let Some(dynamic_reference) = process
-                .read_ptr(typed_value + TYPED_VALUE_VALUE)
-                .filter(|value| *value >= 0x10_000)
-            else {
-                continue;
-            };
-            if let Some(uid) = dynamic_reference_uid(process, dynamic_reference) {
-                return Some(uid);
+            diagnostics.typed_value_count += 1;
+
+            decoded.extend(typed_value_uid_candidates(
+                process,
+                regions,
+                typed_value,
+                known_team_uids,
+            ));
+
+            // ReferenceTypedValue normally stores m_value at 0x18. The second
+            // offset covers the alternative alignment used by some closed
+            // generic instantiations without accepting an unvalidated UID.
+            for value_offset in [TYPED_VALUE_VALUE, TYPED_VALUE_VALUE + 8] {
+                let Some(dynamic_reference) = process
+                    .read_ptr(typed_value + value_offset)
+                    .filter(|value| pointer_in_regions(*value, regions))
+                else {
+                    continue;
+                };
+                diagnostics.reference_value_count += 1;
+                decoded.extend(dynamic_reference_uid_candidates(
+                    process,
+                    regions,
+                    dynamic_reference,
+                    known_team_uids,
+                    diagnostics,
+                ));
             }
         }
-        None
+
+        (decoded.len() == 1).then(|| *decoded.iter().next().unwrap())
     }
 
     fn managed_list_reference(
@@ -2122,35 +2197,168 @@ mod windows_reader {
             .filter(|value| *value >= 0x10_000)
     }
 
-    fn dynamic_reference_uid(
+    fn typed_value_uid_candidates(
         process: &RemoteProcess,
-        dynamic_reference: usize,
-    ) -> Option<u32> {
-        let entries = process.read_ptr(dynamic_reference + MANAGED_DICTIONARY_ENTRIES)?;
-        let count = process.read_u32(dynamic_reference + MANAGED_DICTIONARY_COUNT)? as usize;
-        let capacity = process.read_u64(entries + MANAGED_ARRAY_LENGTH)? as usize;
-        let entry_count = count.min(capacity);
-        if entry_count == 0 || entry_count > 256 || capacity > 4_096 {
-            return None;
-        }
-        let bytes = process.read_exact(
-            entries + MANAGED_ARRAY_DATA,
-            entry_count.checked_mul(DICTIONARY_ENTRY_SIZE)?,
-        )?;
+        regions: &[(usize, usize)],
+        typed_value: usize,
+        known_team_uids: &HashSet<u32>,
+    ) -> HashSet<u32> {
+        let mut candidates = HashSet::<u32>::new();
+        for value_offset in [TYPED_VALUE_VALUE, TYPED_VALUE_VALUE + 8] {
+            if let Some(uid) = process
+                .read_u32(typed_value + value_offset)
+                .filter(|uid| known_team_uids.contains(uid))
+            {
+                candidates.insert(uid);
+            }
 
-        for entry in bytes.chunks_exact(DICTIONARY_ENTRY_SIZE) {
-            let key = read_u32(entry, 0x08)?;
-            if key != DYNAMIC_REFERENCE_UID_PROPERTY {
+            let Some(boxed) = process
+                .read_ptr(typed_value + value_offset)
+                .filter(|value| pointer_in_regions(*value, regions))
+            else {
+                continue;
+            };
+            if let Some(uid) = process
+                .read_u32(boxed + 0x10)
+                .filter(|uid| known_team_uids.contains(uid))
+            {
+                candidates.insert(uid);
+            }
+        }
+        candidates
+    }
+
+    fn dynamic_reference_uid_candidates(
+        process: &RemoteProcess,
+        regions: &[(usize, usize)],
+        dynamic_reference: usize,
+        known_team_uids: &HashSet<u32>,
+        diagnostics: &mut HumanBindingDiagnostics,
+    ) -> HashSet<u32> {
+        let mut candidates = HashSet::<u32>::new();
+        let canonical_count = process
+            .read_u32(dynamic_reference + MANAGED_DICTIONARY_COUNT)
+            .map(|value| value as usize)
+            .unwrap_or(0);
+        let mut arrays = Vec::<usize>::new();
+
+        // Record derives from Dictionary<uint, TypedValue>. 0x18 is the
+        // canonical _entries offset. The bounded alternatives let the reader
+        // survive a runtime layout shift; every resulting number still has to
+        // match a real Team UID collected independently from the native DB.
+        for entries_offset in [
+            MANAGED_DICTIONARY_ENTRIES,
+            0x10,
+            0x20,
+            0x28,
+            0x30,
+        ] {
+            let Some(entries) = process
+                .read_ptr(dynamic_reference + entries_offset)
+                .filter(|value| pointer_in_regions(*value, regions))
+            else {
+                continue;
+            };
+            let Some(capacity) = process
+                .read_u64(entries + MANAGED_ARRAY_LENGTH)
+                .map(|value| value as usize)
+                .filter(|value| {
+                    (1..=MAX_DYNAMIC_REFERENCE_PROPERTIES).contains(value)
+                })
+            else {
+                continue;
+            };
+            if arrays.contains(&entries) {
                 continue;
             }
-            let typed_value = read_u64(entry, 0x10)? as usize;
-            let raw = process.read_u64(typed_value + TYPED_VALUE_VALUE)?;
-            let kind = process.read_u8(typed_value + TYPED_VALUE_VALUE + 8)?;
-            if matches!(kind, 0 | 1) && raw > 0 && raw <= u64::from(u32::MAX) {
-                return Some(raw as u32);
+            arrays.push(entries);
+            diagnostics.record_array_count += 1;
+
+            let entry_count = if entries_offset == MANAGED_DICTIONARY_ENTRIES
+                && (1..=capacity).contains(&canonical_count)
+            {
+                canonical_count
+            } else {
+                capacity
+            };
+
+            for entry_size in [DICTIONARY_ENTRY_SIZE, 0x20] {
+                for index in 0..entry_count {
+                    let entry = entries
+                        .saturating_add(MANAGED_ARRAY_DATA)
+                        .saturating_add(index.saturating_mul(entry_size));
+                    let direct_key = process.read_u32(entry + 0x08);
+                    let boxed_key = process
+                        .read_ptr(entry + 0x08)
+                        .filter(|value| pointer_in_regions(*value, regions))
+                        .and_then(|value| process.read_u32(value + 0x10));
+                    if direct_key != Some(DYNAMIC_REFERENCE_UID_PROPERTY)
+                        && boxed_key != Some(DYNAMIC_REFERENCE_UID_PROPERTY)
+                    {
+                        continue;
+                    }
+                    diagnostics.uid_property_count += 1;
+
+                    for value_offset in [0x10, 0x18] {
+                        let Some(typed_value) = process
+                            .read_ptr(entry + value_offset)
+                            .filter(|value| pointer_in_regions(*value, regions))
+                        else {
+                            continue;
+                        };
+                        candidates.extend(typed_value_uid_candidates(
+                            process,
+                            regions,
+                            typed_value,
+                            known_team_uids,
+                        ));
+                    }
+                }
             }
         }
-        None
+
+        candidates
+    }
+
+    fn collect_known_team_uids(
+        process: &RemoteProcess,
+        uid_objects: &[UidObjectCandidate],
+        clubs: &HashSet<usize>,
+    ) -> HashSet<u32> {
+        let mut team_uids = HashSet::<u32>::new();
+        for &club in clubs {
+            let Some(begin) = process.read_ptr(club + CLUB_TEAMS_BEGIN) else {
+                continue;
+            };
+            let Some(end) = process.read_ptr(club + CLUB_TEAMS_END) else {
+                continue;
+            };
+            if end <= begin || (end - begin) % 8 != 0 || (end - begin) / 8 > 64 {
+                continue;
+            }
+            for index in 0..((end - begin) / 8) {
+                let Some(team) = process.read_ptr(begin + index * 8) else {
+                    continue;
+                };
+                if let Some(uid) = record_uid(process, team) {
+                    team_uids.insert(uid);
+                }
+            }
+        }
+
+        for object in uid_objects {
+            let mut addresses = Vec::<usize>::from([object.address]);
+            if object.dynamic_offset > 0 && object.address >= object.dynamic_offset {
+                addresses.push(object.address - object.dynamic_offset);
+            }
+            if addresses
+                .into_iter()
+                .any(|address| looks_like_team_record(process, address))
+            {
+                team_uids.insert(object.uid);
+            }
+        }
+        team_uids
     }
 
     fn resolve_bound_national_team(
