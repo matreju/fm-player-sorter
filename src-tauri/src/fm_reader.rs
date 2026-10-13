@@ -154,11 +154,15 @@ mod windows_reader {
     const MANAGED_ARRAY_LENGTH: usize = 0x18;
     const MANAGED_ARRAY_DATA: usize = 0x20;
     const TYPED_VALUE_VALUE: usize = 0x18;
+    const INTEROP_REFERENCE_ID_LIST: usize = 0x10;
+    const INTEROP_REFERENCE_PAIR_SIZE: usize = 0x08;
+    const INTEROP_REFERENCE_PAIR_VALUE: usize = 0x04;
     const MANAGED_DICTIONARY_ENTRIES: usize = 0x18;
     const MANAGED_DICTIONARY_COUNT: usize = 0x20;
     const DICTIONARY_ENTRY_SIZE: usize = 0x18;
     const DYNAMIC_REFERENCE_UID_PROPERTY: u32 = 1;
     const MAX_BINDING_NODES: usize = 16_384;
+    const MAX_INTEROP_REFERENCE_PAIRS: usize = 64;
     const MAX_DYNAMIC_REFERENCE_PROPERTIES: usize = 256;
     const HUMAN_CONTEXT_SCAN_TAIL: usize = 0x5C8;
 
@@ -601,8 +605,9 @@ mod windows_reader {
         reference_value_count: usize,
         record_array_count: usize,
         uid_property_count: usize,
-        reference_graph_node_count: usize,
-        reference_graph_uid_count: usize,
+        interop_list_count: usize,
+        interop_pair_count: usize,
+        interop_uid_count: usize,
         decoded_uid_count: usize,
         nation_manager_context_count: usize,
         other_job_context_count: usize,
@@ -894,7 +899,7 @@ mod windows_reader {
         });
         let managed = managed.ok_or_else(|| {
             format!(
-                "Wykryto FM26, ale nie udało się odczytać aktywnej reprezentacji z globalnego powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/K{}/D{}/T{}/Q{}/A{}/P{}/G{}/S{}/U{}/J{}/X{}/O{}/R{}/M{}.",
+                "Wykryto FM26, ale nie udało się odczytać aktywnej reprezentacji z globalnego powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/K{}/D{}/T{}/Q{}/A{}/P{}/L{}/E{}/I{}/U{}/J{}/X{}/O{}/R{}/M{}.",
                 binding_diagnostics.context_candidate_count,
                 binding_diagnostics.binding_candidate_count,
                 binding_diagnostics.validated_binding_count,
@@ -905,8 +910,9 @@ mod windows_reader {
                 binding_diagnostics.reference_value_count,
                 binding_diagnostics.record_array_count,
                 binding_diagnostics.uid_property_count,
-                binding_diagnostics.reference_graph_node_count,
-                binding_diagnostics.reference_graph_uid_count,
+                binding_diagnostics.interop_list_count,
+                binding_diagnostics.interop_pair_count,
+                binding_diagnostics.interop_uid_count,
                 binding_diagnostics.decoded_uid_count,
                 binding_diagnostics.nation_manager_context_count,
                 binding_diagnostics.other_job_context_count,
@@ -2159,38 +2165,40 @@ mod windows_reader {
             );
             decoded.extend(direct_candidates);
 
-            // ReferenceTypedValue normally stores m_value at 0x18. The second
-            // offset covers the alternative alignment used by some closed
-            // generic instantiations without accepting an unvalidated UID.
-            for value_offset in [TYPED_VALUE_VALUE, TYPED_VALUE_VALUE + 8] {
-                let Some(dynamic_reference) = process
+            // ReferenceTypedValue inherits TypedValue<object>; its concrete
+            // m_value field is at 0x18 in the FM26 IL2CPP layout.
+            for value_offset in [TYPED_VALUE_VALUE] {
+                let Some(reference_value) = process
                     .read_ptr(typed_value + value_offset)
                     .filter(|value| pointer_in_regions(*value, regions))
                 else {
                     continue;
                 };
                 diagnostics.reference_value_count += 1;
-                let reference_candidates = dynamic_reference_uid_candidates(
+                let interop_candidates = interop_reference_uid_candidates(
                     process,
                     regions,
-                    dynamic_reference,
+                    reference_value,
                     known_team_uids,
                     diagnostics,
                 );
-                if reference_candidates.is_empty() && decoded.is_empty() {
-                    let graph_candidates = reference_graph_uid_candidates(
+                diagnostics.interop_uid_count = diagnostics
+                    .interop_uid_count
+                    .saturating_add(interop_candidates.len());
+                decoded.extend(interop_candidates.iter().copied());
+
+                // Some bindings contain a DynamicReference (Record) instead
+                // of an InteropReference. Decode its dictionary only when the
+                // concrete InteropReference layout did not yield a Team UID.
+                if interop_candidates.is_empty() {
+                    decoded.extend(dynamic_reference_uid_candidates(
                         process,
                         regions,
-                        dynamic_reference,
+                        reference_value,
                         known_team_uids,
                         diagnostics,
-                    );
-                    diagnostics.reference_graph_uid_count = diagnostics
-                        .reference_graph_uid_count
-                        .saturating_add(graph_candidates.len());
-                    decoded.extend(graph_candidates);
+                    ));
                 }
-                decoded.extend(reference_candidates);
             }
         }
 
@@ -2223,14 +2231,7 @@ mod windows_reader {
         known_team_uids: &HashSet<u32>,
     ) -> HashSet<u32> {
         let mut candidates = HashSet::<u32>::new();
-        for value_offset in [TYPED_VALUE_VALUE, TYPED_VALUE_VALUE + 8] {
-            if let Some(uid) = process
-                .read_u32(typed_value + value_offset)
-                .filter(|uid| known_team_uids.contains(uid))
-            {
-                candidates.insert(uid);
-            }
-
+        for value_offset in [TYPED_VALUE_VALUE] {
             let Some(boxed) = process
                 .read_ptr(typed_value + value_offset)
                 .filter(|value| pointer_in_regions(*value, regions))
@@ -2243,84 +2244,62 @@ mod windows_reader {
             {
                 candidates.insert(uid);
             }
-            if let Some(uid) = process
-                .read_u32(boxed + 0x10)
-                .filter(|uid| known_team_uids.contains(uid))
-            {
-                candidates.insert(uid);
-            }
         }
         candidates
     }
 
-    fn reference_graph_uid_candidates(
+    fn interop_reference_uid_candidates(
         process: &RemoteProcess,
         regions: &[(usize, usize)],
-        root: usize,
+        interop_reference: usize,
         known_team_uids: &HashSet<u32>,
         diagnostics: &mut HumanBindingDiagnostics,
     ) -> HashSet<u32> {
-        const MAX_REFERENCE_GRAPH_DEPTH: usize = 4;
-        const MAX_REFERENCE_GRAPH_NODES: usize = 192;
-        const OBJECT_SCAN_LENGTH: usize = 0x58;
-        const MAX_ARRAY_LENGTH: usize = 256;
-        const MAX_ARRAY_SCAN_LENGTH: usize = 0x2020;
-
         let mut candidates = HashSet::<u32>::new();
-        let mut queue = VecDeque::<(usize, usize)>::from([(root, 0)]);
-        let mut visited = HashSet::<usize>::new();
+        let Some(id_list) = process
+            .read_ptr(interop_reference + INTEROP_REFERENCE_ID_LIST)
+            .filter(|value| pointer_in_regions(*value, regions))
+        else {
+            return candidates;
+        };
+        let Some(size) = process
+            .read_u32(id_list + MANAGED_LIST_SIZE)
+            .map(|value| value as usize)
+            .filter(|value| (1..=MAX_INTEROP_REFERENCE_PAIRS).contains(value))
+        else {
+            return candidates;
+        };
+        let Some(items) = process
+            .read_ptr(id_list + MANAGED_LIST_ITEMS)
+            .filter(|value| pointer_in_regions(*value, regions))
+        else {
+            return candidates;
+        };
+        let Some(capacity) = process
+            .read_u64(items + MANAGED_ARRAY_LENGTH)
+            .map(|value| value as usize)
+            .filter(|value| size <= *value && *value <= MAX_INTEROP_REFERENCE_PAIRS)
+        else {
+            return candidates;
+        };
+        if capacity < size {
+            return candidates;
+        }
 
-        while let Some((address, depth)) = queue.pop_front() {
-            if depth > MAX_REFERENCE_GRAPH_DEPTH
-                || visited.len() >= MAX_REFERENCE_GRAPH_NODES
-                || !pointer_in_regions(address, regions)
-                || !visited.insert(address)
-            {
+        diagnostics.interop_list_count = diagnostics.interop_list_count.saturating_add(1);
+        for index in 0..size {
+            let pair = items
+                .saturating_add(MANAGED_ARRAY_DATA)
+                .saturating_add(index.saturating_mul(INTEROP_REFERENCE_PAIR_SIZE));
+            if process.read_u32(pair).is_none() {
                 continue;
             }
-            diagnostics.reference_graph_node_count = diagnostics
-                .reference_graph_node_count
-                .saturating_add(1);
-
-            // A ReferenceTypedValue may contain a native Team directly, an
-            // InteropReference whose id is inline, or a DynamicReference whose
-            // UID is behind Record -> Dictionary -> Entry -> TypedValue. Walk
-            // only the bounded object graph rooted at the exact humanTeam
-            // value and accept numbers that are independently known Team UIDs.
-            let mut scan_length = OBJECT_SCAN_LENGTH;
-            if let Some(array_length) = process
-                .read_u64(address + MANAGED_ARRAY_LENGTH)
-                .map(|value| value as usize)
-                .filter(|value| (1..=MAX_ARRAY_LENGTH).contains(value))
-            {
-                scan_length = MANAGED_ARRAY_DATA
-                    .saturating_add(array_length.saturating_mul(0x20))
-                    .min(MAX_ARRAY_SCAN_LENGTH)
-                    .max(OBJECT_SCAN_LENGTH);
-            }
-            let Some(bytes) = process
-                .read(address, scan_length)
-                .or_else(|| process.read(address, OBJECT_SCAN_LENGTH))
-            else {
+            let Some(value) = process.read_u32(pair + INTEROP_REFERENCE_PAIR_VALUE) else {
                 continue;
             };
-
-            for uid in aligned_u32_values(&bytes) {
-                if known_team_uids.contains(&uid) {
-                    candidates.insert(uid);
-                }
-            }
-            if depth == MAX_REFERENCE_GRAPH_DEPTH {
-                continue;
-            }
-            for pointer in aligned_pointers(&bytes) {
-                if pointer_in_regions(pointer, regions)
-                    && !visited.contains(&pointer)
-                    && visited.len().saturating_add(queue.len())
-                        < MAX_REFERENCE_GRAPH_NODES
-                {
-                    queue.push_back((pointer, depth + 1));
-                }
+            diagnostics.interop_pair_count = diagnostics.interop_pair_count.saturating_add(1);
+            if known_team_uids.contains(&value) {
+                candidates.insert(value);
             }
         }
 
