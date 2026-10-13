@@ -601,6 +601,8 @@ mod windows_reader {
         reference_value_count: usize,
         record_array_count: usize,
         uid_property_count: usize,
+        reference_graph_node_count: usize,
+        reference_graph_uid_count: usize,
         decoded_uid_count: usize,
         nation_manager_context_count: usize,
         other_job_context_count: usize,
@@ -892,7 +894,7 @@ mod windows_reader {
         });
         let managed = managed.ok_or_else(|| {
             format!(
-                "Wykryto FM26, ale nie udało się odczytać aktywnej reprezentacji z globalnego powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/K{}/D{}/T{}/Q{}/A{}/P{}/U{}/J{}/X{}/O{}/R{}/M{}.",
+                "Wykryto FM26, ale nie udało się odczytać aktywnej reprezentacji z globalnego powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/K{}/D{}/T{}/Q{}/A{}/P{}/G{}/S{}/U{}/J{}/X{}/O{}/R{}/M{}.",
                 binding_diagnostics.context_candidate_count,
                 binding_diagnostics.binding_candidate_count,
                 binding_diagnostics.validated_binding_count,
@@ -903,6 +905,8 @@ mod windows_reader {
                 binding_diagnostics.reference_value_count,
                 binding_diagnostics.record_array_count,
                 binding_diagnostics.uid_property_count,
+                binding_diagnostics.reference_graph_node_count,
+                binding_diagnostics.reference_graph_uid_count,
                 binding_diagnostics.decoded_uid_count,
                 binding_diagnostics.nation_manager_context_count,
                 binding_diagnostics.other_job_context_count,
@@ -2110,25 +2114,25 @@ mod windows_reader {
             return None;
         }
 
-        let mut indices = Vec::<usize>::from([raw_index]);
-        if raw_index > 0 {
-            indices.push(raw_index - 1);
-        }
-        if raw_index + 1 < data_size {
-            indices.push(raw_index + 1);
-        }
+        let mut exact_indices = Vec::<usize>::new();
 
-        // DataKey contains both a version and an index. The index is normally
-        // sufficient, but matching the full key makes the reader resilient to
-        // a recycled list slot and to small layout differences between builds.
+        // DataKey is a packed 64-bit value: the low 32 bits are the list index
+        // and the high bits are the slot version. Prefer equality of the whole
+        // key so a recycled slot can never make humanTeam resolve to a nearby,
+        // unrelated binding value.
         for index in 0..data_size {
             let Some(data) = managed_list_reference(process, data_list, index) else {
                 continue;
             };
             if process.read_u64(data + 0x10) == Some(data_key) {
-                indices.push(index);
+                exact_indices.push(index);
             }
         }
+        let mut indices = if exact_indices.is_empty() && raw_index < data_size {
+            Vec::<usize>::from([raw_index])
+        } else {
+            exact_indices
+        };
         indices.sort_unstable();
         indices.dedup();
 
@@ -2147,12 +2151,13 @@ mod windows_reader {
             };
             diagnostics.typed_value_count += 1;
 
-            decoded.extend(typed_value_uid_candidates(
+            let direct_candidates = typed_value_uid_candidates(
                 process,
                 regions,
                 typed_value,
                 known_team_uids,
-            ));
+            );
+            decoded.extend(direct_candidates);
 
             // ReferenceTypedValue normally stores m_value at 0x18. The second
             // offset covers the alternative alignment used by some closed
@@ -2165,13 +2170,27 @@ mod windows_reader {
                     continue;
                 };
                 diagnostics.reference_value_count += 1;
-                decoded.extend(dynamic_reference_uid_candidates(
+                let reference_candidates = dynamic_reference_uid_candidates(
                     process,
                     regions,
                     dynamic_reference,
                     known_team_uids,
                     diagnostics,
-                ));
+                );
+                if reference_candidates.is_empty() && decoded.is_empty() {
+                    let graph_candidates = reference_graph_uid_candidates(
+                        process,
+                        regions,
+                        dynamic_reference,
+                        known_team_uids,
+                        diagnostics,
+                    );
+                    diagnostics.reference_graph_uid_count = diagnostics
+                        .reference_graph_uid_count
+                        .saturating_add(graph_candidates.len());
+                    decoded.extend(graph_candidates);
+                }
+                decoded.extend(reference_candidates);
             }
         }
 
@@ -2219,12 +2238,92 @@ mod windows_reader {
                 continue;
             };
             if let Some(uid) = process
+                .read_u32(boxed + OBJ_UID)
+                .filter(|uid| known_team_uids.contains(uid))
+            {
+                candidates.insert(uid);
+            }
+            if let Some(uid) = process
                 .read_u32(boxed + 0x10)
                 .filter(|uid| known_team_uids.contains(uid))
             {
                 candidates.insert(uid);
             }
         }
+        candidates
+    }
+
+    fn reference_graph_uid_candidates(
+        process: &RemoteProcess,
+        regions: &[(usize, usize)],
+        root: usize,
+        known_team_uids: &HashSet<u32>,
+        diagnostics: &mut HumanBindingDiagnostics,
+    ) -> HashSet<u32> {
+        const MAX_REFERENCE_GRAPH_DEPTH: usize = 4;
+        const MAX_REFERENCE_GRAPH_NODES: usize = 192;
+        const OBJECT_SCAN_LENGTH: usize = 0x58;
+        const MAX_ARRAY_LENGTH: usize = 256;
+        const MAX_ARRAY_SCAN_LENGTH: usize = 0x2020;
+
+        let mut candidates = HashSet::<u32>::new();
+        let mut queue = VecDeque::<(usize, usize)>::from([(root, 0)]);
+        let mut visited = HashSet::<usize>::new();
+
+        while let Some((address, depth)) = queue.pop_front() {
+            if depth > MAX_REFERENCE_GRAPH_DEPTH
+                || visited.len() >= MAX_REFERENCE_GRAPH_NODES
+                || !pointer_in_regions(address, regions)
+                || !visited.insert(address)
+            {
+                continue;
+            }
+            diagnostics.reference_graph_node_count = diagnostics
+                .reference_graph_node_count
+                .saturating_add(1);
+
+            // A ReferenceTypedValue may contain a native Team directly, an
+            // InteropReference whose id is inline, or a DynamicReference whose
+            // UID is behind Record -> Dictionary -> Entry -> TypedValue. Walk
+            // only the bounded object graph rooted at the exact humanTeam
+            // value and accept numbers that are independently known Team UIDs.
+            let mut scan_length = OBJECT_SCAN_LENGTH;
+            if let Some(array_length) = process
+                .read_u64(address + MANAGED_ARRAY_LENGTH)
+                .map(|value| value as usize)
+                .filter(|value| (1..=MAX_ARRAY_LENGTH).contains(value))
+            {
+                scan_length = MANAGED_ARRAY_DATA
+                    .saturating_add(array_length.saturating_mul(0x20))
+                    .min(MAX_ARRAY_SCAN_LENGTH)
+                    .max(OBJECT_SCAN_LENGTH);
+            }
+            let Some(bytes) = process
+                .read(address, scan_length)
+                .or_else(|| process.read(address, OBJECT_SCAN_LENGTH))
+            else {
+                continue;
+            };
+
+            for uid in aligned_u32_values(&bytes) {
+                if known_team_uids.contains(&uid) {
+                    candidates.insert(uid);
+                }
+            }
+            if depth == MAX_REFERENCE_GRAPH_DEPTH {
+                continue;
+            }
+            for pointer in aligned_pointers(&bytes) {
+                if pointer_in_regions(pointer, regions)
+                    && !visited.contains(&pointer)
+                    && visited.len().saturating_add(queue.len())
+                        < MAX_REFERENCE_GRAPH_NODES
+                {
+                    queue.push_back((pointer, depth + 1));
+                }
+            }
+        }
+
         candidates
     }
 
