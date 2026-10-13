@@ -92,6 +92,7 @@ mod windows_reader {
     const STAFF_OFFSET: i32 = 0x100;
     const HUMAN_MANAGER_OFFSET: i32 = 0x450;
 
+    const NATIVE_RECORD_INDEX: usize = 0x08;
     const OBJ_UID: usize = 0x0C;
     const PLAYER_CA: usize = 0x264;
     const PLAYER_PA: usize = 0x266;
@@ -156,6 +157,14 @@ mod windows_reader {
     const MANAGED_ARRAY_DATA: usize = 0x20;
     const TYPED_VALUE_VALUE: usize = 0x18;
     const INTEROP_REFERENCE_ID_LIST: usize = 0x10;
+    const DATABASE_RECORD_INDEX: usize = 0x20;
+    const DATABASE_RECORD_TYPE: usize = 0x24;
+    const DATABASE_RECORD_INDEX_MASK: u32 = 0x007F_FFFF;
+    const DATABASE_TABLE_COUNT: u32 = 74;
+    const DATABASE_TABLE_CLUB: u32 = 3;
+    const DATABASE_TABLE_NATIONAL_TEAM_CONTAINER: u32 = 9;
+    const DATABASE_TABLE_NATION: u32 = 10;
+    const DATABASE_TABLE_TEAM: u32 = 24;
     const INTEROP_REFERENCE_PAIR_SIZE: usize = 0x08;
     const INTEROP_REFERENCE_PAIR_VALUE: usize = 0x04;
     const MANAGED_DICTIONARY_ENTRIES: usize = 0x18;
@@ -170,6 +179,17 @@ mod windows_reader {
     const HUMAN_JOB_NATION_MANAGER: u32 = 1;
     const HUMAN_JOB_CLUB_MANAGER: u32 = 2;
     const HUMAN_JOB_UNEMPLOYED: u32 = 4;
+
+    // Verified FM26 26.3.x game_plugin.dll signature for the global registry
+    // that owns the one active human manager. Wildcards are the RIP-relative
+    // address of the registry slot.
+    const HUMAN_MANAGER_REGISTRY_SIGNATURE: [Option<u8>; 25] = [
+        Some(0x48), Some(0x8B), Some(0x0D), None, None, None, None, Some(0x48),
+        Some(0x8B), Some(0x41), Some(0x18), Some(0x48), Some(0x8B), Some(0x49),
+        Some(0x20), Some(0x48), Some(0x29), Some(0xC1), Some(0x48), Some(0xC1),
+        Some(0xF9), Some(0x03), Some(0x48), Some(0x39), Some(0xCE),
+    ];
+    const HUMAN_MANAGER_REGISTRY_VECTOR: usize = 0x18;
 
     // Known UI owners of BindingSubsystem + CurrentHumanJobState in FM.UI.
     // Multiple layouts are intentionally sampled; agreement between instances
@@ -493,6 +513,74 @@ mod windows_reader {
         }
     }
 
+    fn resolve_active_human_team(
+        process: &RemoteProcess,
+        resolver: &MetaResolver,
+    ) -> ActiveHumanTeamResolution {
+        let signature = &HUMAN_MANAGER_REGISTRY_SIGNATURE;
+        let matches = resolver
+            .game_plugin
+            .bytes
+            .windows(signature.len())
+            .enumerate()
+            .filter(|(_, window)| {
+                signature
+                    .iter()
+                    .zip(window.iter())
+                    .all(|(expected, actual)| expected.map(|byte| byte == *actual).unwrap_or(true))
+            })
+            .map(|(offset, _)| resolver.game_plugin.base.saturating_add(offset))
+            .collect::<Vec<_>>();
+        let mut resolution = ActiveHumanTeamResolution {
+            signature_match_count: matches.len(),
+            ..ActiveHumanTeamResolution::default()
+        };
+        let [signature_address] = matches.as_slice() else {
+            return resolution;
+        };
+        let Some(displacement) = resolver
+            .game_plugin
+            .read_i32(signature_address.saturating_add(3))
+        else {
+            return resolution;
+        };
+        let instruction_end = signature_address.saturating_add(7);
+        let registry_slot = if displacement >= 0 {
+            instruction_end.checked_add(displacement as usize)
+        } else {
+            instruction_end.checked_sub(displacement.unsigned_abs() as usize)
+        };
+        let Some(registry) = registry_slot
+            .and_then(|slot| process.read_ptr(slot))
+            .filter(|value| *value >= 0x10_000)
+        else {
+            return resolution;
+        };
+        let Some(begin) = process.read_ptr(registry + HUMAN_MANAGER_REGISTRY_VECTOR) else {
+            return resolution;
+        };
+        let Some(end) = process.read_ptr(registry + HUMAN_MANAGER_REGISTRY_VECTOR + 8) else {
+            return resolution;
+        };
+        if end < begin || (end - begin) % 8 != 0 {
+            return resolution;
+        }
+        resolution.active_manager_count = (end - begin) / 8;
+        if resolution.active_manager_count != 1 {
+            return resolution;
+        }
+        let Some(human) = process.read_ptr(begin).filter(|value| *value >= 0x10_000) else {
+            return resolution;
+        };
+        let person = human.saturating_add(HUMAN_MANAGER_OFFSET as usize);
+        let Some(team) = contract_team(process, person) else {
+            return resolution;
+        };
+        resolution.active_team_count = 1;
+        resolution.team_address = Some(team);
+        resolution
+    }
+
     #[derive(Debug)]
     struct PlayerCandidate {
         uid: u32,
@@ -590,8 +678,25 @@ mod windows_reader {
 
     #[derive(Clone, Copy, Debug)]
     struct HumanBindingResolution {
-        human_team_uid: u32,
+        human_team_uid: Option<u32>,
+        database_index: Option<u32>,
+        database_type: Option<u32>,
         nation_manager_evidence: usize,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    struct HumanTeamReference {
+        human_team_uid: Option<u32>,
+        database_index: Option<u32>,
+        database_type: Option<u32>,
+    }
+
+    #[derive(Clone, Copy, Debug, Default)]
+    struct ActiveHumanTeamResolution {
+        team_address: Option<usize>,
+        signature_match_count: usize,
+        active_manager_count: usize,
+        active_team_count: usize,
     }
 
     #[derive(Debug, Default)]
@@ -609,12 +714,19 @@ mod windows_reader {
         interop_list_count: usize,
         interop_pair_count: usize,
         interop_uid_count: usize,
+        database_reference_count: usize,
+        database_reference_type: u32,
+        database_reference_index: u32,
         decoded_uid_count: usize,
         nation_manager_context_count: usize,
         other_job_context_count: usize,
         uid_object_match_count: usize,
         trusted_team_match_count: usize,
         team_shape_match_count: usize,
+        database_index_match_count: usize,
+        manager_registry_signature_count: usize,
+        active_manager_count: usize,
+        active_team_count: usize,
         national_resolution_count: usize,
     }
 
@@ -882,6 +994,7 @@ mod windows_reader {
             &uid_objects,
             &club_candidates,
         );
+        let active_human_team = resolve_active_human_team(&process, &resolver);
         let (human_binding, mut binding_diagnostics) = resolve_human_team_binding(
             &process,
             &regions,
@@ -889,10 +1002,15 @@ mod windows_reader {
             &human_context_candidates,
             &known_team_uids,
         );
+        binding_diagnostics.manager_registry_signature_count =
+            active_human_team.signature_match_count;
+        binding_diagnostics.active_manager_count = active_human_team.active_manager_count;
+        binding_diagnostics.active_team_count = active_human_team.active_team_count;
         let managed = human_binding.and_then(|binding| {
             resolve_bound_national_team(
                 &process,
                 binding,
+                active_human_team.team_address,
                 &uid_objects,
                 &club_candidates,
                 &human_managers,
@@ -903,7 +1021,7 @@ mod windows_reader {
         });
         let managed = managed.ok_or_else(|| {
             format!(
-                "Wykryto FM26, ale nie udało się odczytać aktywnej reprezentacji z globalnego powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/K{}/D{}/T{}/Q{}/A{}/P{}/L{}/E{}/I{}/U{}/J{}/X{}/O{}/W{}/S{}/R{}/M{}.",
+                "Wykryto FM26, ale nie udało się odczytać aktywnej reprezentacji z globalnego powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/K{}/D{}/T{}/Q{}/A{}/P{}/L{}/E{}/I{}/F{}/Y{}/N{}/U{}/J{}/X{}/O{}/W{}/S{}/Z{}/G{}/M{}/GT{}/R{}/MC{}.",
                 binding_diagnostics.context_candidate_count,
                 binding_diagnostics.binding_candidate_count,
                 binding_diagnostics.validated_binding_count,
@@ -917,12 +1035,19 @@ mod windows_reader {
                 binding_diagnostics.interop_list_count,
                 binding_diagnostics.interop_pair_count,
                 binding_diagnostics.interop_uid_count,
+                binding_diagnostics.database_reference_count,
+                binding_diagnostics.database_reference_type,
+                binding_diagnostics.database_reference_index,
                 binding_diagnostics.decoded_uid_count,
                 binding_diagnostics.nation_manager_context_count,
                 binding_diagnostics.other_job_context_count,
                 binding_diagnostics.uid_object_match_count,
                 binding_diagnostics.trusted_team_match_count,
                 binding_diagnostics.team_shape_match_count,
+                binding_diagnostics.database_index_match_count,
+                binding_diagnostics.manager_registry_signature_count,
+                binding_diagnostics.active_manager_count,
+                binding_diagnostics.active_team_count,
                 binding_diagnostics.national_resolution_count,
                 human_managers.len(),
             )
@@ -1974,7 +2099,7 @@ mod windows_reader {
                 continue;
             };
             diagnostics.human_team_node_count += 1;
-            let Some(human_team_uid) = binding_node_dynamic_reference_uid(
+            let Some(human_team_reference) = binding_node_human_team_reference(
                 process,
                 regions,
                 binding,
@@ -2008,7 +2133,9 @@ mod windows_reader {
             diagnostics.other_job_context_count += other_job_evidence;
             decoded.push((
                 HumanBindingResolution {
-                    human_team_uid,
+                    human_team_uid: human_team_reference.human_team_uid,
+                    database_index: human_team_reference.database_index,
+                    database_type: human_team_reference.database_type,
                     nation_manager_evidence,
                 },
                 other_job_evidence,
@@ -2031,10 +2158,20 @@ mod windows_reader {
         if eligible.is_empty() {
             return (None, diagnostics);
         }
-        let expected_uid = eligible[0].0.human_team_uid;
+        let expected_reference = (
+            eligible[0].0.database_type,
+            eligible[0].0.database_index,
+            eligible[0].0.human_team_uid,
+        );
         if eligible
             .iter()
-            .any(|(candidate, _)| candidate.human_team_uid != expected_uid)
+            .any(|(candidate, _)| {
+                (
+                    candidate.database_type,
+                    candidate.database_index,
+                    candidate.human_team_uid,
+                ) != expected_reference
+            })
         {
             return (None, diagnostics);
         }
@@ -2110,14 +2247,14 @@ mod windows_reader {
         String::from_utf16(&utf16).ok()
     }
 
-    fn binding_node_dynamic_reference_uid(
+    fn binding_node_human_team_reference(
         process: &RemoteProcess,
         regions: &[(usize, usize)],
         binding: usize,
         node: usize,
         known_team_uids: &HashSet<u32>,
         diagnostics: &mut HumanBindingDiagnostics,
-    ) -> Option<u32> {
+    ) -> Option<HumanTeamReference> {
         let data_key = process.read_u64(node + BINDING_NODE_DATA_KEY)?;
         let raw_index = (data_key & u64::from(u32::MAX)) as usize;
         let data_list = process.read_ptr(binding + BINDINGS_DATA)?;
@@ -2148,7 +2285,8 @@ mod windows_reader {
         indices.sort_unstable();
         indices.dedup();
 
-        let mut decoded = HashSet::<u32>::new();
+        let mut decoded_uids = HashSet::<u32>::new();
+        let mut database_references = HashSet::<(u32, u32)>::new();
 
         for index in indices {
             let Some(data) = managed_list_reference(process, data_list, index) else {
@@ -2169,7 +2307,7 @@ mod windows_reader {
                 typed_value,
                 known_team_uids,
             );
-            decoded.extend(direct_candidates);
+            decoded_uids.extend(direct_candidates);
 
             // ReferenceTypedValue inherits TypedValue<object>; its concrete
             // m_value field is at 0x18 in the FM26 IL2CPP layout.
@@ -2181,6 +2319,14 @@ mod windows_reader {
                     continue;
                 };
                 diagnostics.reference_value_count += 1;
+                if let Some((database_type, database_index)) =
+                    database_record_reference(process, regions, reference_value)
+                {
+                    diagnostics.database_reference_count = diagnostics
+                        .database_reference_count
+                        .saturating_add(1);
+                    database_references.insert((database_type, database_index));
+                }
                 let interop_candidates = interop_reference_uid_candidates(
                     process,
                     regions,
@@ -2191,13 +2337,13 @@ mod windows_reader {
                 diagnostics.interop_uid_count = diagnostics
                     .interop_uid_count
                     .saturating_add(interop_candidates.len());
-                decoded.extend(interop_candidates.iter().copied());
+                decoded_uids.extend(interop_candidates.iter().copied());
 
                 // Some bindings contain a DynamicReference (Record) instead
                 // of an InteropReference. Decode its dictionary only when the
                 // concrete InteropReference layout did not yield a Team UID.
                 if interop_candidates.is_empty() {
-                    decoded.extend(dynamic_reference_uid_candidates(
+                    decoded_uids.extend(dynamic_reference_uid_candidates(
                         process,
                         regions,
                         reference_value,
@@ -2208,7 +2354,62 @@ mod windows_reader {
             }
         }
 
-        (decoded.len() == 1).then(|| *decoded.iter().next().unwrap())
+        if database_references.len() > 1
+            || (database_references.is_empty() && decoded_uids.len() > 1)
+        {
+            return None;
+        }
+        let database_reference = database_references.into_iter().next();
+        // Pair values belong to the InteropReference identifier tuple. They
+        // are not native Team UIDs. Keep UID decoding only as a fallback for
+        // older DynamicReference values without a concrete database record.
+        let human_team_uid = database_reference
+            .is_none()
+            .then(|| decoded_uids.into_iter().next())
+            .flatten();
+        if database_reference.is_none() && human_team_uid.is_none() {
+            return None;
+        }
+        let (database_type, database_index) = database_reference
+            .map(|(record_type, index)| (Some(record_type), Some(index)))
+            .unwrap_or((None, None));
+        diagnostics.database_reference_type = database_type.unwrap_or(0);
+        diagnostics.database_reference_index = database_index.unwrap_or(0);
+        Some(HumanTeamReference {
+            human_team_uid,
+            database_index,
+            database_type,
+        })
+    }
+
+    fn database_record_reference(
+        process: &RemoteProcess,
+        regions: &[(usize, usize)],
+        reference: usize,
+    ) -> Option<(u32, u32)> {
+        // DatabaseRecordReference derives from InteropReference. Requiring its
+        // canonical ID list first prevents arbitrary managed objects from
+        // being interpreted as a database reference just because two words
+        // at +0x20/+0x24 happen to look small.
+        process
+            .read_ptr(reference + INTEROP_REFERENCE_ID_LIST)
+            .filter(|value| pointer_in_regions(*value, regions))?;
+        let database_index = process.read_u32(reference + DATABASE_RECORD_INDEX)?;
+        let database_type = process.read_u32(reference + DATABASE_RECORD_TYPE)?;
+        if database_index == u32::MAX
+            || database_index > DATABASE_RECORD_INDEX_MASK
+            || database_type >= DATABASE_TABLE_COUNT
+            || !matches!(
+                database_type,
+                DATABASE_TABLE_CLUB
+                    | DATABASE_TABLE_NATIONAL_TEAM_CONTAINER
+                    | DATABASE_TABLE_NATION
+                    | DATABASE_TABLE_TEAM
+            )
+        {
+            return None;
+        }
+        Some((database_type, database_index))
     }
 
     fn managed_list_reference(
@@ -2448,6 +2649,7 @@ mod windows_reader {
     fn resolve_bound_national_team(
         process: &RemoteProcess,
         binding: HumanBindingResolution,
+        active_human_team: Option<usize>,
         uid_objects: &[UidObjectCandidate],
         clubs: &HashSet<usize>,
         human_managers: &HashSet<HumanManagerCandidate>,
@@ -2457,28 +2659,79 @@ mod windows_reader {
     ) -> Option<ManagedTeamResolution> {
         let mut team_addresses = HashSet::<usize>::new();
         let mut trusted_team_addresses = HashSet::<usize>::new();
+        let mut uid_matches = 0usize;
+        let mut database_index_matches = HashSet::<usize>::new();
+
+        // The global manager registry contains exactly one active human. Its
+        // inline Person -> Contract -> Team chain is the authoritative native
+        // answer to "which team does this player manage?". The selected
+        // humanTeam binding independently proves that the active job is a
+        // nation-manager job, so this pointer is safe to trust directly.
+        if binding.nation_manager_evidence > 0 {
+            if let Some(team) = active_human_team {
+                trusted_team_addresses.insert(team);
+                team_addresses.insert(team);
+                if binding.database_type == Some(DATABASE_TABLE_TEAM)
+                    && binding
+                        .database_index
+                        .map(|index| native_record_index_matches(process, team, index))
+                        .unwrap_or(false)
+                {
+                    database_index_matches.insert(team);
+                }
+            }
+        }
 
         // FM26 stores the active job through the human manager's inline Person:
         // Human + 0x450 -> Person, Person + 0xA8 -> Contract,
-        // Contract + 0x10 -> Team. Only accept it when its native UID agrees
-        // with the UID decoded from the exact humanTeam UI binding.
+        // Contract + 0x10 -> Team. This scan-based path remains as a fallback
+        // when the exact global registry signature is unavailable.
         for manager in human_managers {
             let Some(team) = contract_team(process, manager.person_address) else {
                 continue;
             };
-            if record_uid(process, team) == Some(binding.human_team_uid) {
+            let uid_match = binding
+                .human_team_uid
+                .map(|uid| record_uid(process, team) == Some(uid))
+                .unwrap_or(false);
+            let index_match = binding.database_type == Some(DATABASE_TABLE_TEAM)
+                && binding
+                    .database_index
+                    .map(|index| native_record_index_matches(process, team, index))
+                    .unwrap_or(false);
+            if uid_match || index_match {
                 trusted_team_addresses.insert(team);
                 team_addresses.insert(team);
+                uid_matches = uid_matches.saturating_add(if uid_match { 1 } else { 0 });
+                if index_match {
+                    database_index_matches.insert(team);
+                }
             }
         }
 
-        for object in uid_objects
-            .iter()
-            .filter(|object| object.uid == binding.human_team_uid)
-        {
-            team_addresses.insert(object.address);
+        for object in uid_objects {
+            let uid_match = binding
+                .human_team_uid
+                .map(|uid| object.uid == uid)
+                .unwrap_or(false);
+            let mut addresses = Vec::<usize>::from([object.address]);
             if object.dynamic_offset > 0 && object.address >= object.dynamic_offset {
-                team_addresses.insert(object.address - object.dynamic_offset);
+                addresses.push(object.address - object.dynamic_offset);
+            }
+            for address in addresses {
+                let index_match = binding.database_type == Some(DATABASE_TABLE_TEAM)
+                    && binding
+                        .database_index
+                        .map(|index| native_record_index_matches(process, address, index))
+                        .unwrap_or(false);
+                if uid_match || index_match {
+                    team_addresses.insert(address);
+                    uid_matches = uid_matches.saturating_add(if uid_match { 1 } else { 0 });
+                    if index_match && looks_like_team_record(process, address) {
+                        trusted_team_addresses.insert(address);
+                        database_index_matches.insert(address);
+                    }
+                }
             }
         }
         for &club in clubs {
@@ -2495,18 +2748,34 @@ mod windows_reader {
                 let Some(team) = process.read_ptr(begin + index * 8) else {
                     continue;
                 };
-                if record_uid(process, team) == Some(binding.human_team_uid) {
+                let uid_match = binding
+                    .human_team_uid
+                    .map(|uid| record_uid(process, team) == Some(uid))
+                    .unwrap_or(false);
+                let index_match = binding.database_type == Some(DATABASE_TABLE_TEAM)
+                    && binding
+                        .database_index
+                        .map(|record_index| {
+                            native_record_index_matches(process, team, record_index)
+                        })
+                        .unwrap_or(false);
+                if uid_match || index_match {
                     // A pointer read from a validated Club::teams vector is an
                     // exact Team record. Do not reject it using the legacy
                     // TEAM_TYPE byte heuristic; that byte is not stable across
                     // every national-team subtype in FM26.
                     trusted_team_addresses.insert(team);
                     team_addresses.insert(team);
+                    uid_matches = uid_matches.saturating_add(if uid_match { 1 } else { 0 });
+                    if index_match {
+                        database_index_matches.insert(team);
+                    }
                 }
             }
         }
-        diagnostics.uid_object_match_count = team_addresses.len();
+        diagnostics.uid_object_match_count = uid_matches;
         diagnostics.trusted_team_match_count = trusted_team_addresses.len();
+        diagnostics.database_index_match_count = database_index_matches.len();
 
         let mut address_to_nation = HashMap::<usize, usize>::with_capacity(candidates.len() * 2);
         for candidate in candidates.values() {
@@ -2543,6 +2812,9 @@ mod windows_reader {
             candidate.score = candidate
                 .score
                 .saturating_add(binding.nation_manager_evidence.saturating_mul(25_000));
+            if active_human_team == Some(candidate.team_address) {
+                candidate.score = candidate.score.saturating_add(5_000_000);
+            }
         }
         matches.sort_by(|left, right| right.score.cmp(&left.score));
         let best = matches.first()?;
@@ -2551,6 +2823,17 @@ mod windows_reader {
                 && candidate.score.saturating_add(50_000) >= best.score
         });
         (!has_conflict).then(|| matches.remove(0))
+    }
+
+    fn native_record_index_matches(
+        process: &RemoteProcess,
+        address: usize,
+        expected_index: u32,
+    ) -> bool {
+        process
+            .read_u32(address + NATIVE_RECORD_INDEX)
+            .map(|index| index & DATABASE_RECORD_INDEX_MASK == expected_index)
+            .unwrap_or(false)
     }
 
     fn looks_like_team_record(process: &RemoteProcess, team: usize) -> bool {

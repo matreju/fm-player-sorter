@@ -664,7 +664,7 @@ export default function App() {
           </span>
           <span>
             <strong id="app-title">FM Player Sorter</strong>
-            <small>National Team Intelligence · v0.4.10</small>
+            <small>National Team Intelligence · v0.4.11</small>
           </span>
         </div>
 

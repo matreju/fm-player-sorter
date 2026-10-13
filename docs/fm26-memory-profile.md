@@ -11,13 +11,16 @@
 6. Walidacja UID oraz zakresów CA/PA przed odczytem rekordu.
 7. Odczyt globalnego węzła `humanTeam` z `SI.Bindable.BindingSubsystem` oraz
    sprawdzenie `CurrentHumanJobState` w aktywnym kontekście UI (`NationManager`).
-8. Rozwinięcie `DynamicReference` do UID prowadzonego zespołu i powiązanie go
-   z dokładnie tym samym rekordem `Team` w natywnej bazie.
-9. Potwierdzenie reprezentacji na podstawie jej wskaźnika/UID, nazwy kraju oraz
-   profilu narodowościowego składu; klub jest odrzucany.
-10. Odfiltrowanie kandydatów do narodowości i płci prowadzonej reprezentacji.
-11. Powiązanie wybranych zawodników z klubami przez listy zespołów i kontrakty.
-12. Zbudowanie jednego niezmiennego snapshotu dla frontendu.
+8. Dekodowanie `DatabaseRecordReference` do typu tabeli i indeksu rekordu,
+   bez traktowania elementów identyfikatora `InteropReference` jako UID.
+9. Odczyt jedynego aktywnego human managera z globalnego rejestru oraz łańcucha
+   `Human + 0x450 -> Person + 0xA8 -> Contract + 0x10 -> Team`.
+10. Potwierdzenie reprezentacji przez zgodność aktywnego kontraktu, stanu
+   `NationManager`, referencji `humanTeam` i profilu narodowościowego składu;
+   klub jest odrzucany.
+11. Odfiltrowanie kandydatów do narodowości i płci prowadzonej reprezentacji.
+12. Powiązanie wybranych zawodników z klubami przez listy zespołów i kontrakty.
+13. Zbudowanie jednego niezmiennego snapshotu dla frontendu.
 
 Skan nie zapisuje adresów ani wartości do procesu FM.
 
@@ -41,6 +44,7 @@ Skan nie zapisuje adresów ani wartości do procesu FM.
 | Contract | klub / pensja / koniec / status / numer | `0x10` / `0x20` / `0x48` / `0x57` / `0x5D` |
 | BindingSubsystem | root / nodes / data | `0x40` / `0x48` / `0x78` |
 | Bindings.Node | nazwa / pierwszy potomek / rodzeństwo / data key | `0x18` / `0x28` / `0x30` / `0x70` |
+| DatabaseRecordReference | indeks / typ tabeli | `0x20` / `0x24` |
 
 Atrybuty piłkarskie są zapisane jako bajty w skali pięciokrotnej i są
 zaokrąglane do zakresu 0–20. Cechy osobowości są zapisane bezpośrednio w
@@ -53,8 +57,9 @@ skali 1–20.
 - nieczytelny region lub wskaźnik jest pomijany;
 - rekord wymaga niezerowego UID oraz OU i PA w zakresie 1–200;
 - wynik poniżej 500 zawodników jest odrzucany w całości;
-- prowadzona reprezentacja musi mieć jednoznaczny UID z `humanTeam` i stan
-  `NationManager`; niejednoznaczny wynik jest odrzucany zamiast zgadywania kraju;
+- prowadzona reprezentacja musi mieć jednoznaczną referencję `humanTeam`, stan
+  `NationManager` i dokładny zespół z kontraktu jedynego aktywnego human managera;
+  niejednoznaczny wynik jest odrzucany zamiast zgadywania kraju;
 - profil nie zwraca częściowego snapshotu po błędzie walidacji.
 
 ## Data gry
