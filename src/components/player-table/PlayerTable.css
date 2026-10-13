@@ -108,6 +108,13 @@
   padding: 10px 12px;
 }
 
+.player-column-manager__controls > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
 .player-column-manager__controls input {
   min-height: 32px;
   padding: 6px 9px;
@@ -172,7 +179,7 @@
 
 .player-column-manager legend {
   padding: 0 5px;
-  color: #e452d2;
+  color: var(--team-accent, #e452d2);
   font-size: 9px;
   font-weight: 900;
   letter-spacing: 0.05em;
@@ -196,7 +203,7 @@
 }
 
 .player-column-manager input[type="checkbox"] {
-  accent-color: #e849d3;
+  accent-color: var(--team-accent, #e849d3);
 }
 
 .player-table-resizer {
@@ -210,7 +217,7 @@
 }
 
 .player-table-resizer:hover {
-  background: rgba(232, 73, 211, 0.4);
+  background: var(--team-accent-border, rgba(232, 73, 211, 0.4));
 }
 
 .player-table-name {
@@ -229,7 +236,7 @@
 }
 
 .player-table-shell tbody tr[data-selected] td {
-  box-shadow: inset 0 0 0 9999px rgba(232, 73, 211, 0.055);
+  box-shadow: inset 0 0 0 9999px var(--team-accent-faint, rgba(232, 73, 211, 0.055));
 }
 
 @media (max-width: 850px) {

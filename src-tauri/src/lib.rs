@@ -1,10 +1,12 @@
 mod fm_build;
 mod fm_database;
+mod fm_graphics;
 mod fm_memory;
 mod fm_modules;
 mod fm_process;
 mod fm_profile;
 mod fm_reader;
+mod fm_stats;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

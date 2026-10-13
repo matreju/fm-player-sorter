@@ -34,6 +34,18 @@ między innymi:
 - wartość, cenę wywoławczą, pensję, datę końca kontraktu, numer
   w składzie i status transferowy.
 
+Widok zawodników automatycznie łączy te dane z bieżącymi statystykami sezonu
+z najnowszego lokalnego zapisu kariery (`Documents\\Sports Interactive\\Football
+Manager 26\\games`). Obejmuje gole, asysty, xG/xA, podania, pressing, odbiory,
+dystans, sprinty, statystyki bramkarskie oraz komplet przeliczeń na 90 minut.
+Zapis jest kopiowany do katalogu tymczasowego i otwierany wyłącznie do odczytu;
+nie jest potrzebny eksport HTML ani CSV.
+
+Tabela zajmuje całą szerokość, ma poziome przewijanie z przypiętym zawodnikiem
+oraz edytowalny zestaw i kolejność kolumn. Motyw kolorystyczny zależy od
+prowadzonej reprezentacji, a logo jest odczytywane z lokalnego folderu
+`graphics`, jeśli znajduje się tam pasujący wpis `config.xml`.
+
 Wynik jest akceptowany dopiero po walidacji UID oraz CA/PA i znalezieniu co
 najmniej 500 spójnych rekordów. Po niezgodnej aktualizacji FM aplikacja zwraca
 błąd profilu zamiast pokazywać częściowe lub losowe dane.
@@ -44,7 +56,7 @@ może wskazywać termin meczu zamiast aktualnego dnia.
 
 ## Aktualizacje
 
-Wersja 0.4.11 korzysta z updatera Tauri i podpisanych plików GitHub
+Wersja 0.5.0 korzysta z updatera Tauri i podpisanych plików GitHub
 Releases. W górnym pasku można sprawdzić wersję i zainstalować nowsze wydanie
 bez ręcznego odinstalowywania aplikacji.
 

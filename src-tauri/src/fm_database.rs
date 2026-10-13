@@ -1,6 +1,8 @@
 use serde::Serialize;
 
 use crate::{
+    fm_graphics::find_managed_team_logo,
+    fm_stats::enrich_with_latest_save_stats,
     fm_reader::{
         read_fm_date_status, read_fm_native_database, FmClassOffsetStat, FmDateStatus, FmTableRow,
     },
@@ -23,6 +25,9 @@ pub struct FmDatabaseLoadResult {
     pub player_count: usize,
     pub managed_team: Option<String>,
     pub managed_nation: Option<String>,
+    pub managed_team_uid: Option<u32>,
+    pub managed_nation_uid: Option<u32>,
+    pub team_logo_data_url: Option<String>,
     pub managed_squad_gender: Option<String>,
     pub national_filter_applied: bool,
     pub scan_region_count: usize,
@@ -53,6 +58,9 @@ impl FmDatabaseLoadResult {
             player_count: 0,
             managed_team: None,
             managed_nation: None,
+            managed_team_uid: None,
+            managed_nation_uid: None,
+            team_logo_data_url: None,
             managed_squad_gender: None,
             national_filter_applied: false,
             scan_region_count: 0,
@@ -87,7 +95,13 @@ fn load_fm_database_blocking() -> FmDatabaseLoadResult {
     }
 
     match read_fm_native_database() {
-        Ok(database) => FmDatabaseLoadResult {
+        Ok(mut database) => {
+            let _season_stats_player_count = enrich_with_latest_save_stats(&mut database);
+            let team_logo_data_url = find_managed_team_logo(
+                database.managed_nation_uid,
+                database.managed_team_uid,
+            );
+            FmDatabaseLoadResult {
             success: true,
             stage: "database-loaded".to_string(),
             message: format!(
@@ -105,6 +119,9 @@ fn load_fm_database_blocking() -> FmDatabaseLoadResult {
             player_count: database.player_count,
             managed_team: database.managed_team,
             managed_nation: database.managed_nation,
+            managed_team_uid: database.managed_team_uid,
+            managed_nation_uid: database.managed_nation_uid,
+            team_logo_data_url,
             managed_squad_gender: database.managed_squad_gender,
             national_filter_applied: database.national_filter_applied,
             scan_region_count: database.scan_region_count,
@@ -117,6 +134,7 @@ fn load_fm_database_blocking() -> FmDatabaseLoadResult {
             headers: database.headers,
             rows: database.rows,
             class_offsets: database.class_offsets,
+        }
         },
         Err(message) => FmDatabaseLoadResult::failed(
             if message.contains("26.3.x") {

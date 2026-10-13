@@ -32,10 +32,10 @@ const buttonStyle: CSSProperties = {
 
 const activeButtonStyle: CSSProperties = {
   color: "#ef54db",
-  background: "rgba(232, 73, 211, 0.055)",
+  background: "var(--team-accent-faint, rgba(232, 73, 211, 0.055))",
   borderLeftColor: "#292c40",
   borderRightColor: "#292c40",
-  boxShadow: "inset 0 -2px 0 #e849d3",
+  boxShadow: "inset 0 -2px 0 var(--team-accent, #e849d3)",
 };
 
 const moduleButtons: Array<{

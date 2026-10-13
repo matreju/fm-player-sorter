@@ -80,6 +80,7 @@ import {
 } from "./utils/sideFit";
 import { compareValues, getSortableNumber } from "./utils/sortTable";
 import { normalizeTextForSearch } from "./utils/textSearch";
+import { getNationTheme } from "./utils/nationTheme";
 
 const PlayerCompare = lazy(() =>
   import("./components/player-compare").then((module) => ({
@@ -654,17 +655,31 @@ export default function App() {
     snapshot?.managedNation ??
     snapshot?.managedTeam ??
     (rows.length > 0 ? "Reprezentacja" : "Brak danych");
+  const nationTheme = getNationTheme(snapshot?.managedNation);
 
   return (
-    <main className="desktop-app" aria-labelledby="app-title">
+    <main
+      className="desktop-app"
+      aria-labelledby="app-title"
+      style={nationTheme.style}
+    >
       <header className="desktop-header">
         <div className="desktop-brand">
-          <span className="desktop-brand__mark" aria-hidden="true">
-            FM
+          <span
+            className="desktop-brand__mark"
+            data-logo={snapshot?.teamLogoDataUrl ? "image" : undefined}
+            aria-hidden="true"
+          >
+            {snapshot?.teamLogoDataUrl ? (
+              <img src={snapshot.teamLogoDataUrl} alt="" />
+            ) : snapshot?.managedNation ? (
+              nationTheme.flag
+            ) : (
+              "FM"
+            )}
           </span>
           <span>
             <strong id="app-title">FM Player Sorter</strong>
-            <small>National Team Intelligence · v0.4.11</small>
           </span>
         </div>
 

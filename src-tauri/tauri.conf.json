@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "FM Player Sorter",
-  "version": "0.4.11",
+  "version": "0.5.0",
   "identifier": "pl.fmplayersorter.desktop",
   "build": {
 "frontendDist": "../dist",
@@ -30,6 +30,12 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "externalBin": [
+      "binaries/fmstats"
+    ],
+    "resources": [
+      "../THIRD_PARTY_NOTICES.md"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

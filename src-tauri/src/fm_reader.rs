@@ -20,6 +20,8 @@ pub struct FmNativeDatabase {
     pub player_count: usize,
     pub managed_team: Option<String>,
     pub managed_nation: Option<String>,
+    pub managed_team_uid: Option<u32>,
+    pub managed_nation_uid: Option<u32>,
     pub managed_squad_gender: Option<String>,
     pub national_filter_applied: bool,
     pub scan_region_count: usize,
@@ -1053,6 +1055,8 @@ mod windows_reader {
             )
         })?;
         let manager_team = Some(managed.team_address);
+        let managed_team_uid = record_uid(&process, managed.team_address);
+        let managed_nation_uid = record_uid(&process, managed.nation_address);
         let managed_team = Some(managed.team_name);
         let managed_nation_address = managed.nation_address;
         let managed_nation = managed.nation_name;
@@ -1146,6 +1150,8 @@ mod windows_reader {
             player_count: rows.len(),
             managed_team,
             managed_nation: Some(managed_nation),
+            managed_team_uid,
+            managed_nation_uid,
             managed_squad_gender: managed_gender.map(|female| {
                 if female {
                     "Kobiety".to_string()

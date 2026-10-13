@@ -5,7 +5,7 @@ const DATABASE_NAME = "fm-player-sorter";
 const DATABASE_VERSION = 1;
 const STORE_NAME = "fm-snapshots";
 const CURRENT_SNAPSHOT_KEY = "current-national-team";
-const CURRENT_SNAPSHOT_SCHEMA = 3;
+const CURRENT_SNAPSHOT_SCHEMA = 4;
 
 export type StoredFmSnapshot = {
   key: typeof CURRENT_SNAPSHOT_KEY;
@@ -14,6 +14,9 @@ export type StoredFmSnapshot = {
   gameDate: string | null;
   managedTeam: string | null;
   managedNation: string | null;
+  managedTeamUid: number | null;
+  managedNationUid: number | null;
+  teamLogoDataUrl: string | null;
   managedSquadGender: string | null;
   databasePlayerCount: number;
   playerCount: number;
@@ -50,6 +53,9 @@ export async function saveFmSnapshot(
     gameDate: result.gameDate,
     managedTeam: result.managedTeam,
     managedNation: result.managedNation,
+    managedTeamUid: result.managedTeamUid,
+    managedNationUid: result.managedNationUid,
+    teamLogoDataUrl: result.teamLogoDataUrl,
     managedSquadGender: result.managedSquadGender,
     databasePlayerCount: result.databasePlayerCount,
     playerCount: result.playerCount,

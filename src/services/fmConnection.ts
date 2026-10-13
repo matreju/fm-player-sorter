@@ -233,6 +233,9 @@ export interface FmDatabaseLoadResult {
   playerCount: number;
   managedTeam: string | null;
   managedNation: string | null;
+  managedTeamUid: number | null;
+  managedNationUid: number | null;
+  teamLogoDataUrl: string | null;
   managedSquadGender: string | null;
   nationalFilterApplied: boolean;
   scanRegionCount: number;

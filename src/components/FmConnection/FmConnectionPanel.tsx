@@ -212,25 +212,18 @@ export function FmConnectionPanel({
             </header>
 
             <div className="fm-connect__body">
-              <div className="fm-connect__process">
-                <span className="fm-connect__dot" aria-hidden="true" />
-                <div>
+              {(!processConnected || isChecking) && (
+                <div className="fm-connect__process">
+                  <span className="fm-connect__dot" aria-hidden="true" />
                   <strong>
                     {!desktopMode
                       ? "Uruchom wersję desktopową"
                       : isChecking
                         ? "Szukanie Football Managera…"
-                        : processConnected
-                          ? "Football Manager jest gotowy"
-                          : "Nie wykryto uruchomionego FM26"}
+                        : "Nie wykryto uruchomionego FM26"}
                   </strong>
-                  <small>
-                    {processConnected
-                      ? "Odczyt prowadzonej reprezentacji — bez HTML i CSV."
-                      : "Wczytaj zapis w FM26 i spróbuj ponownie."}
-                  </small>
                 </div>
-              </div>
+              )}
 
               {displayedError && (
                 <p className="fm-connect__message" data-tone="error">

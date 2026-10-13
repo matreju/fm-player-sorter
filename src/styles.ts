@@ -20,9 +20,9 @@ const colors = {
   muted: "#9aa7bb",
   mutedDark: "#64748b",
 
-  accent: "#38bdf8",
-  accentSoft: "rgba(56, 189, 248, 0.14)",
-  accentStrong: "#0ea5e9",
+  accent: "var(--team-accent, #38bdf8)",
+  accentSoft: "var(--team-accent-soft, rgba(56, 189, 248, 0.14))",
+  accentStrong: "var(--team-primary, #0ea5e9)",
 
   success: "#22c55e",
   successSoft: "rgba(34, 197, 94, 0.16)",
@@ -695,6 +695,10 @@ indexTd: {
   textAlign: "center",
 },
 markTh: {
+  position: "sticky",
+  left: 0,
+  top: 0,
+  zIndex: 7,
   width: 116,
   minWidth: 116,
   maxWidth: 116,
@@ -708,6 +712,9 @@ markTh: {
 },
 
 markTd: {
+  position: "sticky",
+  left: 0,
+  zIndex: 5,
   width: 116,
   minWidth: 116,
   maxWidth: 116,
@@ -754,7 +761,7 @@ selectionPositionSelect: {
 
 nameStickyTh: {
   position: "sticky",
-  left: 38,
+  left: 170,
   top: 0,
   zIndex: 5,
   minWidth: 180,
@@ -772,7 +779,7 @@ nameStickyTh: {
 
 nameStickyTd: {
   position: "sticky",
-  left: 38,
+  left: 170,
   zIndex: 3,
   minWidth: 180,
   padding: "5px 8px",

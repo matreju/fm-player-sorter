@@ -331,7 +331,7 @@ export function getMoneyballSections(row: TableRow): MoneyballSection[] {
         metric(row, ["Liczba goli na 90 min", "Gole/90", "Brm/90"], "Gole/90"),
         metric(row, ["xG/90"], "xG/90"),
         metric(row, ["Strz./90"], "Strz./90"),
-        metric(row, ["% strzałów"], "Celne strz."),
+        metric(row, ["Celne strzały (%)", "% strzałów"], "Celne strz."),
       ],
     },
     {
@@ -347,7 +347,7 @@ export function getMoneyballSections(row: TableRow): MoneyballSection[] {
     {
       title: "Podania",
       metrics: [
-        metric(row, ["Pod %"], "Podania %"),
+        metric(row, ["Podania (%)", "Pod %"], "Podania %"),
         metric(row, ["Pod/90"], "Próby/90"),
         metric(row, ["PodC/90"], "Celne/90"),
         metric(row, ["Str Płk/90"], "Straty/90", {
@@ -359,8 +359,8 @@ export function getMoneyballSections(row: TableRow): MoneyballSection[] {
       title: "Dośrodkowania",
       metrics: [
         metric(row, ["Doś P/90"], "Próby doś./90"),
-        metric(row, ["Doś C/P"], "Celne doś. %"),
-        metric(row, ["Doś C"], "Celne doś."),
+        metric(row, ["Dośrodkowania (%)", "Doś C/P"], "Celne doś. %"),
+        metric(row, ["Celne dośrodkowania", "Doś C"], "Celne doś."),
         metric(row, ["C Doś zG/90"], "Celne z gry/90"),
         metric(row, ["Pr Doś zG/90"], "Próby z gry/90"),
       ],
@@ -371,7 +371,7 @@ export function getMoneyballSections(row: TableRow): MoneyballSection[] {
         metric(row, ["Pr Pres/90"], "Pressing/90"),
         metric(row, ["Ud Pres/90"], "Ud. pressing/90"),
         metric(row, ["Odz Płk/90"], "Odzyskane/90"),
-        metric(row, ["Wślizgi"], "Próby odb."),
+        metric(row, ["Próby odbiorów", "Wślizgi"], "Próby odb."),
         metric(row, ["W/90"], "Odbiory/90"),
       ],
     },
@@ -381,15 +381,15 @@ export function getMoneyballSections(row: TableRow): MoneyballSection[] {
         metric(row, ["Prz/90"], "Przechw./90"),
         metric(row, ["Wyb/90"], "Wybicia/90"),
         metric(row, ["Blk/90"], "Bloki/90"),
-        metric(row, ["Odb%"], "Odbiór %"),
+        metric(row, ["Odbiory (%)", "Odb%"], "Odbiór %"),
         metric(row, ["K Wś/90"], "Klucz. odb./90"),
       ],
     },
     {
       title: "Powietrze/fizyczność",
       metrics: [
-        metric(row, ["% Głw"], "Główki %"),
-        metric(row, ["Głw"], "Wygrane główki"),
+        metric(row, ["Główki (%)", "% Głw"], "Główki %"),
+        metric(row, ["Wygrane główki", "Głw"], "Wygrane główki"),
         metric(row, ["Dyst./90"], "Dystans/90"),
         metric(row, ["Sprinty/90"], "Sprinty/90"),
         metric(row, ["ZwB"], "Zaw. bramki", {
@@ -477,13 +477,13 @@ if (reliability.level === "very-low") {
     "C Doś zG/90",
   ]);
   const losses90 = getNumberFromColumns(row, ["Str Płk/90"]);
-  const passPercent = getNumberFromColumns(row, ["Pod %"]);
+  const passPercent = getNumberFromColumns(row, ["Podania (%)", "Pod %"]);
   const interceptions90 = getNumberFromColumns(row, ["Prz/90"]);
   const recoveries90 = getNumberFromColumns(row, ["Odz Płk/90"]);
   const press90 = getNumberFromColumns(row, ["Pr Pres/90"]);
   const successfulPress90 = getNumberFromColumns(row, ["Ud Pres/90"]);
-  const tacklePercent = getNumberFromColumns(row, ["Odb%"]);
-  const headersPercent = getNumberFromColumns(row, ["% Głw"]);
+  const tacklePercent = getNumberFromColumns(row, ["Odbiory (%)", "Odb%"]);
+  const headersPercent = getNumberFromColumns(row, ["Główki (%)", "% Głw"]);
   const distance90 = getNumberFromColumns(row, ["Dyst./90"]);
   const sprints90 = getNumberFromColumns(row, ["Sprinty/90"]);
   const errors = getNumberFromColumns(row, ["ZwB"]);
@@ -800,13 +800,13 @@ export function getMoneyballPositionProfile(
   const xg90 = getNumberFromColumns(row, ["xG/90"]);
   const xa90 = getNumberFromColumns(row, ["xA/90"]);
   const shots90 = getNumberFromColumns(row, ["Strz./90"]);
-  const shotAccuracy = getNumberFromColumns(row, ["% strzałów"]);
+  const shotAccuracy = getNumberFromColumns(row, ["Celne strzały (%)", "% strzałów"]);
 
   const keyPasses90 = getNumberFromColumns(row, ["KP/90"]);
   const keyPassesOpenPlay90 = getNumberFromColumns(row, ["KPzG/90"]);
   const chances90 = getNumberFromColumns(row, ["StS/90"]);
 
-  const passPercent = getNumberFromColumns(row, ["Pod %"]);
+  const passPercent = getNumberFromColumns(row, ["Podania (%)", "Pod %"]);
   const passes90 = getNumberFromColumns(row, ["Pod/90"]);
   const accuratePasses90 = getNumberFromColumns(row, ["PodC/90"]);
   const forwardPasses90 = getNumberFromColumns(row, ["Podania dP/90"]);
@@ -817,7 +817,7 @@ export function getMoneyballPositionProfile(
   const crosses90 = getNumberFromColumns(row, ["Doś P/90"]);
   const openPlayCrosses90 = getNumberFromColumns(row, ["Pr Doś zG/90"]);
   const accurateCrosses90 = getNumberFromColumns(row, ["Doś P/90 (2)", "C Doś zG/90"]);
-  const crossAccuracy = getNumberFromColumns(row, ["Doś C/P"]);
+  const crossAccuracy = getNumberFromColumns(row, ["Dośrodkowania (%)", "Doś C/P"]);
 
   const interceptions90 = getNumberFromColumns(row, ["Prz/90"]);
   const clearances90 = getNumberFromColumns(row, ["Wyb/90"]);
@@ -826,12 +826,12 @@ export function getMoneyballPositionProfile(
   const press90 = getNumberFromColumns(row, ["Pr Pres/90"]);
   const successfulPress90 = getNumberFromColumns(row, ["Ud Pres/90"]);
 
-  const tacklesTotal = getNumberFromColumns(row, ["Wślizgi"]);
+  const tacklesTotal = getNumberFromColumns(row, ["Próby odbiorów", "Wślizgi"]);
   const tackles90 = getNumberFromColumns(row, ["W/90"]);
-  const tacklePercent = getNumberFromColumns(row, ["Odb%"]);
+  const tacklePercent = getNumberFromColumns(row, ["Odbiory (%)", "Odb%"]);
 
-  const headersPercent = getNumberFromColumns(row, ["% Głw"]);
-  const headersWon = getNumberFromColumns(row, ["Głw"]);
+  const headersPercent = getNumberFromColumns(row, ["Główki (%)", "% Głw"]);
+  const headersWon = getNumberFromColumns(row, ["Wygrane główki", "Głw"]);
 
   const distance90 = getNumberFromColumns(row, ["Dyst./90"]);
   const sprints90 = getNumberFromColumns(row, ["Sprinty/90"]);
