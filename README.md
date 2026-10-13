@@ -42,7 +42,7 @@ może wskazywać termin meczu zamiast aktualnego dnia.
 
 ## Aktualizacje
 
-Wersja 0.4.9 korzysta z updatera Tauri i podpisanych plików GitHub
+Wersja 0.4.10 korzysta z updatera Tauri i podpisanych plików GitHub
 Releases. W górnym pasku można sprawdzić wersję i zainstalować nowsze wydanie
 bez ręcznego odinstalowywania aplikacji.
 

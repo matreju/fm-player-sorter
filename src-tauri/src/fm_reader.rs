@@ -125,6 +125,7 @@ mod windows_reader {
     const CLUB_SHORT_NAME: usize = 0xC8;
     const CLUB_TEAMS_BEGIN: usize = 0x18;
     const CLUB_TEAMS_END: usize = 0x20;
+    const NATION_NAME: usize = 0x18;
     const TEAM_TYPE: usize = 0x28;
     const TEAM_CLUB: usize = 0x30;
     const TEAM_PLAYERS_BEGIN: usize = 0x38;
@@ -3183,7 +3184,12 @@ mod windows_reader {
 
     fn nation_name(process: &RemoteProcess, nation: usize) -> Option<String> {
         process
-            .indirect_string(nation + 0x20)
+            // Validated FM26 26.3.x native layout: the nationality pointer on
+            // Person leads to a Nation record whose length-prefixed UTF-8 name
+            // pointer is stored at +0x18. The older fallbacks are kept only for
+            // compatible record variants encountered in the same build.
+            .indirect_string(nation + NATION_NAME)
+            .or_else(|| process.indirect_string(nation + 0x20))
             .or_else(|| process.indirect_string(nation + 0x30))
             .filter(|name| plausible_label(name, 64))
     }
