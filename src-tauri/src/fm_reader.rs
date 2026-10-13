@@ -612,6 +612,8 @@ mod windows_reader {
         nation_manager_context_count: usize,
         other_job_context_count: usize,
         uid_object_match_count: usize,
+        trusted_team_match_count: usize,
+        team_shape_match_count: usize,
         national_resolution_count: usize,
     }
 
@@ -892,6 +894,7 @@ mod windows_reader {
                 binding,
                 &uid_objects,
                 &club_candidates,
+                &human_managers,
                 &player_candidates,
                 &nation_counts,
                 &mut binding_diagnostics,
@@ -899,7 +902,7 @@ mod windows_reader {
         });
         let managed = managed.ok_or_else(|| {
             format!(
-                "Wykryto FM26, ale nie udało się odczytać aktywnej reprezentacji z globalnego powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/K{}/D{}/T{}/Q{}/A{}/P{}/L{}/E{}/I{}/U{}/J{}/X{}/O{}/R{}/M{}.",
+                "Wykryto FM26, ale nie udało się odczytać aktywnej reprezentacji z globalnego powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/K{}/D{}/T{}/Q{}/A{}/P{}/L{}/E{}/I{}/U{}/J{}/X{}/O{}/W{}/S{}/R{}/M{}.",
                 binding_diagnostics.context_candidate_count,
                 binding_diagnostics.binding_candidate_count,
                 binding_diagnostics.validated_binding_count,
@@ -917,6 +920,8 @@ mod windows_reader {
                 binding_diagnostics.nation_manager_context_count,
                 binding_diagnostics.other_job_context_count,
                 binding_diagnostics.uid_object_match_count,
+                binding_diagnostics.trusted_team_match_count,
+                binding_diagnostics.team_shape_match_count,
                 binding_diagnostics.national_resolution_count,
                 human_managers.len(),
             )
@@ -2444,11 +2449,28 @@ mod windows_reader {
         binding: HumanBindingResolution,
         uid_objects: &[UidObjectCandidate],
         clubs: &HashSet<usize>,
+        human_managers: &HashSet<HumanManagerCandidate>,
         candidates: &HashMap<u32, PlayerCandidate>,
         nation_counts: &HashMap<usize, usize>,
         diagnostics: &mut HumanBindingDiagnostics,
     ) -> Option<ManagedTeamResolution> {
         let mut team_addresses = HashSet::<usize>::new();
+        let mut trusted_team_addresses = HashSet::<usize>::new();
+
+        // FM26 stores the active job through the human manager's inline Person:
+        // Human + 0x450 -> Person, Person + 0xA8 -> Contract,
+        // Contract + 0x10 -> Team. Only accept it when its native UID agrees
+        // with the UID decoded from the exact humanTeam UI binding.
+        for manager in human_managers {
+            let Some(team) = contract_team(process, manager.person_address) else {
+                continue;
+            };
+            if record_uid(process, team) == Some(binding.human_team_uid) {
+                trusted_team_addresses.insert(team);
+                team_addresses.insert(team);
+            }
+        }
+
         for object in uid_objects
             .iter()
             .filter(|object| object.uid == binding.human_team_uid)
@@ -2473,11 +2495,17 @@ mod windows_reader {
                     continue;
                 };
                 if record_uid(process, team) == Some(binding.human_team_uid) {
+                    // A pointer read from a validated Club::teams vector is an
+                    // exact Team record. Do not reject it using the legacy
+                    // TEAM_TYPE byte heuristic; that byte is not stable across
+                    // every national-team subtype in FM26.
+                    trusted_team_addresses.insert(team);
                     team_addresses.insert(team);
                 }
             }
         }
         diagnostics.uid_object_match_count = team_addresses.len();
+        diagnostics.trusted_team_match_count = trusted_team_addresses.len();
 
         let mut address_to_nation = HashMap::<usize, usize>::with_capacity(candidates.len() * 2);
         for candidate in candidates.values() {
@@ -2488,9 +2516,18 @@ mod windows_reader {
             address_to_nation.insert(candidate.player_address, candidate.nation_address);
         }
 
+        let shape_matches = team_addresses
+            .iter()
+            .filter(|team| looks_like_team_record(process, **team))
+            .count();
+        diagnostics.team_shape_match_count = shape_matches;
+
         let mut matches = team_addresses
             .into_iter()
-            .filter(|team| looks_like_team_record(process, *team))
+            .filter(|team| {
+                trusted_team_addresses.contains(team)
+                    || looks_like_team_record(process, *team)
+            })
             .filter_map(|team| {
                 build_bound_national_team_candidate(
                     process,
