@@ -64,59 +64,6 @@ export function createFmSnapshot(
   };
 }
 
-export async function saveFmSnapshot(
-  result: FmDatabaseLoadResult,
-): Promise<StoredFmSnapshot> {
-  const snapshot = createFmSnapshot(result);
-
-  const database = await openSnapshotDatabase();
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const transaction = database.transaction(STORE_NAME, "readwrite");
-      transaction.objectStore(STORE_NAME).put(snapshot);
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () =>
-        reject(transaction.error ?? new Error("Nie udało się zapisać danych FM."));
-      transaction.onabort = () =>
-        reject(transaction.error ?? new Error("Zapisywanie danych FM przerwano."));
-    });
-  } finally {
-    database.close();
-  }
-
-  return snapshot;
-}
-
-export async function loadFmSnapshot(): Promise<StoredFmSnapshot | null> {
-  const database = await openSnapshotDatabase();
-  try {
-    return await new Promise<StoredFmSnapshot | null>((resolve, reject) => {
-      const transaction = database.transaction(STORE_NAME, "readonly");
-      const request = transaction
-        .objectStore(STORE_NAME)
-        .get(CURRENT_SNAPSHOT_KEY);
-      request.onsuccess = () => {
-        const snapshot = request.result as
-          | Partial<StoredFmSnapshot>
-          | undefined;
-        if (
-          !snapshot ||
-          snapshot.schemaVersion !== CURRENT_SNAPSHOT_SCHEMA ||
-          snapshot.managedTeam === "Baza danych zawodników"
-        ) {
-          resolve(null);
-          return;
-        }
-        resolve(snapshot as StoredFmSnapshot);
-      };
-      request.onerror = () =>
-        reject(request.error ?? new Error("Nie udało się odczytać danych FM."));
-    });
-  } finally {
-    database.close();
-  }
-}
-
 export async function clearFmSnapshot(): Promise<void> {
   const database = await openSnapshotDatabase();
   try {

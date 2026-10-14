@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   getFootballManagerDateStatus,
@@ -19,6 +19,7 @@ interface FmConnectionPanelProps {
   loadedNation: string | null;
   loadedPlayerCount: number;
   onDatabaseLoaded: (result: FmDatabaseLoadResult) => void;
+  onFmUnavailable: () => void;
 }
 
 function formatDuration(milliseconds: number): string {
@@ -31,6 +32,7 @@ export function FmConnectionPanel({
   loadedNation,
   loadedPlayerCount,
   onDatabaseLoaded,
+  onFmUnavailable,
 }: FmConnectionPanelProps) {
   const desktopMode = isDesktopApp();
   const [status, setStatus] = useState<FmMemoryStatus | null>(null);
@@ -41,6 +43,7 @@ export function FmConnectionPanel({
   const [isLoading, setIsLoading] = useState(false);
   const [probeError, setProbeError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const processDetectedRef = useRef<boolean | null>(null);
 
   const refreshStatus = useCallback(async () => {
     if (!desktopMode) return;
@@ -49,6 +52,15 @@ export function FmConnectionPanel({
       const nextStatus = await probeFootballManagerMemory();
       setStatus(nextStatus);
       setProbeError(nextStatus.error);
+      if (
+        !nextStatus.processDetected &&
+        processDetectedRef.current !== false
+      ) {
+        setResult(null);
+        setDateStatus(null);
+        onFmUnavailable();
+      }
+      processDetectedRef.current = nextStatus.processDetected;
     } catch (unknownError) {
       setStatus(null);
       setProbeError(
@@ -59,7 +71,7 @@ export function FmConnectionPanel({
     } finally {
       setIsChecking(false);
     }
-  }, [desktopMode]);
+  }, [desktopMode, onFmUnavailable]);
 
   useEffect(() => {
     if (!desktopMode) return;

@@ -60,9 +60,8 @@ import type { SortConfig, TableRow } from "./types/table";
 import { calculateClubFormImpact, formatClubFormImpact } from "./utils/clubForm";
 import { matchesFootFilter, type FootFilter } from "./utils/filters";
 import {
+  clearFmSnapshot,
   createFmSnapshot,
-  loadFmSnapshot,
-  saveFmSnapshot,
   type StoredFmSnapshot,
 } from "./utils/fmSnapshotStorage";
 import { getMoneyballTableSummary } from "./utils/moneyball";
@@ -205,7 +204,6 @@ export default function App() {
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<TableRow[]>([]);
   const [snapshot, setSnapshot] = useState<StoredFmSnapshot | null>(null);
-  const [snapshotLoading, setSnapshotLoading] = useState(true);
   const [error, setError] = useState("");
   const [supplementaryDataLoading, setSupplementaryDataLoading] =
     useState(false);
@@ -261,33 +259,9 @@ export default function App() {
   });
 
   useEffect(() => {
-    let cancelled = false;
-
-    void loadFmSnapshot()
-      .then((saved) => {
-        if (cancelled || !saved) return;
-        startTransition(() => {
-          setSnapshot(saved);
-          setHeaders(saved.headers);
-          setRows(saved.rows);
-        });
-      })
-      .catch((unknownError) => {
-        if (!cancelled) {
-          setError(
-            unknownError instanceof Error
-              ? unknownError.message
-              : String(unknownError),
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setSnapshotLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    // Snapshoty z poprzednich wersji nie mogą udawać aktywnego połączenia z FM.
+    // Dane zawodników są od tej wersji wyłącznie stanem bieżącej sesji.
+    void clearFmSnapshot().catch(() => undefined);
   }, []);
 
   const rolePositionOptions = useMemo(
@@ -643,21 +617,6 @@ export default function App() {
         setError("");
       });
 
-      const baseSavePromise = new Promise<void>((resolve) => {
-        window.setTimeout(() => {
-          void saveFmSnapshot(result)
-            .catch((unknownError) => {
-              if (databaseLoadSequence.current !== loadSequence) return;
-              setError(
-                unknownError instanceof Error
-                  ? unknownError.message
-                  : String(unknownError),
-              );
-            })
-            .finally(resolve);
-        }, 0);
-      });
-
       const uids = result.rows
         .map((row) => Number(row.UID))
         .filter((uid) => Number.isInteger(uid) && uid > 0);
@@ -685,7 +644,7 @@ export default function App() {
       });
 
       void Promise.all([statsPromise, logoPromise]).then(
-        async ([stats, teamLogoDataUrl]) => {
+        ([stats, teamLogoDataUrl]) => {
           if (databaseLoadSequence.current !== loadSequence) return;
 
           const enrichedRows = mergeSeasonStats(result.rows, stats);
@@ -705,24 +664,26 @@ export default function App() {
           });
           setSnapshot(createFmSnapshot(enrichedResult));
           setSupplementaryDataLoading(false);
-
-          await baseSavePromise;
-          if (databaseLoadSequence.current !== loadSequence) return;
-          try {
-            await saveFmSnapshot(enrichedResult);
-          } catch (unknownError) {
-            if (databaseLoadSequence.current !== loadSequence) return;
-            setError(
-              unknownError instanceof Error
-                ? unknownError.message
-                : String(unknownError),
-            );
-          }
         },
       );
     },
     [],
   );
+
+  const handleFmUnavailable = useCallback(() => {
+    // Unieważnia również ewentualne doładowywanie statystyk lub herbu.
+    databaseLoadSequence.current += 1;
+    setSupplementaryDataLoading(false);
+    setSnapshot(null);
+    startTransition(() => {
+      setHeaders([]);
+      setRows([]);
+      setSelectedPlayerKey(null);
+      setError("");
+    });
+    clearPlayerSelection();
+    void clearFmSnapshot().catch(() => undefined);
+  }, [clearPlayerSelection]);
 
   const handleSort = useCallback((column: string) => {
     setSortConfig((current) => {
@@ -793,6 +754,7 @@ export default function App() {
             loadedNation={snapshot?.managedNation ?? null}
             loadedPlayerCount={rows.length}
             onDatabaseLoaded={handleFmDatabaseLoaded}
+            onFmUnavailable={handleFmUnavailable}
           />
         </div>
       </header>
@@ -949,11 +911,7 @@ export default function App() {
         ) : (
           <section className="desktop-empty-state">
             <span aria-hidden="true">◎</span>
-            <h2>
-              {snapshotLoading
-                ? "Odtwarzanie ostatniej kadry…"
-                : "Połącz aplikację z Football Managerem"}
-            </h2>
+            <h2>Połącz aplikację z Football Managerem</h2>
             <p>
               Otwórz zapis reprezentacji w FM26, a następnie użyj przycisku
               „Połącz z grą”. Aplikacja wczyta tylko zawodników uprawnionych do
