@@ -21,7 +21,7 @@ type UpdateState =
 
 export function AppUpdater() {
   const desktopMode = isDesktopApp();
-  const [currentVersion, setCurrentVersion] = useState("0.5.2");
+  const [currentVersion, setCurrentVersion] = useState("0.5.3");
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
   const [state, setState] = useState<UpdateState>("idle");
   const [message, setMessage] = useState(

@@ -1082,6 +1082,7 @@ mod windows_reader {
         let derived_year = derive_game_year_from_candidates(player_candidates.values());
         let mut players = HashMap::<u32, PlayerRecord>::with_capacity(selected_candidates.len());
         let mut person_to_uid = HashMap::<usize, u32>::with_capacity(selected_candidates.len() * 2);
+        let mut selected_club_candidates = HashSet::<usize>::new();
         let mut read_cache = PlayerReadCache::default();
 
         for candidate in selected_candidates {
@@ -1095,7 +1096,7 @@ mod windows_reader {
                 &mut read_cache,
             ) {
                 if let Some(club) = player.owner_club_address {
-                    club_candidates.insert(club);
+                    selected_club_candidates.insert(club);
                 }
                 person_to_uid.insert(candidate.person_address, candidate.uid);
                 person_to_uid.insert(candidate.player_address, candidate.uid);
@@ -1105,7 +1106,7 @@ mod windows_reader {
 
         let squad_links = walk_club_squads(
             &process,
-            &club_candidates,
+            &selected_club_candidates,
             &person_to_uid,
         );
 

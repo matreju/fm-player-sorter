@@ -99,6 +99,11 @@ export type MinutesReliability = {
   scope: "league" | "import" | "fixed";
 };
 
+export type MoneyballContext = {
+  allMinutesReference: number | null;
+  leagueMinutesReferences: ReadonlyMap<string, number>;
+};
+
 function getLeagueName(row: TableRow): string {
   return (row["Liga"] || row["Rozgrywki"] || "").trim().toLowerCase();
 }
@@ -124,34 +129,71 @@ function percentile(values: number[], ratio: number): number | null {
   return sorted[index];
 }
 
+export function createMoneyballContext(rows: TableRow[]): MoneyballContext {
+  const allMinutes: number[] = [];
+  const minutesByLeague = new Map<string, number[]>();
+
+  for (const row of rows) {
+    const minutes = getMinutesValue(row);
+    if (minutes === null || minutes <= 0) continue;
+
+    allMinutes.push(minutes);
+    const league = getLeagueName(row);
+    if (!league) continue;
+
+    const leagueMinutes = minutesByLeague.get(league);
+    if (leagueMinutes) {
+      leagueMinutes.push(minutes);
+    } else {
+      minutesByLeague.set(league, [minutes]);
+    }
+  }
+
+  const leagueMinutesReferences = new Map<string, number>();
+  for (const [league, minutes] of minutesByLeague) {
+    if (minutes.length < 8) continue;
+    const reference = percentile(minutes, 0.75);
+    if (reference !== null) {
+      leagueMinutesReferences.set(league, reference);
+    }
+  }
+
+  return {
+    allMinutesReference:
+      allMinutes.length >= 20 ? percentile(allMinutes, 0.75) : null,
+    leagueMinutesReferences,
+  };
+}
+
+type MoneyballContextInput = TableRow[] | MoneyballContext;
+
+function normalizeMoneyballContext(
+  context: MoneyballContextInput,
+): MoneyballContext {
+  return Array.isArray(context) ? createMoneyballContext(context) : context;
+}
+
 function getMinutesReference(
   row: TableRow,
-  contextRows: TableRow[]
+  contextInput: MoneyballContextInput,
 ): {
   referenceMinutes: number | null;
   scope: "league" | "import" | "fixed";
 } {
   const league = getLeagueName(row);
+  const context = normalizeMoneyballContext(contextInput);
+  const leagueReference = context.leagueMinutesReferences.get(league);
 
-  const allMinutes = contextRows
-    .map(getMinutesValue)
-    .filter((value): value is number => value !== null && value > 0);
-
-  const leagueMinutes = contextRows
-    .filter((item) => getLeagueName(item) === league && league.length > 0)
-    .map(getMinutesValue)
-    .filter((value): value is number => value !== null && value > 0);
-
-  if (leagueMinutes.length >= 8) {
+  if (leagueReference !== undefined) {
     return {
-      referenceMinutes: percentile(leagueMinutes, 0.75),
+      referenceMinutes: leagueReference,
       scope: "league",
     };
   }
 
-  if (allMinutes.length >= 20) {
+  if (context.allMinutesReference !== null) {
     return {
-      referenceMinutes: percentile(allMinutes, 0.75),
+      referenceMinutes: context.allMinutesReference,
       scope: "import",
     };
   }
@@ -221,7 +263,7 @@ function getMinutesReliabilityFromFixedThresholds(
 
 export function getMinutesReliability(
   row: TableRow,
-  contextRows: TableRow[] = []
+  contextRows: MoneyballContextInput = [],
 ): MinutesReliability {
   const minutes = getMinutesValue(row);
 
@@ -236,7 +278,7 @@ export function getMinutesReliability(
     };
   }
 
-  if (contextRows.length === 0) {
+  if (Array.isArray(contextRows) && contextRows.length === 0) {
     return getMinutesReliabilityFromFixedThresholds(minutes);
   }
 
@@ -611,7 +653,7 @@ if (reliability.level === "very-low") {
 
 export function getMoneyballTableSummary(
   row: TableRow,
-  contextRows: TableRow[] = []
+  contextRows: MoneyballContextInput = [],
 ): string {
   if (!hasMoneyballData(row)) {
     return "-";
