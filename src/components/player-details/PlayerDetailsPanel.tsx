@@ -26,6 +26,7 @@ import {
 import { MoneyballProfile } from "../moneyball";
 import { AppButton, AppSelectField } from "../ui";
 import { buildPlayerNationalReport } from "../../utils/playerNationalReport";
+import { PlayerFmOverview } from "./PlayerFmOverview";
 
 const ROLE_SCORE_COLUMN = "Dopasowanie";
 const CLUB_FORM_COLUMN = "Forma klubu";
@@ -89,7 +90,7 @@ const detailStyles: Record<string, CSSProperties> = {
   },
 
 modal: {
-  width: "min(1360px, calc(100vw - 28px))",
+  width: "min(1580px, calc(100vw - 20px))",
   maxHeight: "calc(100vh - 28px)",
   overflow: "auto",
   border: "1px solid #334155",
@@ -660,6 +661,8 @@ export function PlayerDetailsPanel({
         </header>
 
         <div style={detailStyles.body}>
+          <PlayerFmOverview player={player} />
+
           <div style={detailStyles.topGrid}>
             <section style={detailStyles.heroCard}>
               <div style={detailStyles.sectionEyebrow}>Raport zawodnika</div>
@@ -670,8 +673,8 @@ export function PlayerDetailsPanel({
 
               <div style={detailStyles.sectionText}>
                 Raport pokazuje statystyki meczowe/Moneyball na tle aktualnie
-                wczytanej listy. Skróty z importu są rozwijane do pełnych nazw,
-                a niejednoznaczne kolumny są pomijane.
+                wczytanej kadry. Pola z bezpośredniego odczytu FM są porównywane
+                z zawodnikami uprawnionymi do gry dla tej reprezentacji.
               </div>
             </section>
 

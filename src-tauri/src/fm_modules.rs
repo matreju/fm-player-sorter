@@ -143,6 +143,34 @@ fn enumerate_modules(
     pid: u32,
     normalized_game_directory: &str,
 ) -> Result<Vec<FmLoadedModule>, String> {
+    use std::{thread, time::Duration};
+
+    let mut last_error = None;
+
+    // CreateToolhelp32Snapshot potrafi zwrócić przejściowy ERROR_PARTIAL_COPY,
+    // gdy FM ładuje lub zwalnia bibliotekę dokładnie w chwili wykonywania
+    // migawki. Nie uznajemy pojedynczej takiej próby za trwałą awarię.
+    for attempt in 0..5_u64 {
+        match enumerate_modules_once(pid, normalized_game_directory) {
+            Ok(modules) => return Ok(modules),
+            Err(error) => last_error = Some(error),
+        }
+
+        if attempt < 4 {
+            thread::sleep(Duration::from_millis(40 * (attempt + 1)));
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| {
+        "Nie udało się pobrać listy modułów procesu FM.".to_string()
+    }))
+}
+
+#[cfg(target_os = "windows")]
+fn enumerate_modules_once(
+    pid: u32,
+    normalized_game_directory: &str,
+) -> Result<Vec<FmLoadedModule>, String> {
     use windows::Win32::{
         Foundation::{CloseHandle, HANDLE},
         System::Diagnostics::ToolHelp::{

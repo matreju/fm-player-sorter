@@ -7,6 +7,7 @@ import { styles } from "../../styles";
 type PlayerSelectionCellProps = {
   row: TableRow;
   mark: PlayerMark | null;
+  width: number;
   selectionPosition: string;
   onToggleMark: (row: TableRow, mark: PlayerMark) => void;
   onSetSelectionPosition: (row: TableRow, position: string) => void;
@@ -15,6 +16,7 @@ type PlayerSelectionCellProps = {
 export function PlayerSelectionCell({
   row,
   mark,
+  width,
   selectionPosition,
   onToggleMark,
   onSetSelectionPosition,
@@ -23,7 +25,15 @@ export function PlayerSelectionCell({
   const isRejected = mark === "rejected";
 
   return (
-    <td style={styles.markTd}>
+    <td
+      className="player-table-selection-column"
+      style={{
+        ...styles.markTd,
+        width,
+        minWidth: width,
+        maxWidth: width,
+      }}
+    >
       <div style={styles.markButtons}>
         <AppButton
           type="button"

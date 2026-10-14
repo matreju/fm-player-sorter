@@ -611,8 +611,8 @@ const hasHighlightedPoints = chartData.highlightedPoints.length > 0;
           <h3 style={styles.title}>Mapa Moneyball</h3>
 <div style={styles.subtitle}>
   {goalkeeperMode
-    ? "Bramkarz na tle bramkarzy z importu"
-    : "Zawodnik na tle wybranej grupy z importu"}
+    ? "Bramkarz na tle bramkarzy z kadry"
+    : "Zawodnik na tle wybranej grupy z kadry"}
 </div>
         </div>
 

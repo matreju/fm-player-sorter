@@ -1,5 +1,7 @@
 ﻿node_modules
 dist
+build
+src-tauri/binaries/*.exe
 .env
 .env.local
 .DS_Store
