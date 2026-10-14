@@ -6,6 +6,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -23,6 +24,7 @@ import {
   ROLE_SCORE_COLUMN,
   ROLE_SCORE_RANGE_COLUMN,
   ROLE_SCORE_UNCERTAINTY_COLUMN,
+  SELECTION_SCORE_COLUMN,
   ROLE_SIDE_COLUMN,
   ROLE_SIDE_PROFILE_COLUMN,
   ROLE_SIDE_SCORE_COLUMN,
@@ -43,7 +45,12 @@ import { PlayerTable } from "./components/player-table";
 import { SquadDepthDrawer } from "./components/squad-depth";
 import { usePlayerSelection } from "./hooks/usePlayerSelection";
 import { useSquadDepth } from "./hooks/useSquadDepth";
-import type { FmDatabaseLoadResult } from "./services/fmConnection";
+import {
+  loadFootballManagerSeasonStats,
+  loadFootballManagerTeamLogo,
+  type FmDatabaseLoadResult,
+  type FmSeasonStatsResult,
+} from "./services/fmConnection";
 import type {
   FormationSlot,
   SlotCandidate,
@@ -53,6 +60,7 @@ import type { SortConfig, TableRow } from "./types/table";
 import { calculateClubFormImpact, formatClubFormImpact } from "./utils/clubForm";
 import { matchesFootFilter, type FootFilter } from "./utils/filters";
 import {
+  createFmSnapshot,
   loadFmSnapshot,
   saveFmSnapshot,
   type StoredFmSnapshot,
@@ -180,12 +188,28 @@ function getBestOverallTableCandidate(row: TableRow, phase: TacticalView) {
   return bestCandidate;
 }
 
+function mergeSeasonStats(
+  rows: TableRow[],
+  stats: FmSeasonStatsResult,
+): TableRow[] {
+  if (Object.keys(stats.rows).length === 0) return rows;
+
+  return rows.map((row) => {
+    const uid = row.UID;
+    const seasonStats = uid ? stats.rows[uid] : undefined;
+    return seasonStats ? { ...row, ...seasonStats } : row;
+  });
+}
+
 export default function App() {
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<TableRow[]>([]);
   const [snapshot, setSnapshot] = useState<StoredFmSnapshot | null>(null);
   const [snapshotLoading, setSnapshotLoading] = useState(true);
   const [error, setError] = useState("");
+  const [supplementaryDataLoading, setSupplementaryDataLoading] =
+    useState(false);
+  const databaseLoadSequence = useRef(0);
 
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -392,6 +416,9 @@ export default function App() {
         [ROLE_SCORE_COLUMN]: selectedCandidate
           ? formatRoleScore(getCandidateRoleScore(selectedCandidate))
           : "-",
+        [SELECTION_SCORE_COLUMN]: selectedCandidate
+          ? formatRoleScore(selectedCandidate.finalScore)
+          : "-",
         [CLUB_FORM_COLUMN]: formatClubFormImpact(clubFormImpact),
         [MONEYBALL_COLUMN]: getMoneyballTableSummary(row, rows),
         [CANDIDATE_TYPE_COLUMN]:
@@ -590,6 +617,13 @@ export default function App() {
 
   const handleFmDatabaseLoaded = useCallback(
     (result: FmDatabaseLoadResult) => {
+      const loadSequence = ++databaseLoadSequence.current;
+
+      // Metadane reprezentacji (w tym motyw) pokazujemy od razu. Statystyki
+      // z dużego pliku zapisu i herb z graphics są doładowywane niezależnie.
+      setSnapshot(createFmSnapshot(result));
+      setSupplementaryDataLoading(true);
+
       startTransition(() => {
         setHeaders(result.headers);
         setRows(result.rows);
@@ -609,15 +643,83 @@ export default function App() {
         setError("");
       });
 
-      void saveFmSnapshot(result)
-        .then(setSnapshot)
-        .catch((unknownError) => {
-          setError(
-            unknownError instanceof Error
-              ? unknownError.message
-              : String(unknownError),
+      const baseSavePromise = new Promise<void>((resolve) => {
+        window.setTimeout(() => {
+          void saveFmSnapshot(result)
+            .catch((unknownError) => {
+              if (databaseLoadSequence.current !== loadSequence) return;
+              setError(
+                unknownError instanceof Error
+                  ? unknownError.message
+                  : String(unknownError),
+              );
+            })
+            .finally(resolve);
+        }, 0);
+      });
+
+      const uids = result.rows
+        .map((row) => Number(row.UID))
+        .filter((uid) => Number.isInteger(uid) && uid > 0);
+
+      const statsPromise = loadFootballManagerSeasonStats(uids).catch(() => ({
+        headers: [],
+        rows: {},
+        playerCount: 0,
+      } satisfies FmSeasonStatsResult));
+      const logoPromise = loadFootballManagerTeamLogo(
+        result.managedNationUid,
+        result.managedTeamUid,
+      ).catch(() => null);
+
+      void logoPromise.then((teamLogoDataUrl) => {
+        if (
+          databaseLoadSequence.current !== loadSequence ||
+          !teamLogoDataUrl
+        ) {
+          return;
+        }
+        setSnapshot((current) =>
+          current ? { ...current, teamLogoDataUrl } : current,
+        );
+      });
+
+      void Promise.all([statsPromise, logoPromise]).then(
+        async ([stats, teamLogoDataUrl]) => {
+          if (databaseLoadSequence.current !== loadSequence) return;
+
+          const enrichedRows = mergeSeasonStats(result.rows, stats);
+          const enrichedHeaders = Array.from(
+            new Set([...result.headers, ...stats.headers]),
           );
-        });
+          const enrichedResult: FmDatabaseLoadResult = {
+            ...result,
+            rows: enrichedRows,
+            headers: enrichedHeaders,
+            teamLogoDataUrl,
+          };
+
+          startTransition(() => {
+            setRows(enrichedRows);
+            setHeaders(enrichedHeaders);
+          });
+          setSnapshot(createFmSnapshot(enrichedResult));
+          setSupplementaryDataLoading(false);
+
+          await baseSavePromise;
+          if (databaseLoadSequence.current !== loadSequence) return;
+          try {
+            await saveFmSnapshot(enrichedResult);
+          } catch (unknownError) {
+            if (databaseLoadSequence.current !== loadSequence) return;
+            setError(
+              unknownError instanceof Error
+                ? unknownError.message
+                : String(unknownError),
+            );
+          }
+        },
+      );
     },
     [],
   );
@@ -749,6 +851,9 @@ export default function App() {
             </span>
           ) : null}
           {snapshot?.gameDate && <span>Dane: {snapshot.gameDate}</span>}
+          {supplementaryDataLoading && (
+            <span>Doładowywanie statystyk i herbu w tle…</span>
+          )}
           {error && <span className="desktop-context-bar__error">{error}</span>}
         </div>
 

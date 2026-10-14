@@ -26,6 +26,7 @@ export function PlayerSelectionCell({
 
   return (
     <td
+      className="player-table-selection-column"
       style={{
         ...styles.markTd,
         width,

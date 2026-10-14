@@ -43,10 +43,10 @@ function openSnapshotDatabase(): Promise<IDBDatabase> {
   });
 }
 
-export async function saveFmSnapshot(
+export function createFmSnapshot(
   result: FmDatabaseLoadResult,
-): Promise<StoredFmSnapshot> {
-  const snapshot: StoredFmSnapshot = {
+): StoredFmSnapshot {
+  return {
     key: CURRENT_SNAPSHOT_KEY,
     schemaVersion: CURRENT_SNAPSHOT_SCHEMA,
     savedAt: new Date().toISOString(),
@@ -62,6 +62,12 @@ export async function saveFmSnapshot(
     headers: result.headers,
     rows: result.rows,
   };
+}
+
+export async function saveFmSnapshot(
+  result: FmDatabaseLoadResult,
+): Promise<StoredFmSnapshot> {
+  const snapshot = createFmSnapshot(result);
 
   const database = await openSnapshotDatabase();
   try {

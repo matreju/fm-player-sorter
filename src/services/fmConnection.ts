@@ -261,6 +261,12 @@ export interface FmDateStatus {
   error: string | null;
 }
 
+export interface FmSeasonStatsResult {
+  headers: string[];
+  rows: Record<string, Record<string, string>>;
+  playerCount: number;
+}
+
 export async function inspectFootballManagerReaderProfile(): Promise<FmReaderProfileStatus> {
   if (!isTauri()) {
     throw new Error(
@@ -279,6 +285,28 @@ export async function loadFootballManagerDatabase(): Promise<FmDatabaseLoadResul
   }
 
   return invoke<FmDatabaseLoadResult>("load_fm_database");
+}
+
+export async function loadFootballManagerSeasonStats(
+  uids: number[],
+): Promise<FmSeasonStatsResult> {
+  if (!isTauri()) {
+    return { headers: [], rows: {}, playerCount: 0 };
+  }
+
+  return invoke<FmSeasonStatsResult>("load_fm_season_stats", { uids });
+}
+
+export async function loadFootballManagerTeamLogo(
+  managedNationUid: number | null,
+  managedTeamUid: number | null,
+): Promise<string | null> {
+  if (!isTauri()) return null;
+
+  return invoke<string | null>("load_fm_team_logo", {
+    managedNationUid,
+    managedTeamUid,
+  });
 }
 
 export async function getFootballManagerDateStatus(): Promise<FmDateStatus> {

@@ -1,5 +1,6 @@
 export const PLAYER_MARK_COLUMN = "Wybór";
 export const ROLE_SCORE_COLUMN = "Dopasowanie";
+export const SELECTION_SCORE_COLUMN = "Ocena selekcyjna";
 export const OVERALL_ABILITY_COLUMN = "OU";
 export const CLUB_FORM_COLUMN = "Forma klubu";
 export const MONEYBALL_COLUMN = "Moneyball";
@@ -17,6 +18,7 @@ export const OVERALL_SCORE_COLUMN = "Dopasowanie ogólne";
 
 export const ROLE_ANALYSIS_COLUMNS = [
   ROLE_SCORE_COLUMN,
+  SELECTION_SCORE_COLUMN,
   CLUB_FORM_COLUMN,
   MONEYBALL_COLUMN,
   CANDIDATE_TYPE_COLUMN,
@@ -36,6 +38,7 @@ export const BASE_TABLE_COLUMNS = [
   PLAYER_MARK_COLUMN,
   "Nazwisko",
   ROLE_SCORE_COLUMN,
+  SELECTION_SCORE_COLUMN,
   OVERALL_ABILITY_COLUMN,
   "Wiek",
   "Pozycja",

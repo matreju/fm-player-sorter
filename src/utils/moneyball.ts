@@ -321,7 +321,7 @@ export function getMoneyballSections(row: TableRow): MoneyballSection[] {
       metrics: [
         metric(row, ["Minuty"], "Minuty"),
         metric(row, ["Występy"], "Występy"),
-        metric(row, ["Średnia ocena w klubie"], "Śr. ocena"),
+        metric(row, ["Średnia ocena w klubie", "Śr. ocena"], "Śr. ocena"),
         metric(row, ["Ostatnie 5 występów klubowych"], "Ostatnie 5"),
       ],
     },

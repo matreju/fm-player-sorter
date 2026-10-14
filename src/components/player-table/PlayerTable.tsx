@@ -42,7 +42,7 @@ type ColumnGroup = {
 
 const PAGE_SIZE = 100;
 const COLUMN_STORAGE_KEY = "fm-player-sorter.table-columns.v5";
-const WIDTH_STORAGE_KEY = "fm-player-sorter.table-widths.v2";
+const WIDTH_STORAGE_KEY = "fm-player-sorter.table-widths.v3";
 const REQUIRED_COLUMNS = new Set<string>(["Wybór", "Nazwisko"]);
 
 const ATTRIBUTE_COLUMNS = new Set([
@@ -117,6 +117,7 @@ const PERSONALITY_COLUMNS = new Set([
 const CALCULATED_COLUMNS = new Set([
   "Wybór",
   "Dopasowanie",
+  "Ocena selekcyjna",
   "Forma klubu",
   "Moneyball",
   "Typ kandydata",
@@ -315,7 +316,7 @@ function readStoredWidths(): Record<string, number> {
 function getDefaultColumnWidth(header: string): number {
   if (header === "Nazwisko") return 190;
   if (header === "Pozycja" || header === "Klub" || header === "Liga") return 150;
-  if (header === "Wybór") return 170;
+  if (header === "Wybór") return 82;
   if (header.length >= 22) return 160;
   if (header.length >= 14) return 130;
   return 94;
@@ -655,7 +656,7 @@ export function PlayerTable({
         </section>
       )}
 
-      <div style={styles.tableWrapper}>
+      <div className="player-table-scroll" style={styles.tableWrapper}>
         <table
           style={{
             ...styles.table,
@@ -678,6 +679,7 @@ export function PlayerTable({
                     <th
                       key={header}
                       scope="col"
+                      className="player-table-selection-column player-table-selection-column--header"
                       style={{
                         ...styles.markTh,
                         width,
@@ -700,6 +702,11 @@ export function PlayerTable({
                   <th
                     key={header}
                     scope="col"
+                    className={
+                      header === "Nazwisko"
+                        ? "player-table-name-column player-table-name-column--header"
+                        : undefined
+                    }
                     aria-sort={getColumnAriaSort(header, sortConfig)}
                     style={{
                       ...(header === "Nazwisko"
@@ -771,6 +778,7 @@ export function PlayerTable({
                       return (
                         <td
                           key={header}
+                          className="player-table-name-column"
                           style={{
                             ...styles.nameStickyTd,
                             left: markColumnWidth,

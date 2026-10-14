@@ -2,10 +2,10 @@ use serde::Serialize;
 
 use crate::{
     fm_graphics::find_managed_team_logo,
-    fm_stats::enrich_with_latest_save_stats,
     fm_reader::{
         read_fm_date_status, read_fm_native_database, FmClassOffsetStat, FmDateStatus, FmTableRow,
     },
+    fm_stats::{load_latest_save_stats, SeasonStatsRows, SEASON_STATS_HEADERS},
     fm_process::detect_football_manager,
 };
 
@@ -40,6 +40,14 @@ pub struct FmDatabaseLoadResult {
     pub headers: Vec<String>,
     pub rows: Vec<FmTableRow>,
     pub class_offsets: Vec<FmClassOffsetStat>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FmSeasonStatsResult {
+    pub headers: Vec<String>,
+    pub rows: SeasonStatsRows,
+    pub player_count: usize,
 }
 
 impl FmDatabaseLoadResult {
@@ -95,13 +103,7 @@ fn load_fm_database_blocking() -> FmDatabaseLoadResult {
     }
 
     match read_fm_native_database() {
-        Ok(mut database) => {
-            let _season_stats_player_count = enrich_with_latest_save_stats(&mut database);
-            let team_logo_data_url = find_managed_team_logo(
-                database.managed_nation_uid,
-                database.managed_team_uid,
-            );
-            FmDatabaseLoadResult {
+        Ok(database) => FmDatabaseLoadResult {
             success: true,
             stage: "database-loaded".to_string(),
             message: format!(
@@ -121,7 +123,7 @@ fn load_fm_database_blocking() -> FmDatabaseLoadResult {
             managed_nation: database.managed_nation,
             managed_team_uid: database.managed_team_uid,
             managed_nation_uid: database.managed_nation_uid,
-            team_logo_data_url,
+            team_logo_data_url: None,
             managed_squad_gender: database.managed_squad_gender,
             national_filter_applied: database.national_filter_applied,
             scan_region_count: database.scan_region_count,
@@ -134,7 +136,6 @@ fn load_fm_database_blocking() -> FmDatabaseLoadResult {
             headers: database.headers,
             rows: database.rows,
             class_offsets: database.class_offsets,
-        }
         },
         Err(message) => FmDatabaseLoadResult::failed(
             if message.contains("26.3.x") {
@@ -146,6 +147,35 @@ fn load_fm_database_blocking() -> FmDatabaseLoadResult {
             process.pid,
         ),
     }
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn load_fm_season_stats(uids: Vec<u32>) -> Result<FmSeasonStatsResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let rows = load_latest_save_stats(&uids);
+        FmSeasonStatsResult {
+            headers: SEASON_STATS_HEADERS
+                .iter()
+                .map(|header| (*header).to_string())
+                .collect(),
+            player_count: rows.len(),
+            rows,
+        }
+    })
+    .await
+    .map_err(|error| format!("Wątek odczytu statystyk FM zakończył się błędem: {error}"))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn load_fm_team_logo(
+    managed_nation_uid: Option<u32>,
+    managed_team_uid: Option<u32>,
+) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        find_managed_team_logo(managed_nation_uid, managed_team_uid)
+    })
+    .await
+    .map_err(|error| format!("Wątek odczytu herbu reprezentacji zakończył się błędem: {error}"))
 }
 
 #[tauri::command]

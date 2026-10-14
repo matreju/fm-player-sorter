@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 pub const SEASON_STATS_HEADERS: &[&str] = &[
     "Występy", "Z ławki", "Minuty", "Śr. ocena", "Gracz meczu", "Gole", "Asysty",
     "Żółte kartki", "Czerwone kartki", "xG", "npxG", "xA", "Strzały", "Celne strzały",
@@ -25,10 +27,11 @@ pub const SEASON_STATS_HEADERS: &[&str] = &[
     "Obrony/90",
 ];
 
+pub type SeasonStatsRows = BTreeMap<String, BTreeMap<String, String>>;
+
 #[cfg(target_os = "windows")]
 mod platform {
     use std::{
-        collections::BTreeMap,
         env,
         io::Write,
         os::windows::process::CommandExt,
@@ -38,9 +41,7 @@ mod platform {
 
     use serde::{Deserialize, Serialize};
 
-    use crate::fm_reader::FmNativeDatabase;
-
-    use super::SEASON_STATS_HEADERS;
+    use super::SeasonStatsRows;
 
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
@@ -51,26 +52,22 @@ mod platform {
 
     #[derive(Deserialize)]
     struct StatsResponse {
-        rows: BTreeMap<String, BTreeMap<String, String>>,
+        rows: SeasonStatsRows,
     }
 
-    pub fn enrich_with_latest_save_stats(database: &mut FmNativeDatabase) -> usize {
-        append_headers(database);
+    pub fn load_latest_save_stats(uids: &[u32]) -> SeasonStatsRows {
         let Some(sidecar) = find_sidecar() else {
-            return 0;
+            return SeasonStatsRows::new();
         };
-        let uids = database
-            .rows
-            .iter()
-            .filter_map(|row| row.get("UID")?.parse::<u32>().ok())
-            .collect::<Vec<_>>();
         if uids.is_empty() {
-            return 0;
+            return SeasonStatsRows::new();
         }
 
-        let request = match serde_json::to_vec(&StatsRequest { uids }) {
+        let request = match serde_json::to_vec(&StatsRequest {
+            uids: uids.to_vec(),
+        }) {
             Ok(request) => request,
-            Err(_) => return 0,
+            Err(_) => return SeasonStatsRows::new(),
         };
         let mut child = match Command::new(sidecar)
             .stdin(Stdio::piped())
@@ -80,44 +77,22 @@ mod platform {
             .spawn()
         {
             Ok(child) => child,
-            Err(_) => return 0,
+            Err(_) => return SeasonStatsRows::new(),
         };
         if let Some(mut stdin) = child.stdin.take() {
             if stdin.write_all(&request).is_err() {
-                return 0;
+                return SeasonStatsRows::new();
             }
         }
         let output = match child.wait_with_output() {
             Ok(output) if output.status.success() => output,
-            _ => return 0,
+            _ => return SeasonStatsRows::new(),
         };
         let response = match serde_json::from_slice::<StatsResponse>(&output.stdout) {
             Ok(response) => response,
-            Err(_) => return 0,
+            Err(_) => return SeasonStatsRows::new(),
         };
-
-        let mut matched = 0;
-        for row in &mut database.rows {
-            let Some(uid) = row.get("UID").cloned() else {
-                continue;
-            };
-            let Some(stats) = response.rows.get(&uid) else {
-                continue;
-            };
-            matched += 1;
-            for (header, value) in stats {
-                row.insert(header.clone(), value.clone());
-            }
-        }
-        matched
-    }
-
-    fn append_headers(database: &mut FmNativeDatabase) {
-        for header in SEASON_STATS_HEADERS {
-            if !database.headers.iter().any(|value| value == header) {
-                database.headers.push((*header).to_string());
-            }
-        }
+        response.rows
     }
 
     fn find_sidecar() -> Option<PathBuf> {
@@ -138,14 +113,9 @@ mod platform {
 }
 
 #[cfg(target_os = "windows")]
-pub use platform::enrich_with_latest_save_stats;
+pub use platform::load_latest_save_stats;
 
 #[cfg(not(target_os = "windows"))]
-pub fn enrich_with_latest_save_stats(database: &mut crate::fm_reader::FmNativeDatabase) -> usize {
-    for header in SEASON_STATS_HEADERS {
-        if !database.headers.iter().any(|value| value == header) {
-            database.headers.push((*header).to_string());
-        }
-    }
-    0
+pub fn load_latest_save_stats(_uids: &[u32]) -> SeasonStatsRows {
+    SeasonStatsRows::new()
 }
