@@ -1,0 +1,85 @@
+name: Publish verified existing application update
+
+on:
+  push:
+    branches: [agent/fm26-native-reader]
+    paths: [.github/promote-update.json]
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify source and wait for signed release assets
+        shell: bash
+        run: |
+          version=$(node -p "require('./.github/promote-update.json').version")
+          source_sha=$(node -p "require('./.github/promote-update.json').source_sha")
+          test "$(node -p "require('./package.json').version")" = "$version"
+          git merge-base --is-ancestor "$source_sha" HEAD
+          git diff --exit-code "$source_sha" HEAD -- src src-tauri tools tests package.json package-lock.json
+          mkdir -p update-verify
+          for attempt in $(seq 1 60); do
+            if gh api "repos/$GITHUB_REPOSITORY/releases/tags/app-v$version" > update-verify/release.json 2>/dev/null; then
+              if node -e "const r=require('./update-verify/release.json'); process.exit(r.assets.some(a=>a.name==='latest.json') && r.assets.some(a=>a.name.endsWith('setup.exe')) ? 0 : 1)"; then
+                gh release download "app-v$version" --pattern latest.json --pattern '*setup.exe' --dir update-verify --clobber
+                break
+              fi
+            fi
+            sleep 10
+          done
+          test -f update-verify/latest.json
+      - name: Verify updater signature with the current application key
+        shell: bash
+        run: |
+          node <<'JS'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const spec = require('./.github/promote-update.json');
+          const release = require('./update-verify/release.json');
+          const manifest = require('./update-verify/latest.json');
+          const config = require('./src-tauri/tauri.conf.json');
+          if (release.target_commitish !== spec.source_sha || manifest.version.replace(/^v/, '') !== spec.version) throw Error('Release provenance/version mismatch');
+          const names = fs.readdirSync('update-verify').filter(name => name.endsWith('setup.exe'));
+          if (names.length !== 1) throw Error('Expected exactly one installer');
+          const bytes = fs.readFileSync('update-verify/' + names[0]);
+          const asset = release.assets.find(a => a.name === names[0]);
+          if (!asset || bytes.length !== asset.size || bytes.subarray(0, 2).toString() !== 'MZ') throw Error('Invalid installer asset');
+          const publicText = Buffer.from(config.plugins.updater.pubkey, 'base64').toString().trim().split(/\r?\n/);
+          const key = Buffer.from(publicText.find(line => !line.startsWith('untrusted comment:')), 'base64');
+          const publicKey = crypto.createPublicKey({key: Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), key.subarray(10)]), format: 'der', type: 'spki'});
+          for (const platform of Object.values(manifest.platforms)) {
+            if (platform.url !== asset.url && platform.url !== asset.browser_download_url) throw Error('Manifest points to a different installer');
+            const lines = Buffer.from(platform.signature, 'base64').toString().trim().split(/\r?\n/);
+            const signature = Buffer.from(lines[1], 'base64');
+            if (!signature.subarray(2, 10).equals(key.subarray(2, 10))) throw Error('Signing key ID mismatch');
+            const algorithm = signature.subarray(0, 2).toString();
+            if (!['ED', 'Ed'].includes(algorithm)) throw Error('Unknown signature algorithm');
+            const message = algorithm === 'ED' ? crypto.createHash('blake2b512').update(bytes).digest() : bytes;
+            if (!crypto.verify(null, message, publicKey, signature.subarray(10))) throw Error('Installer signature failed');
+            const comment = lines[2].replace(/^trusted comment: /, '');
+            if (!crypto.verify(null, Buffer.concat([signature.subarray(10), Buffer.from(comment)]), publicKey, Buffer.from(lines[3], 'base64'))) throw Error('Trusted-comment signature failed');
+          }
+          console.log('Verified signed application update ' + spec.version);
+          JS
+      - name: Replace redundant rebuild with the verified signed update
+        shell: bash
+        run: |
+          version=$(node -p "require('./.github/promote-update.json').version")
+          run_id=$(node -p "require('./.github/promote-update.json').superseded_run_id")
+          expected_head=$(node -p "require('./.github/promote-update.json').superseded_head")
+          gh run view "$run_id" --json headSha,workflowName,status > update-verify/superseded-run.json
+          node -e "const r=require('./update-verify/superseded-run.json'); if(r.headSha !== '$expected_head' || r.workflowName !== 'Publish Windows release') throw Error('Unexpected superseded build')"
+          status=$(node -p "require('./update-verify/superseded-run.json').status")
+          if [ "$status" != completed ]; then gh run cancel "$run_id"; fi
+          gh release edit "app-v$version" --prerelease=false --latest
+          gh api "repos/$GITHUB_REPOSITORY/releases/latest" > update-verify/latest-release.json
+          node -e "const r=require('./update-verify/latest-release.json'); if(r.tag_name !== 'app-v$version' || r.prerelease || r.draft) throw Error('Update channel publication failed')"
