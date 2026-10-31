@@ -1,7 +1,7 @@
 {
-  "version": "0.7.0-beta.3",
-  "source_sha": "8bef8c8d38d357b81ffced28388c12d4440d5efc",
-  "run_id": 41204607653,
+  "version": "0.7.0-beta.4",
+  "source_sha": "abeee6f8047e305f15b8e2059ebc66e0b896a278",
+  "run_id": 41209417678,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Odczyt prowadzonego klubu bez zależności od humanTeam. Aplikacja korzysta z kontraktu jedynego aktywnego menedżera, potwierdza natywny typ obiektu klubu, jego zespół i powiązania składu. Brak humanTeam (H0/VC0 przy M1/GT1) nie blokuje już tej ścieżki. Zachowano rezerwy, juniorów, rankingi własnego składu i wyszukiwarkę transferową. Typ klubu zweryfikowano na przesłanym game_plugin.dll; odczyt w uruchomionej grze nadal wymaga ponownego sprawdzenia."
+  "notes": "Pełna lista zawodników klubu: domyślnie cały klub, bez progu oceny i ograniczania do wybranej jedenastki. Zakładki drużyn z liczebnością, domyślne kolumny składu z potencjałem, kondycją i finansami oraz pełny skład na jednej przewijanej stronie. Transfery obejmują całą odczytaną bazę, również własnych graczy. Dodano zakresy od–do OU, potencjału, wieku, ceny/wartości, płacy i końca kontraktu, opcjonalny zakres klubów oraz 50/100/250 wyników na stronę z pełnymi licznikami. Zachowano bezpośredni odczyt klubu z kontraktu menedżera."
 }
