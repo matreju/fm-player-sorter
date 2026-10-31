@@ -104,3 +104,16 @@ Tests cover inclusive ranges, invalid ranges, missing values, free-agent fees,
 unfiltered own-player inclusion, and optional club scopes. The UI smoke fixture
 uses 27 club players including low-score players to verify the complete roster,
 team tabs, column defaults, reset behavior and transfer range transport.
+
+## Position ordering and EUR presentation (0.7.0-beta.5)
+
+Positions sort GK, right defender/wingback, centre back, left defender/wingback,
+defensive midfielder, central midfielder, attacking midfielder, right winger,
+left winger, striker. Multi-position players use the first matching group.
+
+Club and market finances and player details display EUR; wages are annual
+(52 weekly payments). The native index and persisted rows remain GBP/weekly;
+market filters convert EUR/annual bounds back with inclusive integer rounding.
+The currency table is not yet read from the game, so the shared 1 GBP = 1.20 EUR
+rate is explicitly described as approximate in the market and detail tooltips.
+Tests were deliberately skipped for this update at the user's request.

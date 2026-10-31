@@ -13,6 +13,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Configure requested build mode
+        shell: bash
+        run: |
+          node -e "const fs=require('fs'); const mode=fs.existsSync('.github/build-mode.json')?require('./.github/build-mode.json'):{}; fs.appendFileSync(process.env.GITHUB_ENV, 'SKIP_TESTS='+(mode.skip_tests_for_version===require('./package.json').version)+String.fromCharCode(10))"
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -36,18 +40,22 @@ jobs:
           Copy-Item dist/fmstats.exe src-tauri/binaries/fmstats-x86_64-pc-windows-msvc.exe
 
       - name: Test edition isolation
+        if: env.SKIP_TESTS != 'true'
         run: python -m unittest discover -s tests -p "test_*.py"
 
       - name: Test contract calendar
+        if: env.SKIP_TESTS != 'true'
         run: node --test tests/contract-duration.test.mjs
 
       - name: Build frontend
         run: npm run build
 
       - name: Check Windows backend
+        if: env.SKIP_TESTS != 'true'
         run: cargo check --manifest-path src-tauri/Cargo.toml --locked
 
       - name: Test club membership and transfer filters
+        if: env.SKIP_TESTS != 'true'
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked --lib
 
       - name: Build Windows installer

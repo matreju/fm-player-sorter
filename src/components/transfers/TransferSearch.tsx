@@ -1,3 +1,4 @@
+import { formatPlayerFinance, financeFilterToNative, FINANCE_NOTE } from "../../utils/playerFinance";
 import { useEffect, useState, type FormEvent } from "react";
 import { useModuleDrawer } from "../../hooks/useModuleDrawer";
 import { searchFootballManagerPlayers, type FmScoutingQuery, type FmScoutingResult } from "../../services/fmConnection";
@@ -8,20 +9,19 @@ import "./TransferSearch.css";
 
 type Filters = {text:string;position:string;minCa:string;maxCa:string;minPa:string;maxPa:string;minAge:string;maxAge:string;minFee:string;maxFee:string;minWage:string;maxWage:string;contractAfter:string;contractBefore:string;status:string;clubScope:string;sort:string;pageSize:string};
 const EMPTY: Filters = {text:"",position:"any",minCa:"",maxCa:"",minPa:"",maxPa:"",minAge:"",maxAge:"",minFee:"",maxFee:"",minWage:"",maxWage:"",contractAfter:"",contractBefore:"",status:"all",clubScope:"all",sort:"ca",pageSize:"100"};
-const POSITIONS = ["BR","LIB","O (L)","O (Ś)","O (P)","DP","P (L)","P (Ś)","P (P)","OP (L)","OP (Ś)","OP (P)","N (Ś)","WO (L)","WO (P)"];
+const POSITIONS = ["BR","O (P)","WO (P)","O (Ś)","LIB","O (L)","WO (L)","DP","P (Ś)","OP (Ś)","P (P)","OP (P)","P (L)","OP (L)","N (Ś)"];
 const COLUMNS = ["Nazwisko","Pozycja","Narodowość","Wiek","Klub","OU","PA","Wartość","Cena wywoławcza","Pensja","Koniec kontraktu","Pozostały kontrakt","Status transferu"];
 const number = (text:string) => text.trim() ? Number(text) : undefined;
 function request(filters: Filters, sessionId: number, page=0): FmScoutingQuery {
   return {...filters,sessionId,page,pageSize:Number(filters.pageSize),
     minCa:number(filters.minCa),maxCa:number(filters.maxCa),minPa:number(filters.minPa),maxPa:number(filters.maxPa),
-    minAge:number(filters.minAge),maxAge:number(filters.maxAge),minFee:number(filters.minFee),maxFee:number(filters.maxFee),
-    minWage:number(filters.minWage),maxWage:number(filters.maxWage)};
+    minAge:number(filters.minAge),maxAge:number(filters.maxAge),minFee:financeFilterToNative(filters.minFee,false,"min"),maxFee:financeFilterToNative(filters.maxFee,false,"max"),
+    minWage:financeFilterToNative(filters.minWage,true,"min"),maxWage:financeFilterToNative(filters.maxWage,true,"max")};
 }
 function cell(column:string,value:string|undefined) {
   if (!value?.trim()) return "—";
   if (["Wartość","Cena wywoławcza","Pensja"].includes(column)) {
-    const amount=Number(value);
-    return Number.isFinite(amount) ? new Intl.NumberFormat("pl-PL",{style:"currency",currency:"GBP",maximumFractionDigits:0}).format(amount) : value;
+    return formatPlayerFinance(column,value);
   }
   return value;
 }
@@ -49,8 +49,8 @@ export function TransferSearch({sessionId,clubName}:{sessionId:number;clubName:s
     {title:"Obecne umiejętności · OU",label:"OU",from:"minCa",to:"maxCa",max:"200"},
     {title:"Potencjał · PA",label:"Potencjał",from:"minPa",to:"maxPa",max:"200"},
     {title:"Wiek",label:"Wiek",from:"minAge",to:"maxAge",max:"100",disabled:shown!==null&&!shown.gameDate},
-    {title:"Cena / wartość · £",label:"Cena",from:"minFee",to:"maxFee"},
-    {title:"Obecna płaca · £ / tydzień",label:"Płaca",from:"minWage",to:"maxWage"},
+    {title:"Cena / wartość · €",label:"Cena",from:"minFee",to:"maxFee"},
+    {title:"Obecna płaca · € / rok",label:"Płaca",from:"minWage",to:"maxWage"},
     {title:"Koniec kontraktu",label:"Koniec kontraktu",from:"contractAfter",to:"contractBefore",type:"date"},
   ];
   const pageCount=shown?Math.max(1,Math.ceil(shown.total/shown.pageSize)):1;
@@ -77,13 +77,13 @@ export function TransferSearch({sessionId,clubName}:{sessionId:number;clubName:s
           <AppButton disabled={loading} onClick={()=>{setDraft(EMPTY);setQuery(request(EMPTY,sessionId));}}>Wyczyść filtry</AppButton>
         </div>
       </form>
-      <p className="transfer-search__note">Bez filtrów pokazujemy całą odczytaną bazę, również własny klub. Strony dzielą wyniki wyłącznie dla sprawnego wyświetlania. Cena wywoławcza i wartość są osobnymi danymi; przy braku ceny filtr korzysta z wartości. Płaca: obecny kontrakt, GBP / tydzień. Brakujące dane oznaczamy „—”.</p>
+      <p className="transfer-search__note">Bez filtrów pokazujemy całą odczytaną bazę, również własny klub. Strony dzielą wyniki wyłącznie dla sprawnego wyświetlania. Cena wywoławcza i wartość są osobnymi danymi; przy braku ceny filtr korzysta z wartości. Płaca: obecny kontrakt, EUR / rok. {FINANCE_NOTE} Brakujące dane oznaczamy „—”.</p>
       {loading && <div className="transfer-search__notice" role="status">Wczytywanie wyników z całej bazy gry. Przy pierwszym otwarciu przygotowujemy pełny indeks piłkarzy.</div>}
       {error && <div className="transfer-search__notice" role="alert">{error} <AppButton onClick={()=>setRevision(value=>value+1)}>Ponów</AppButton></div>}
       {shown && <>
         <div className="transfer-search__summary" role="status"><strong>Znaleziono {shown.total.toLocaleString("pl-PL")} z {(shown.databaseTotal??shown.total).toLocaleString("pl-PL")} piłkarzy w bazie</strong><span>{shown.total?shown.page*shown.pageSize+1:0}–{Math.min((shown.page+1)*shown.pageSize,shown.total)} · strona {shown.page+1} z {pageCount}</span></div>
-        <div className="transfer-search__table"><table><thead><tr>{COLUMNS.map(column=><th key={column}>{column==="Pensja" ? "Obecna płaca / tydz." : column==="OU" ? "OU (CA)" : column==="PA"?"Potencjał":column}</th>)}</tr></thead>
-          <tbody>{shown.rows.map(row=><tr key={row.UID}>{COLUMNS.map(column=><td key={column} title={row[column] || undefined}>{column==="Pozostały kontrakt" ? contractDuration(row["Koniec kontraktu"],shown.gameDate) : cell(column,row[column])}</td>)}</tr>)}</tbody></table>
+        <div className="transfer-search__table"><table><thead><tr>{COLUMNS.map(column=><th key={column}>{column==="Pensja" ? "Obecna płaca (€/rok)" : column==="OU" ? "OU (CA)" : column==="PA"?"Potencjał":column}</th>)}</tr></thead>
+          <tbody>{shown.rows.map(row=><tr key={row.UID}>{COLUMNS.map(column=><td key={column} title={["Pensja","Wartość","Cena wywoławcza"].includes(column) ? FINANCE_NOTE : row[column] || undefined}>{column==="Pozostały kontrakt" ? contractDuration(row["Koniec kontraktu"],shown.gameDate) : cell(column,row[column])}</td>)}</tr>)}</tbody></table>
           {!shown.rows.length && <p className="transfer-search__empty">Brak zawodników spełniających te filtry.</p>}</div>
         <div className="transfer-search__pagination"><AppButton disabled={loading||shown.page===0} onClick={()=>go(0)}>Pierwsza</AppButton><AppButton disabled={loading||shown.page===0} onClick={()=>go(shown.page-1)}>← Poprzednia</AppButton>
           <AppButton disabled={loading||shown.page+1>=pageCount} onClick={()=>go(shown.page+1)}>Następna →</AppButton><AppButton disabled={loading||shown.page+1>=pageCount} onClick={()=>go(pageCount-1)}>Ostatnia</AppButton></div>

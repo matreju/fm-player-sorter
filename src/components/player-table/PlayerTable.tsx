@@ -1,3 +1,4 @@
+import { formatPlayerFinance, FINANCE_NOTE } from "../../utils/playerFinance";
 import {
   useEffect,
   useMemo,
@@ -315,13 +316,13 @@ function readStoredWidths(): Record<string, number> {
 }
 
 function columnLabel(header: string): string {
-  const labels: Record<string,string> = {Nazwisko:"Imię i nazwisko",PA:"Potencjał","Numer w składzie":"Numer",Pensja:"Płaca (£/tydz.)",Wartość:"Wartość (£)","Cena wywoławcza":"Cena wywoławcza (£)"};
+  const labels: Record<string,string> = {Nazwisko:"Imię i nazwisko",PA:"Potencjał","Numer w składzie":"Numer",Pensja:"Płaca (€/rok)",Wartość:"Wartość (€)","Cena wywoławcza":"Cena wywoławcza (€)"};
   return labels[header] ?? header;
 }
 function displayCell(header:string, value:string|undefined):string {
   if (!value?.trim()) return "—";
   if (["Wartość","Cena wywoławcza","Pensja"].includes(header) && Number.isFinite(Number(value))) {
-    return new Intl.NumberFormat("pl-PL",{maximumFractionDigits:0}).format(Number(value));
+    return formatPlayerFinance(header, value);
   }
   return value;
 }
@@ -829,7 +830,7 @@ export function PlayerTable({
                           ...getMarkedCellStyle(mark),
                           width,
                         }}
-                        title={row[header] || undefined}
+                        title={["Pensja","Wartość","Cena wywoławcza"].includes(header) ? FINANCE_NOTE : row[header] || undefined}
                       >
                         {displayCell(header,row[header])}
                       </td>

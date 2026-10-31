@@ -68,39 +68,32 @@ export function areComparablePlayerTypes(
 }
 
 export function getPlayerPositionSortRank(row: TableRow): number {
-  const position = normalizePositionText(row["Pozycja"]);
-
-  if (isGoalkeeper(row)) return 0;
-
-  if (/O\s*\([^)]*[SŚ]/i.test(position) || position.includes("STOPER")) {
-    return 10;
+  const position = normalizePositionText(row["Pozycja"])
+    .replace(/((?:\b(?:WO|OP|DP|O|P|N)\s*\/\s*)+(?:WO|OP|DP|O|P|N))\s*\(([^)]+)\)/g,
+      (_match, roles: string, sides: string) => roles.split("/").map(role => `${role.trim()} (${sides})`).join(", "));
+  const ranks: number[] = [];
+  for (const match of position.matchAll(/\b(BR|GK|LIB|WO|WB|DP|DM|OP|AM|O|D|P|M|N|ST)\b(?:\s*\(([^)]*)\))?/g)) {
+    const role = match[1];
+    const sides = match[2] ?? "";
+    const right = /[PR]/.test(sides), centre = /[SC]/.test(sides), left = /L/.test(sides);
+    if (role === "BR" || role === "GK") ranks.push(0);
+    else if (role === "LIB") ranks.push(2);
+    else if (["O", "D", "WO", "WB"].includes(role)) {
+      if (right) ranks.push(1);
+      if (centre) ranks.push(2);
+      if (left) ranks.push(3);
+    } else if (role === "DP" || role === "DM") ranks.push(4);
+    else if (["P", "M", "OP", "AM"].includes(role)) {
+      if (centre) ranks.push(role === "OP" || role === "AM" ? 6 : 5);
+      if (right) ranks.push(7);
+      if (left) ranks.push(8);
+    } else if (role === "N" || role === "ST") ranks.push(9);
   }
-
-  if (/O\s*\([^)]*L/i.test(position)) return 20;
-  if (/O\s*\([^)]*P/i.test(position)) return 21;
-
-  if (/WO\s*\([^)]*L/i.test(position)) return 25;
-  if (/WO\s*\([^)]*P/i.test(position)) return 26;
-
-  if (/\bDP\b/i.test(position)) return 30;
-
-  if (/P\s*\([^)]*[SŚ]/i.test(position)) return 40;
-
-  if (/OP\s*\([^)]*[SŚ]/i.test(position)) return 50;
-
-  if (/OP\s*\([^)]*L/i.test(position) || /P\s*\([^)]*L/i.test(position)) {
-    return 60;
-  }
-
-  if (/OP\s*\([^)]*P/i.test(position) || /P\s*\([^)]*P/i.test(position)) {
-    return 61;
-  }
-
-  if (/\bN\s*\(/i.test(position) || position.includes("NAPAST")) {
-    return 70;
-  }
-
-  return 999;
+  if (position.includes("BRAMKARZ")) ranks.push(0);
+  if (position.includes("STOPER")) ranks.push(2);
+  if (position.includes("NAPAST")) ranks.push(9);
+  // A multi-position player belongs to the earliest applicable football group.
+  return ranks.length ? Math.min(...ranks) : 999;
 }
 
 export function getPlayerCompareOptionLabel(row: TableRow): string {

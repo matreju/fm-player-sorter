@@ -91,6 +91,7 @@ import {
   getRoleSideFit,
 } from "./utils/sideFit";
 import { compareValues, getSortableNumber } from "./utils/sortTable";
+import { getPlayerPositionSortRank } from "./utils/playerPositionType";
 import { normalizeTextForSearch } from "./utils/textSearch";
 import { getNationTheme } from "./utils/nationTheme";
 
@@ -582,7 +583,7 @@ export default function App() {
   ]);
 
   const sortedRows = useMemo(() => {
-    if (showOnlySelectedPlayers) {
+    if (showOnlySelectedPlayers && sortConfig?.column !== "Pozycja") {
       return [...analyzedRows].sort((a, b) => {
         const orderA =
           SELECTION_POSITION_ORDER[getPlayerSelectionPosition(a)] ?? 999;
@@ -598,6 +599,15 @@ export default function App() {
     }
 
     if (!sortConfig) return analyzedRows;
+    if (sortConfig.column === "Pozycja") {
+      return [...analyzedRows].sort((a,b) => {
+        const left = getPlayerPositionSortRank(a), right = getPlayerPositionSortRank(b);
+        if (left === 999 && right !== 999) return 1;
+        if (right === 999 && left !== 999) return -1;
+        const order = sortConfig.direction === "asc" ? left-right : right-left;
+        return order || compareValues(a["Nazwisko"] ?? "",b["Nazwisko"] ?? "","asc");
+      });
+    }
     return [...analyzedRows].sort((a, b) =>
       compareValues(
         a[sortConfig.column],
@@ -816,7 +826,7 @@ export default function App() {
   const handleSort = useCallback((column: string) => {
     setSortConfig((current) => {
       if (!current || current.column !== column) {
-        return { column, direction: "desc" };
+        return { column, direction: column === "Pozycja" ? "asc" : "desc" };
       }
       return {
         column,
