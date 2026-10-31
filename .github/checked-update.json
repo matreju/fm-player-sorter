@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.10",
-  "source_sha": "a10faef8140c1f051cf414fd7c5cf2499bbc347f",
-  "run_id": 41243096856,
+  "version": "0.7.0-beta.11",
+  "source_sha": "2f3a94673a2578360abfcefbc9e4416d3420b5ad",
+  "run_id": 41244849555,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Nowy panel wyszukiwania transferów z kategoriami i klikalnym boiskiem: wybór kilku pozycji, dopasowanie dowolnej lub wszystkich zaznaczonych. Filtry pozostają domyślnie zwinięte. Poprawiony odczyt bieżącego kursu EUR/GBP bezpośrednio z tabeli formatowania gry, niezależny od wyszukiwania rekordów walut i ich nazw; usuwa przyczynę ukrywania wartości i pensji przy braku rozpoznanych rekordów. Kwoty nadal w euro, pensje roczne. Odczyt kwot wymaga potwierdzenia w uruchomionej grze. Testy pominięto na życzenie użytkownika; wydanie po kompilacji Windows.",
+  "notes": "Automatyczny podział aplikacji na tryb klubowy i reprezentacyjny według zespołu odczytanego z FM. W klubie dostępne Transfery, Porównanie i Skład; w reprezentacji Porównanie, Skład, Trzon i Zgrupowania. Moduły niedopasowane do trybu są ukryte i nie są uruchamiane. Zmiana prowadzonego zespołu lub rozłączenie zamyka otwarte zakładki. Nagłówek pokazuje aktywny tryb. Testy pominięto na życzenie użytkownika; wydanie po kompilacji Windows.",
   "ui_revision": 1
 }
