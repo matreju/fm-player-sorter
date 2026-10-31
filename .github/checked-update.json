@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.7",
-  "source_sha": "22de9f9b83fc60fa4c65798736d8a7f74127479c",
-  "run_id": 41226232058,
+  "version": "0.7.0-beta.8",
+  "source_sha": "8147a9341939a98887a08fc389e0a42732f7b7af",
+  "run_id": 41227463325,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Poprawione sortowanie pozycji w klubie i transferach: wahadłowi mają osobną grupę po całej linii obrony. Kolejność linii: bramkarze, obrońcy (prawa/środek/lewa), wahadłowi (prawa/lewa), defensywni pomocnicy, pomocnicy (prawa/środek/lewa), ofensywni pomocnicy (prawa/środek/lewa), napastnicy. Sortowanie korzysta z kompletnych ocen pozycji 1–20, a nie ze skróconego opisu. Uwzględnia mocne pozycje (minimum 15 i do dwóch punktów od najwyższej oceny), dzięki czemu słabsza dodatkowa pozycja nie przesuwa zawodnika do wcześniejszej grupy. Opis pokazuje również dodatkowe pozycje z oceną co najmniej 15. W obrębie tej samej grupy zachowano porządek nazwisk. Testy pominięto zgodnie z prośbą użytkownika.",
+  "notes": "Poprawka fałszywego komunikatu o zmianie połączenia podczas szybkiego odświeżania. Sesja zapamiętuje rzeczywistego menedżera potwierdzonego przez kontrakt, także gdy pełne połączenie korzystało ze ścieżki alternatywnej. Usunięto ponowny wymóg jednego wpisu w globalnym rejestrze i blokowanie klubu przez nieaktualną próbkę obcych zawodników. Normalna zmiana/przeniesienie rejestru piłkarzy może odbudować indeks z natywnej listy bez skanowania całej pamięci. Chwilowe błędy odczytu zachowują sesję i skład do ponowienia, a szczegółowe kody FM-Rxx wskazują przyczynę problemu. Faktyczna zmiana procesu, menedżera lub klubu nadal wymaga ponownego połączenia. Testy pominięto na prośbę użytkownika. Odczyt na żywo pozostaje do potwierdzenia w grze.",
   "ui_revision": 1
 }
