@@ -16,6 +16,9 @@ pub struct FmClassOffsetStat {
 pub struct FmNativeDatabase {
     pub pid: u32,
     pub profile: String,
+    pub managed_mode: String,
+    pub managed_club_uid: Option<u32>,
+    pub session_id: u64,
     pub database_player_count: usize,
     pub player_count: usize,
     pub managed_team: Option<String>,
@@ -54,7 +57,7 @@ mod windows_reader {
         collections::{BTreeMap, HashMap, HashSet, VecDeque},
         ffi::c_void,
         mem::size_of,
-        sync::{Mutex, OnceLock},
+        sync::{Arc, Mutex, OnceLock, atomic::{AtomicU64, Ordering}},
         time::Instant,
     };
 
@@ -74,6 +77,8 @@ mod windows_reader {
     };
 
     use crate::{
+        fm_club::{self, ClubNode},
+        fm_scout::{self, ScoutingQuery, ScoutingResult, ScoutingEntry},
         fm_modules::inspect_fm_modules_blocking,
         fm_process::detect_football_manager,
         fm_version::{self, FmLayout},
@@ -278,6 +283,115 @@ mod windows_reader {
 
     const FOOT_LEFT: usize = 0x18;
     const FOOT_RIGHT: usize = 0x19;
+
+    #[derive(Clone)]
+    struct ScoutingSession {
+        session_id: u64,
+        pid: u32,
+        layout: FmLayout,
+        candidates: Arc<Vec<PlayerCandidate>>,
+        own_uids: Arc<HashSet<u32>>,
+        own_clubs: Arc<HashSet<usize>>,
+        derived_year: i32,
+        game_date: Option<u32>,
+        gender: Option<bool>,
+        index: Option<Arc<Vec<ScoutingEntry>>>,
+    }
+    static SCOUTING_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+    static SCOUTING_CACHE: OnceLock<Mutex<Option<ScoutingSession>>> = OnceLock::new();
+    static SCOUTING_QUERY_LOCK: Mutex<()> = Mutex::new(());
+    fn scouting_slot() -> &'static Mutex<Option<ScoutingSession>> {
+        SCOUTING_CACHE.get_or_init(|| Mutex::new(None))
+    }
+
+    fn read_transfer_entry(
+        process: &RemoteProcess, candidate: &PlayerCandidate, candidate_index: usize,
+        source: &ScoutingSession, cache: &mut PlayerReadCache,
+    ) -> Option<ScoutingEntry> {
+        let person=process.read_exact(candidate.person_address,0xB0)?;
+        if read_u32(&person,OBJ_UID)!=Some(candidate.uid) { return None; }
+        let player=process.read_exact(candidate.player_address,0x270)?;
+        let ca=read_u16(&player,PLAYER_CA)?; let pa=read_u16(&player,PLAYER_PA)?;
+        if !(1..=200).contains(&ca) || !(1..=200).contains(&pa) { return None; }
+        let common=nested_string_from_block(process,&person,PERSON_COMMON_NAME);
+        let first=nested_string_from_block(process,&person,PERSON_FIRST_NAME);
+        let last=nested_string_from_block(process,&person,PERSON_LAST_NAME);
+        let name=common.filter(|name| plausible_label(name,160)).unwrap_or_else(|| format!("{} {}",first.unwrap_or_default(),last.unwrap_or_default()));
+        if !plausible_label(&name,200) { return None; }
+        let contract_address=read_u64(&person,PERSON_CONTRACT)? as usize;
+        let contract=if contract_address>=0x10_000 { Some(process.read_exact(contract_address,0x60)?) } else { None };
+        let contract_team=contract.as_deref().and_then(|bytes| read_u64(bytes,CONTRACT_TEAM)).filter(|team| *team>=0x10_000).map(|team| team as usize);
+        let current_team=read_u64(&player,0x130).filter(|team| *team>=0x10_000).map(|team| team as usize);
+        let owner=contract_team.map(|team| cached_team_details(process,team,cache));
+        let current=current_team.map(|team| cached_team_details(process,team,cache));
+        let club=current.as_ref().and_then(|team| team.owner_club.as_deref()).or_else(|| owner.as_ref().and_then(|team| team.owner_club.as_deref())).unwrap_or("");
+        let nationality=cached_nation_name(process,candidate.nation_address,cache).unwrap_or_default();
+        let positions=POSITION_FIELDS.iter().filter(|(_,_,offset)| player.get(PLAYER_POSITIONS+offset).copied().unwrap_or(0)>=14)
+            .map(|(short,_,_)| (*short).to_string()).collect();
+        let age=source.game_date.and_then(|date| read_u32(&person,PERSON_DOB).and_then(|birth| age_at(birth,Some(date),source.derived_year)))
+            .and_then(|age| u16::try_from(age).ok()).filter(|age| *age<=90);
+        let flags=contract.as_deref().and_then(|bytes| bytes.get(CONTRACT_STATUS)).copied().unwrap_or(0);
+        Some(ScoutingEntry {
+            candidate_index, search:fm_scout::search_text(&format!("{name} {club} {nationality}")), positions,ca,pa,age,
+            value:read_u32(&player,PLAYER_VALUE).and_then(money_value),
+            asking_price:read_u32(&player,PLAYER_ASKING_PRICE).and_then(money),
+            wage:contract.as_deref().and_then(|bytes| read_u32(bytes,CONTRACT_WAGE)).and_then(money),
+            expiry:contract.as_deref().and_then(|bytes| read_u32(bytes,CONTRACT_EXPIRY)).and_then(format_fm_date),
+            listed:flags&1!=0,
+            free:contract_address==0 && current_team.is_none(),
+            own_player:source.own_uids.contains(&candidate.uid) || owner.as_ref().and_then(|team| team.owner_club_address).map(|club| source.own_clubs.contains(&club)).unwrap_or(false),
+        })
+    }
+
+    pub(super) fn search_players(query: ScoutingQuery) -> Result<ScoutingResult,String> {
+        let _query_guard=SCOUTING_QUERY_LOCK.lock().map_err(|_| "Wyszukiwarka jest niedostępna.".to_string())?;
+        let source=scouting_slot().lock().map_err(|_| "Brak dostępu do danych transferowych.".to_string())?
+            .as_ref().cloned().ok_or("Najpierw połącz aplikację z grą.")?;
+        if source.session_id!=query.session_id { return Err("Dane gry zostały odświeżone. Otwórz wyszukiwarkę ponownie.".into()); }
+        let detected=detect_football_manager();
+        if !detected.detected || detected.pid!=Some(source.pid) {
+            *scouting_slot().lock().map_err(|_| "Brak dostępu do sesji.".to_string())?=None;
+            return Err("Połączenie z grą wygasło. Połącz aplikację ponownie.".into());
+        }
+        let mut process=RemoteProcess::open(source.pid)?; process.layout=source.layout;
+        let index=if let Some(index)=source.index.clone() { index } else {
+            let mut entries=Vec::new(); let mut cache=PlayerReadCache::default();
+            for (i,candidate) in source.candidates.iter().enumerate() {
+                if source.gender.map(|female| female!=candidate.female).unwrap_or(false) { continue; }
+                if let Some(entry)=read_transfer_entry(&process,candidate,i,&source,&mut cache) { entries.push(entry); }
+            }
+            let index=Arc::new(entries);
+            let mut guard=scouting_slot().lock().map_err(|_| "Brak dostępu do sesji.".to_string())?;
+            let current=guard.as_mut().filter(|current| current.session_id==source.session_id)
+                .ok_or("Podczas indeksowania odświeżono dane gry. Powtórz wyszukiwanie.")?;
+            current.index=Some(index.clone()); index
+        };
+        if query.max_age.is_some() && source.game_date.is_none() {
+            return Err("Filtr wieku wymaga potwierdzonej daty gry. Usuń limit wieku lub odśwież połączenie.".into());
+        }
+        let matches=fm_scout::matching_entries(&index,&query)?;
+        let page_size=if query.page_size==0 {50} else {query.page_size.clamp(10,100)};
+        let page=query.page.min(matches.len().saturating_sub(1)/page_size);
+        let mut rows=Vec::new(); let mut cache=PlayerReadCache::default();
+        for &entry_index in matches.iter().skip(page.saturating_mul(page_size)).take(page_size) {
+            let entry=&index[entry_index]; let candidate=&source.candidates[entry.candidate_index];
+            if process.read_u32(candidate.person_address+OBJ_UID)!=Some(candidate.uid) {
+                return Err("Baza w grze zmieniła się. Odśwież połączenie przed dalszym wyszukiwaniem.".into());
+            }
+            if let Some(player)=read_player(&process,candidate.uid,candidate.person_address,candidate.player_address,entry.ca,entry.pa,&mut cache) {
+                let mut row=player_to_row(player,source.game_date,source.derived_year);
+                if source.game_date.is_none() { row.insert("Wiek".into(),String::new()); }
+                row.insert("Status transferu".into(),if entry.free {"Wolny zawodnik"} else if entry.listed {"Lista transferowa"} else {"Kontrakt klubowy"}.into());
+                row.insert("Na liście transferowej".into(),yes_no(entry.listed));
+                rows.push(row);
+            }
+        }
+        if scouting_slot().lock().map_err(|_| "Brak dostępu do sesji.".to_string())?.as_ref().map(|current| current.session_id)!=Some(source.session_id)
+            || detect_football_manager().pid!=Some(source.pid) {
+            return Err("Sesja gry zmieniła się podczas wyszukiwania. Połącz aplikację ponownie.".into());
+        }
+        Ok(ScoutingResult {session_id:source.session_id,total:matches.len(),page,page_size,game_date:source.game_date.and_then(format_fm_date),rows})
+    }
 
     struct HandleGuard(HANDLE);
 
@@ -607,7 +721,7 @@ mod windows_reader {
         (active.len() == 1).then(|| active[0])
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     struct PlayerCandidate {
         uid: u32,
         person_address: usize,
@@ -708,6 +822,7 @@ mod windows_reader {
         database_index: Option<u32>,
         database_type: Option<u32>,
         nation_manager_evidence: usize,
+        club_manager_evidence: usize,
     }
 
     #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -802,6 +917,7 @@ mod windows_reader {
             *guard = None;
         }
 
+        if let Ok(mut cache) = scouting_slot().lock() { *cache = None; }
         let started = Instant::now();
         let detected = detect_football_manager();
         let pid = detected
@@ -1047,7 +1163,11 @@ mod windows_reader {
             active_human_team.signature_match_count;
         binding_diagnostics.active_manager_count = active_human_team.active_manager_count;
         binding_diagnostics.active_team_count = active_human_team.active_team_count;
+        let club_mode = human_binding.map(|binding| binding.club_manager_evidence > 0).unwrap_or(false);
         let managed = human_binding.and_then(|binding| {
+            if club_mode {
+                return resolve_bound_club_team(&process, binding, active_human_team.team_address, &human_managers);
+            }
             resolve_bound_national_team(
                 &process,
                 binding,
@@ -1062,7 +1182,7 @@ mod windows_reader {
         });
         let managed = managed.ok_or_else(|| {
             format!(
-                "Wykryto {}, ale nie udało się odczytać aktywnej reprezentacji z globalnego powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/K{}/D{}/T{}/Q{}/A{}/P{}/L{}/E{}/I{}/F{}/Y{}/N{}/U{}/J{}/X{}/O{}/W{}/S{}/Z{}/G{}/M{}/GT{}/R{}/MC{}.",
+                "Wykryto {}, ale nie udało się jednoznacznie odczytać prowadzonego klubu lub reprezentacji z powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/K{}/D{}/T{}/Q{}/A{}/P{}/L{}/E{}/I{}/F{}/Y{}/N{}/U{}/J{}/X{}/O{}/W{}/S{}/Z{}/G{}/M{}/GT{}/R{}/MC{}.",
                 process.layout.name,
                 binding_diagnostics.context_candidate_count,
                 binding_diagnostics.binding_candidate_count,
@@ -1096,17 +1216,22 @@ mod windows_reader {
         })?;
         let manager_team = Some(managed.team_address);
         let managed_team_uid = record_uid(&process, managed.team_address);
-        let managed_nation_uid = record_uid(&process, managed.nation_address);
-        let managed_team = Some(managed.team_name);
+        let managed_nation_uid = (!club_mode).then(|| record_uid(&process, managed.nation_address)).flatten();
+        let managed_club = if club_mode { process.read_ptr(managed.team_address + TEAM_CLUB) } else { None };
+        let managed_club_uid = managed_club.and_then(|club| record_uid(&process, club));
+        let managed_team = Some(managed.team_name.clone());
         let managed_nation_address = managed.nation_address;
         let managed_nation = managed.nation_name;
         let managed_gender =
             resolve_managed_squad_gender(&process, managed.team_address, &player_candidates);
 
+        let (club_groups, own_clubs) = if let Some(club) = managed_club {
+            collect_managed_club_players(&process, club, managed.team_address, &player_candidates)?
+        } else { (HashMap::new(), HashSet::new()) };
         let selected_candidates = player_candidates
             .values()
             .filter(|candidate| {
-                candidate.nation_address == managed_nation_address
+                (if club_mode { club_groups.contains_key(&candidate.uid) } else { candidate.nation_address == managed_nation_address })
                     && managed_gender
                         .map(|female| candidate.female == female)
                         .unwrap_or(true)
@@ -1114,12 +1239,19 @@ mod windows_reader {
             .collect::<Vec<_>>();
         if selected_candidates.is_empty() {
             return Err(format!(
-                "Rozpoznano reprezentację {managed_nation}, ale nie znaleziono żadnego uprawnionego zawodnika w bazie."
+                "Rozpoznano prowadzony zespół, ale nie znaleziono jego zawodników. Odśwież połączenie po wczytaniu zapisu."
             ));
         }
 
         let database_player_count = player_candidates.len();
-        let derived_year = derive_game_year_from_candidates(player_candidates.values());
+        // Documented FM27 Steam world clock; never use a fixture date as today's date.
+        let world_date = if process.layout.edition == 27 && process.native_plugin_hash.as_deref()
+            .map(|hash| hash.eq_ignore_ascii_case("bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f")).unwrap_or(false) {
+            process.read_u32(resolver.game_plugin.base + 0x56AD378)
+                .filter(|raw| decode_fm_date(*raw).is_some()).map(normalize_fm_date)
+        } else { None };
+        let derived_year = world_date.and_then(decode_fm_date).map(|(year,_)| year)
+            .unwrap_or_else(|| derive_game_year_from_candidates(player_candidates.values()));
         let mut players = HashMap::<u32, PlayerRecord>::with_capacity(selected_candidates.len());
         let mut person_to_uid = HashMap::<usize, u32>::with_capacity(selected_candidates.len() * 2);
         let mut selected_club_candidates = HashSet::<usize>::new();
@@ -1144,11 +1276,11 @@ mod windows_reader {
             }
         }
 
-        let squad_links = walk_club_squads(
+        let squad_links = if club_mode { SquadWalk::default() } else { walk_club_squads(
             &process,
             &selected_club_candidates,
             &person_to_uid,
-        );
+        ) };
 
         for (uid, link) in &squad_links.player_links {
             if let Some(player) = players.get_mut(uid) {
@@ -1165,18 +1297,36 @@ mod windows_reader {
             .and_then(|team| read_team_date_anchor(&process, team, derived_year))
             .or_else(|| choose_date_vote(&squad_links.date_votes, derived_year));
         let schedule_raw = date_anchor.as_ref().map(|anchor| anchor.raw);
-        let monitor_candidates = Vec::<DateCandidate>::new();
-        let game_date = None;
-        let game_date_source = "unavailable".to_string();
+        let monitor_candidates = world_date.map(|_| vec![DateCandidate {
+            address: resolver.game_plugin.base + 0x56AD378,
+            kind: DateCandidateKind::PackedFmDate, object_context: false, module_static: true,
+        }]).unwrap_or_default();
+        let game_date = world_date.and_then(format_fm_date);
+        let game_date_source = if world_date.is_some() {"verified-fm27-world-clock"} else {"unavailable"}.to_string();
+        if let (Some(raw),Some(date))=(world_date,game_date.clone()) {
+            *monitor_slot().lock().map_err(|_| "Nie można monitorować daty gry.".to_string())? = Some(DateMonitor {
+                pid,candidates:monitor_candidates.clone(),imported_raw:raw,imported_date:date,
+                source:game_date_source.clone(),observed_current_raw:None,
+            });
+        }
 
         // Kotwica terminarza służy wyłącznie jako wewnętrzne przybliżenie wieku.
         // Nie pokazujemy jej jako daty świata gry, ponieważ może wskazywać datę
         // ostatniego lub następnego meczu.
-        let current_raw = schedule_raw;
-        let headers = table_headers();
+        let current_raw = world_date.or(schedule_raw);
+        let mut headers = table_headers();
+        if club_mode { headers.push("Grupa klubowa".into()); }
         let mut rows = players
             .into_values()
-            .map(|player| player_to_row(player, current_raw, derived_year))
+            .map(|player| {
+                let uid = player.uid;
+                let mut row = player_to_row(player, current_raw, derived_year);
+                if club_mode {
+                    row.insert("Klub".into(), managed_team.clone().unwrap_or_default());
+                    row.insert("Grupa klubowa".into(), club_groups.get(&uid).cloned().unwrap_or_default());
+                }
+                row
+            })
             .collect::<Vec<_>>();
         rows.sort_by(|left, right| {
             left.get("Nazwisko")
@@ -1184,13 +1334,22 @@ mod windows_reader {
                 .then_with(|| left.get("UID").cmp(&right.get("UID")))
         });
 
+        let session_id = SCOUTING_SEQUENCE.fetch_add(1, Ordering::Relaxed) + 1;
+        let own_uids = if club_mode { rows.iter().filter_map(|row| row.get("UID")?.parse::<u32>().ok()).collect() } else { HashSet::new() };
+        *scouting_slot().lock().map_err(|_| "Nie można przygotować wyszukiwarki transferowej.".to_string())? = Some(ScoutingSession {
+            session_id, pid, layout: process.layout, candidates: Arc::new(player_candidates.values().cloned().collect()),
+            own_uids: Arc::new(own_uids), own_clubs: Arc::new(own_clubs), derived_year, game_date: world_date, gender: managed_gender, index: None,
+        });
         Ok(FmNativeDatabase {
             pid,
+            managed_mode: if club_mode { "club".into() } else { "nation".into() },
+            managed_club_uid,
+            session_id,
             profile: process.layout.name.to_string(),
             database_player_count,
             player_count: rows.len(),
             managed_team,
-            managed_nation: Some(managed_nation),
+            managed_nation: (!club_mode).then_some(managed_nation),
             managed_team_uid,
             managed_nation_uid,
             managed_squad_gender: managed_gender.map(|female| {
@@ -1200,7 +1359,7 @@ mod windows_reader {
                     "Mężczyźni".to_string()
                 }
             }),
-            national_filter_applied: true,
+            national_filter_applied: !club_mode,
             scan_region_count: regions.len(),
             scanned_bytes,
             scan_duration_ms: started.elapsed().as_millis(),
@@ -1330,8 +1489,9 @@ mod windows_reader {
         let owner_club = team_details
             .as_ref()
             .and_then(|details| details.owner_club.clone());
-        let division = team_details
-            .as_ref()
+        let current_team = read_u64(&player, 0x130).filter(|team| *team >= 0x10_000).map(|team| cached_team_details(process, team as usize, cache));
+        let current_details = current_team.as_ref().filter(|details| details.owner_club.is_some()).or(team_details.as_ref());
+        let division = current_details
             .and_then(|details| details.division.clone());
         let club_reputation = team_details
             .as_ref()
@@ -1354,7 +1514,7 @@ mod windows_reader {
                 .unwrap_or(false),
             birth_raw: read_u32(&person, PERSON_DOB).unwrap_or(0),
             nationality,
-            club: owner_club.clone(),
+            club: current_details.and_then(|details| details.owner_club.clone()),
             owner_club,
             division,
             team_type: None,
@@ -1630,6 +1790,10 @@ mod windows_reader {
         process: &RemoteProcess,
         monitor: &DateMonitor,
     ) -> (usize, Option<u32>) {
+        if monitor.source == "verified-fm27-world-clock" && monitor.candidates.len() == 1 {
+            let raw = read_date_candidate(process, monitor.candidates[0], 2026);
+            return (usize::from(raw.is_some()), raw.filter(|raw| *raw != monitor.imported_raw));
+        }
         let expected_year = decode_fm_date(monitor.imported_raw)
             .map(|(year, _)| year)
             .unwrap_or(2026);
@@ -2202,6 +2366,9 @@ mod windows_reader {
                         && candidate.job_state == HUMAN_JOB_NATION_MANAGER
                 })
                 .count();
+            let club_manager_evidence = context_candidates.iter().filter(|candidate| {
+                candidate.binding_address == binding && candidate.job_state == HUMAN_JOB_CLUB_MANAGER
+            }).count();
             let other_job_evidence = context_candidates
                 .iter()
                 .filter(|candidate| {
@@ -2220,6 +2387,7 @@ mod windows_reader {
                     database_index: human_team_reference.database_index,
                     database_type: human_team_reference.database_type,
                     nation_manager_evidence,
+                    club_manager_evidence,
                 },
                 other_job_evidence,
             ));
@@ -2228,13 +2396,18 @@ mod windows_reader {
         let has_nation_context = decoded
             .iter()
             .any(|(candidate, _)| candidate.nation_manager_evidence > 0);
+        if has_nation_context && decoded.iter().any(|(candidate, _)| candidate.club_manager_evidence > 0) {
+            return (None, diagnostics);
+        }
         let mut eligible = decoded
             .into_iter()
             .filter(|(candidate, other_job_evidence)| {
-                if has_nation_context {
+                if candidate.nation_manager_evidence > 0 && candidate.club_manager_evidence > 0 {
+                    false
+                } else if has_nation_context {
                     candidate.nation_manager_evidence > 0
                 } else {
-                    *other_job_evidence == 0
+                    candidate.club_manager_evidence > 0 || *other_job_evidence == 0
                 }
             })
             .collect::<Vec<_>>();
@@ -2727,6 +2900,92 @@ mod windows_reader {
             }
         }
         team_uids
+    }
+
+    fn pointer_vector(process: &RemoteProcess, address: usize, limit: usize) -> Result<Vec<usize>, String> {
+        let begin = process.read_ptr(address).ok_or("Nieczytelna lista zespołów klubu.")?;
+        let end = process.read_ptr(address + 8).ok_or("Nieczytelny koniec listy zespołów klubu.")?;
+        if begin == 0 && end == 0 { return Ok(Vec::new()); }
+        if begin < 0x10_000 || end < begin || (end-begin)%8 != 0 || (end-begin)/8 > limit {
+            return Err("Nieprawidłowa struktura zespołów klubu; nie pokazano niepełnego składu.".into());
+        }
+        if begin == end { return Ok(Vec::new()); }
+        let bytes = process.read_exact(begin,end-begin).ok_or("Nieczytelne elementy listy zespołów.")?;
+        Ok(bytes.chunks_exact(8).filter_map(|bytes| {
+            let value = u64::from_le_bytes(bytes.try_into().ok()?) as usize;
+            (value >= 0x10_000).then_some(value)
+        }).collect())
+    }
+
+    fn resolve_bound_club_team(
+        process: &RemoteProcess, binding: HumanBindingResolution,
+        active: Option<usize>, managers: &HashSet<HumanManagerCandidate>,
+    ) -> Option<ManagedTeamResolution> {
+        if binding.club_manager_evidence == 0 || binding.nation_manager_evidence > 0 { return None; }
+        let mut matches = HashMap::new();
+        let teams = active.into_iter().chain(managers.iter().filter_map(|manager| contract_team(process,manager.person_address)));
+        for team in teams {
+            let Some(club) = process.read_ptr(team + TEAM_CLUB).filter(|club| *club >= 0x10_000) else { continue; };
+            let Some(name) = club_name(process,club).filter(|name| plausible_label(name,120)) else { continue; };
+            let uid_match = binding.human_team_uid.map(|uid| record_uid(process,team)==Some(uid) || record_uid(process,club)==Some(uid)).unwrap_or(false);
+            let index_match = binding.database_index.map(|index| match binding.database_type {
+                Some(DATABASE_TABLE_TEAM) => native_record_index_matches(process,team,index),
+                Some(DATABASE_TABLE_CLUB) => native_record_index_matches(process,club,index),
+                _ => false,
+            }).unwrap_or(false);
+            if !uid_match && !index_match { continue; }
+            if pointer_vector(process,club+CLUB_TEAMS_BEGIN,64).ok()?.contains(&team) {
+                matches.insert(team,ManagedTeamResolution {team_address:team,team_name:name,nation_address:0,nation_name:String::new(),score:0});
+            }
+        }
+        if matches.len()!=1 { return None; }
+        matches.into_values().next()
+    }
+
+    fn collect_managed_club_players(
+        process: &RemoteProcess, root: usize, first_team: usize, candidates: &HashMap<u32,PlayerCandidate>,
+    ) -> Result<(HashMap<u32,String>,HashSet<usize>),String> {
+        let mut own_clubs = HashSet::new();
+        let linked_reserves = process.layout.edition==27 && process.native_plugin_hash.as_deref()
+            .map(|hash| hash.eq_ignore_ascii_case("bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f")).unwrap_or(false);
+        let mut teams = fm_club::club_teams(root, |club| {
+            own_clubs.insert(club);
+            if club_name(process,club).filter(|name| plausible_label(name,120)).is_none() {
+                return Err("Nie udało się potwierdzić powiązanego klubu rezerw.".into());
+            }
+            let teams = pointer_vector(process,club+CLUB_TEAMS_BEGIN,64)?;
+            if teams.iter().any(|team| process.read_ptr(*team+TEAM_CLUB)!=Some(club)) {
+                return Err("Nieprawidłowe powiązanie zespołu z klubem.".into());
+            }
+            let reserve_clubs = if linked_reserves {
+                pointer_vector(process,club+0x30,64)?.into_iter().map(|team| {
+                    process.read_ptr(team+TEAM_CLUB).filter(|club| *club>=0x10_000)
+                        .ok_or_else(|| "Nie udało się odczytać klubu rezerw.".to_string())
+                }).collect::<Result<Vec<_>,_>>()?
+            } else { Vec::new() };
+            Ok(ClubNode {teams,reserve_clubs})
+        })?;
+        teams.insert(first_team);
+        let by_address = candidates.values().flat_map(|candidate| [(candidate.person_address,candidate.uid),(candidate.player_address,candidate.uid)]).collect::<HashMap<_,_>>();
+        let mut roster = HashMap::<u32,bool>::new();
+        for &team in &teams {
+            for entry in pointer_vector(process,team+TEAM_PLAYERS_BEGIN,512)? {
+                let uid = by_address.get(&entry).copied().or_else(|| (0..=0x80).step_by(8).find_map(|offset| {
+                    process.read_ptr(entry+offset).and_then(|address| by_address.get(&address).copied())
+                }));
+                if let Some(uid)=uid { roster.entry(uid).and_modify(|first| *first |= team==first_team).or_insert(team==first_team); }
+            }
+        }
+        let mut result=HashMap::new();
+        for candidate in candidates.values() {
+            let current = process.read_ptr(candidate.player_address+0x130).filter(|team| *team>=0x10_000);
+            let on_roster=roster.contains_key(&candidate.uid);
+            if fm_club::belongs_to_club(current,&teams,on_roster) {
+                let first=current.map(|team| team==first_team).unwrap_or_else(|| roster.get(&candidate.uid).copied().unwrap_or(false));
+                result.insert(candidate.uid,if first {"Pierwsza drużyna"} else {"Rezerwy i juniorzy"}.into());
+            }
+        }
+        Ok((result,own_clubs))
     }
 
     fn resolve_bound_national_team(
@@ -4125,4 +4384,13 @@ pub(crate) fn read_fm_date_status() -> FmDateStatus {
         candidate_count: 0,
         error: Some("Monitoring daty FM26 jest dostępny tylko w Windows.".to_string()),
     }
+}
+
+#[cfg(target_os = "windows")]
+pub(crate) fn search_fm_players(query: crate::fm_scout::ScoutingQuery) -> Result<crate::fm_scout::ScoutingResult,String> {
+    windows_reader::search_players(query)
+}
+#[cfg(not(target_os = "windows"))]
+pub(crate) fn search_fm_players(_query: crate::fm_scout::ScoutingQuery) -> Result<crate::fm_scout::ScoutingResult,String> {
+    Err("Wyszukiwarka jest dostępna w aplikacji Windows po połączeniu z grą.".into())
 }

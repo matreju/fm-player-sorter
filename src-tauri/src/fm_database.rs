@@ -20,6 +20,9 @@ pub struct FmDatabaseLoadResult {
     pub read_only: bool,
     pub pid: Option<u32>,
     pub profile: Option<String>,
+    pub managed_mode: String,
+    pub managed_club_uid: Option<u32>,
+    pub session_id: u64,
     pub database_root_found: bool,
     pub database_player_count: usize,
     pub player_count: usize,
@@ -61,6 +64,9 @@ impl FmDatabaseLoadResult {
             read_only: true,
             pid,
             profile: None,
+            managed_mode: "unknown".into(),
+            managed_club_uid: None,
+            session_id: 0,
             database_root_found: false,
             database_player_count: 0,
             player_count: 0,
@@ -107,16 +113,19 @@ fn load_fm_database_blocking() -> FmDatabaseLoadResult {
             success: true,
             stage: "database-loaded".to_string(),
             message: format!(
-                "{}Wczytano jednorazowo {} zawodników uprawnionych do gry dla reprezentacji {} wraz z pełnymi atrybutami i danymi ukrytymi.",
+                "{}Wczytano {} zawodników — {}.",
                 if database.profile.contains("experimental") { "FM27 — profil testowy. " } else { "" },
                 database.player_count,
-                database.managed_nation.as_deref().unwrap_or("narodowej")
+                database.managed_team.as_deref().unwrap_or("prowadzony zespół")
             ),
             reader_mode: "external-process-memory".to_string(),
             requires_bepinex: false,
             read_only: true,
             pid: Some(database.pid),
             profile: Some(database.profile),
+            managed_mode: database.managed_mode,
+            managed_club_uid: database.managed_club_uid,
+            session_id: database.session_id,
             database_root_found: true,
             database_player_count: database.database_player_count,
             player_count: database.player_count,
@@ -184,4 +193,10 @@ pub async fn get_fm_date_status() -> Result<FmDateStatus, String> {
     tauri::async_runtime::spawn_blocking(read_fm_date_status)
         .await
         .map_err(|error| format!("Wątek monitorowania daty FM zakończył się błędem: {error}"))
+}
+
+#[tauri::command]
+pub async fn search_fm_players(query: crate::fm_scout::ScoutingQuery) -> Result<crate::fm_scout::ScoutingResult,String> {
+    tauri::async_runtime::spawn_blocking(move || crate::fm_reader::search_fm_players(query))
+        .await.map_err(|error| format!("Wyszukiwanie transferowe zakończyło się błędem: {error}"))?
 }

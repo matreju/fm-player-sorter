@@ -25,6 +25,9 @@ import {
 import { mainToolbarStyles as styles } from "./MainToolbar.styles";
 
 type MainToolbarProps = {
+  clubMode?: boolean;
+  clubSquadScope?: string;
+  onClubSquadScopeChange?: (value: string) => void;
   searchTerm: string;
   setSearchTerm: Dispatch<SetStateAction<string>>;
   minAge: string;
@@ -56,6 +59,9 @@ type MainToolbarProps = {
 };
 
 export function MainToolbar({
+  clubMode = false,
+  clubSquadScope = "all",
+  onClubSquadScopeChange,
   searchTerm,
   setSearchTerm,
   minAge,
@@ -106,6 +112,7 @@ export function MainToolbar({
   }, [draftSearchTerm, searchTerm, setSearchTerm]);
 
   const hasActiveFilters =
+    clubSquadScope !== "all" ||
     draftSearchTerm.trim() !== "" ||
     minAge.trim() !== "" ||
     maxAge.trim() !== "" ||
@@ -120,6 +127,7 @@ export function MainToolbar({
   const hasPlayerMarks = selectedPlayersCount > 0 || rejectedPlayersCount > 0;
 
   function clearFilters() {
+    onClubSquadScopeChange?.("all");
     setDraftSearchTerm("");
     setSearchTerm("");
     setMinAge("");
@@ -156,6 +164,10 @@ export function MainToolbar({
       </h2>
 
       <div style={styles.toolbarGrid}>
+        {clubMode && <AppSelectField label="Zespoły klubu" value={clubSquadScope}
+          onChange={value => onClubSquadScopeChange?.(value)}
+          options={[{value:"all",label:"Cały klub"},{value:"first",label:"Pierwsza drużyna"},{value:"development",label:"Rezerwy i juniorzy"}]}
+          fieldStyle={styles.filterField} labelStyle={styles.filterLabel} selectStyle={styles.fieldInput} />}
         <AppTextField
           label="Szukaj zawodnika"
           type="search"

@@ -12,6 +12,9 @@ export type StoredFmSnapshot = {
   schemaVersion: typeof CURRENT_SNAPSHOT_SCHEMA;
   savedAt: string;
   gameDate: string | null;
+  managedMode: "club" | "nation" | "unknown";
+  managedClubUid: number | null;
+  sessionId: number;
   managedTeam: string | null;
   managedNation: string | null;
   managedTeamUid: number | null;
@@ -51,6 +54,9 @@ export function createFmSnapshot(
     schemaVersion: CURRENT_SNAPSHOT_SCHEMA,
     savedAt: new Date().toISOString(),
     gameDate: result.gameDate,
+    managedMode: result.managedMode,
+    managedClubUid: result.managedClubUid,
+    sessionId: result.sessionId,
     managedTeam: result.managedTeam,
     managedNation: result.managedNation,
     managedTeamUid: result.managedTeamUid,

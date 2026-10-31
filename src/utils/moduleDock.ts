@@ -2,7 +2,8 @@ export type AppModuleId =
   | "compare"
   | "squad"
   | "core"
-  | "camps";
+  | "camps"
+  | "transfers";
 export const MODULE_DOCK_OPEN_EVENT = "fm-player-sorter-open-module";
 export const MODULE_DOCK_CLOSE_EVENT = "fm-player-sorter-close-module";
 
@@ -11,6 +12,7 @@ const APP_MODULE_IDS: AppModuleId[] = [
   "squad",
   "core",
   "camps",
+  "transfers",
 ];
 type ModuleDockOpenDetail = {
   module: AppModuleId;
