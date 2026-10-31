@@ -57,3 +57,26 @@ remain errors. No team is selected by player counts. Diagnostics now include
 VC (validated contexts) and IC (ignored numeric context hits). Regression tests
 cover the wrong-class, wrong-namespace, overlapping-layout and stale-state
 cases. This fixes the rejection path; a live-game retry remains necessary.
+
+## Native club job (0.7.0-beta.3)
+
+A club career no longer requires a humanTeam UI binding. The exact active
+manager registry (one manager and one contract team), or the existing validated
+FM27 human-class discovery, supplies the native team. The team points to its
+owner; that owner must have the primary MSVC RTTI type `.?AVCLUB@db@@`, a valid
+UID/name, a validated team vector containing the contract team and reciprocal
+team-to-club links. A nation/container, unrelated club or ambiguous manager
+registry is rejected. This route runs before UI job classification, so missing
+or stale UI state cannot veto a proven club contract. National-team resolution
+retains its existing path.
+
+The user's previously uploaded game_plugin.dll was SHA256-verified as
+bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f.
+Its RTTI at club vtable RVA 0x4CDA1F8 identifies `.?AVCLUB@db@@`; nation vtable
+RVA 0x4CDF658 identifies `.?AVNATION@db@@`. The implementation resolves RTTI
+through the module image and validates the locator's self RVA rather than
+hardcoding the club vtable address. No game DLL is redistributed.
+
+Regression tests cover the reported H0/VC0 with M1/GT1, wrong native type,
+unrelated team, unreadable owner, multiple managers/teams and missing contract.
+Live-game validation is still required after installing the update.

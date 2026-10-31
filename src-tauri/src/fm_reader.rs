@@ -613,6 +613,24 @@ mod windows_reader {
                 .or_else(|| self.game_assembly.read_i32(address))
         }
 
+        fn native_type_name(&self, vtable: usize) -> Option<String> {
+            let image = [&self.game_plugin, &self.game_assembly].into_iter()
+                .find(|image| image.contains(vtable.checked_sub(8).unwrap_or(0), 8))?;
+            let locator = image.read_u64(vtable.checked_sub(8)?)? as usize;
+            // MSVC x64 complete-object locator: signature, offset, cdOffset,
+            // type-descriptor RVA, hierarchy RVA, self RVA. Require a primary vtable.
+            if image.read_i32(locator)? != 1 || image.read_i32(locator + 4)? != 0 { return None; }
+            let self_rva = u32::try_from(image.read_i32(locator + 20)?).ok()? as usize;
+            if image.base.checked_add(self_rva)? != locator { return None; }
+            let type_rva = u32::try_from(image.read_i32(locator + 12)?).ok()? as usize;
+            let name_address = image.base.checked_add(type_rva)?.checked_add(16)?;
+            if !image.contains(name_address, 1) { return None; }
+            let start = name_address - image.base;
+            let bytes = image.bytes.get(start..start.saturating_add(128).min(image.bytes.len()))?;
+            let end = bytes.iter().position(|byte| *byte == 0)?;
+            std::str::from_utf8(&bytes[..end]).ok().map(str::to_string)
+        }
+
         fn dynamic_offset(&self, vtable: usize) -> Option<i32> {
             let meta = self.image_u64(vtable.checked_sub(8)?)? as usize;
             let offset = self.image_i32(meta.saturating_add(4))?;
@@ -1141,11 +1159,6 @@ mod windows_reader {
                 *counts.entry(candidate.nation_address).or_default() += 1;
                 counts
             });
-        let known_team_uids = collect_known_team_uids(
-            &process,
-            &uid_objects,
-            &club_candidates,
-        );
         let mut active_human_team = resolve_active_human_team(&process, &resolver);
         if active_human_team.team_address.is_none() {
             if let Some(team) = resolve_fm27_manager_class(&process, &resolver, &human_managers) {
@@ -1154,19 +1167,24 @@ mod windows_reader {
                 active_human_team.active_team_count = 1;
             }
         }
-        let (human_binding, mut binding_diagnostics) = resolve_human_team_binding(
-            &process,
-            &regions,
-            &binding_candidates,
-            &human_context_candidates,
-            &known_team_uids,
-        );
+        let direct_club = resolve_active_contract_club(&process, &resolver, &active_human_team);
+        let (human_binding, mut binding_diagnostics) = if direct_club.is_some() {
+            // A proven native club job needs no heap-wide UI binding lookup.
+            (None, HumanBindingDiagnostics::default())
+        } else {
+            let known_team_uids = collect_known_team_uids(&process, &uid_objects, &club_candidates);
+            resolve_human_team_binding(&process, &regions, &binding_candidates,
+                &human_context_candidates, &known_team_uids)
+        };
         binding_diagnostics.manager_registry_signature_count =
             active_human_team.signature_match_count;
         binding_diagnostics.active_manager_count = active_human_team.active_manager_count;
         binding_diagnostics.active_team_count = active_human_team.active_team_count;
-        let club_mode = human_binding.map(|binding| binding.club_manager_evidence > 0).unwrap_or(false);
-        let managed = human_binding.and_then(|binding| {
+        // The native active-manager contract is authoritative for a club career.
+        // humanTeam is UI state and may be absent or stale on unrelated screens.
+        let club_mode = direct_club.is_some()
+            || human_binding.map(|binding| binding.club_manager_evidence > 0).unwrap_or(false);
+        let managed = direct_club.or_else(|| human_binding.and_then(|binding| {
             if club_mode {
                 return resolve_bound_club_team(&process, binding, active_human_team.team_address, &human_managers);
             }
@@ -1181,10 +1199,10 @@ mod windows_reader {
                 &nation_counts,
                 &mut binding_diagnostics,
             )
-        });
+        }));
         let managed = managed.ok_or_else(|| {
             format!(
-                "Wykryto {}, ale nie udało się jednoznacznie odczytać prowadzonego klubu lub reprezentacji z powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/K{}/D{}/T{}/Q{}/A{}/P{}/L{}/E{}/I{}/F{}/Y{}/N{}/U{}/J{}/X{}/O{}/W{}/S{}/Z{}/G{}/M{}/GT{}/R{}/MC{}/VC{}/IC{}.",
+                "Wykryto {}, ale nie udało się jednoznacznie odczytać prowadzonego zespołu z kontraktu menedżera ani powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/K{}/D{}/T{}/Q{}/A{}/P{}/L{}/E{}/I{}/F{}/Y{}/N{}/U{}/J{}/X{}/O{}/W{}/S{}/Z{}/G{}/M{}/GT{}/R{}/MC{}/VC{}/IC{}.",
                 process.layout.name,
                 binding_diagnostics.context_candidate_count,
                 binding_diagnostics.binding_candidate_count,
@@ -2946,6 +2964,23 @@ mod windows_reader {
         }).collect())
     }
 
+    fn resolve_active_contract_club(
+        process: &RemoteProcess, resolver: &MetaResolver, active: &ActiveHumanTeamResolution,
+    ) -> Option<ManagedTeamResolution> {
+        let resolved = fm_club::resolve_active_club(active.team_address,
+            active.active_manager_count, active.active_team_count, |team| {
+                let club = process.read_ptr(team + TEAM_CLUB).filter(|address| *address >= 0x10_000)?;
+                let native_type = resolver.native_type_name(process.read_ptr(club)?)?;
+                let uid = record_uid(process, club)?;
+                let name = club_name(process, club).filter(|name| plausible_label(name, 120))?;
+                let teams = pointer_vector(process, club + CLUB_TEAMS_BEGIN, 64).ok()?;
+                if teams.iter().any(|team| process.read_ptr(*team + TEAM_CLUB) != Some(club)) { return None; }
+                Some(fm_club::NativeClubIdentity {club, uid, name, native_type, teams})
+            })?;
+        Some(ManagedTeamResolution {team_address:resolved.team,team_name:resolved.name,
+            nation_address:0,nation_name:String::new(),score:0})
+    }
+
     fn resolve_bound_club_team(
         process: &RemoteProcess, binding: HumanBindingResolution,
         active: Option<usize>, managers: &HashSet<HumanManagerCandidate>,
@@ -4369,6 +4404,37 @@ mod windows_reader {
             format!("{:.1}", f64::from(value) / 100.0)
         } else {
             value.to_string()
+        }
+    }
+
+    #[cfg(test)]
+    mod native_job_tests {
+        use super::*;
+        fn resolver() -> MetaResolver {
+            let base=0x180000000usize;
+            let mut bytes=vec![0u8;0x500];
+            bytes[0xF8..0x100].copy_from_slice(&((base+0x200) as u64).to_le_bytes());
+            for (offset,value) in [(0x200,1u32),(0x20C,0x300),(0x214,0x200)] {
+                bytes[offset..offset+4].copy_from_slice(&value.to_le_bytes());
+            }
+            let name=b".?AVCLUB@db@@\0";
+            bytes[0x310..0x310+name.len()].copy_from_slice(name);
+            MetaResolver {game_plugin:ModuleImage{base,end:base+bytes.len(),bytes},
+                game_assembly:ModuleImage{base:0,end:0,bytes:Vec::new()},module_low:base,module_high:base+0x500}
+        }
+        #[test]
+        fn native_club_type_is_read_from_validated_relative_rtti() {
+            let r=resolver();
+            assert_eq!(r.native_type_name(r.game_plugin.base+0x100).as_deref(),Some(".?AVCLUB@db@@"));
+        }
+        #[test]
+        fn corrupt_or_secondary_vtables_cannot_prove_a_club_job() {
+            let mut r=resolver();let vtable=r.game_plugin.base+0x100;
+            r.game_plugin.bytes[0x214..0x218].copy_from_slice(&0x201u32.to_le_bytes());
+            assert!(r.native_type_name(vtable).is_none());
+            let mut r=resolver();r.game_plugin.bytes[0x204..0x208].copy_from_slice(&8u32.to_le_bytes());
+            assert!(r.native_type_name(vtable).is_none());
+            assert!(r.native_type_name(0).is_none());
         }
     }
 
