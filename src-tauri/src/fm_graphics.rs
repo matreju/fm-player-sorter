@@ -107,6 +107,10 @@ fn graphics_roots() -> Vec<PathBuf> {
         }
     }
 
+    let Some(edition) = crate::fm_version::current_edition() else {
+        return Vec::new();
+    };
+    let game_title = format!("football manager {edition}");
     let mut roots = Vec::new();
     for documents_root in documents {
         let sports_interactive = documents_root.join("Sports Interactive");
@@ -115,7 +119,7 @@ fn graphics_roots() -> Vec<PathBuf> {
         };
         for entry in entries.flatten() {
             let title = entry.file_name().to_string_lossy().to_ascii_lowercase();
-            if !entry.path().is_dir() || !title.starts_with("football manager 26") {
+            if !entry.path().is_dir() || title != game_title {
                 continue;
             }
             let root = entry.path().join("graphics");

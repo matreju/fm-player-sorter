@@ -1,4 +1,4 @@
-"""Read FM26 season statistics from the newest local save for selected database UIDs."""
+"""Read Football Manager season statistics from the newest local save for selected database UIDs."""
 
 from __future__ import annotations
 
@@ -145,10 +145,12 @@ def _documents_directories() -> list[Path]:
     return list(dict.fromkeys(roots))
 
 
-def _latest_save() -> Path | None:
+def _latest_save(edition: int = 26) -> Path | None:
+    if edition not in (26, 27):
+        return None
     saves: list[Path] = []
     for documents in _documents_directories():
-        games = documents / "Sports Interactive" / "Football Manager 26" / "games"
+        games = documents / "Sports Interactive" / f"Football Manager {edition}" / "games"
         if games.is_dir():
             saves.extend(path for path in games.rglob("*.fm") if path.is_file())
     return max(saves, key=lambda path: path.stat().st_mtime, default=None)
@@ -234,7 +236,7 @@ def main() -> int:
     try:
         request = json.load(sys.stdin)
         wanted = {int(value) for value in request.get("uids", []) if int(value) > 0}
-        save_path = _latest_save()
+        save_path = _latest_save(int(request.get("edition", 26)))
         rows = {} if save_path is None or not wanted else _read_stats(save_path, wanted)
         sys.stdout.write(json.dumps({"rows": rows}, ensure_ascii=False, separators=(",", ":")))
         return 0

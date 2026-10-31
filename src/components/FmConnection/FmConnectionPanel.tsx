@@ -170,7 +170,7 @@ export function FmConnectionPanel({
               ? "Data w FM zmieniła się od ostatniego wczytania."
               : displayedDate
                 ? "Snapshot jest aktualny względem automatycznie wykrytej daty."
-                : "Snapshot ostatniego odczytu z FM26."
+                : "Snapshot ostatniego odczytu z Football Managera."
           }
         >
           <strong>{dataStale ? "!" : loadedNation ?? "Kadra"}</strong>
@@ -211,7 +211,7 @@ export function FmConnectionPanel({
           >
             <header>
               <div>
-                <span>FM26</span>
+                <span>FM26 / FM27</span>
                 <h2 id="fm-connect-title">Połącz z grą</h2>
               </div>
               <button
@@ -232,7 +232,7 @@ export function FmConnectionPanel({
                       ? "Uruchom wersję desktopową"
                       : isChecking
                         ? "Szukanie Football Managera…"
-                        : "Nie wykryto uruchomionego FM26"}
+                        : "Nie wykryto uruchomionego Football Managera"}
                   </strong>
                 </div>
               )}

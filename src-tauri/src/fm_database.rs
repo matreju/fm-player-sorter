@@ -107,7 +107,8 @@ fn load_fm_database_blocking() -> FmDatabaseLoadResult {
             success: true,
             stage: "database-loaded".to_string(),
             message: format!(
-                "Wczytano jednorazowo {} zawodników uprawnionych do gry dla reprezentacji {} wraz z pełnymi atrybutami i danymi ukrytymi.",
+                "{}Wczytano jednorazowo {} zawodników uprawnionych do gry dla reprezentacji {} wraz z pełnymi atrybutami i danymi ukrytymi.",
+                if database.profile.contains("experimental") { "FM27 — profil testowy. " } else { "" },
                 database.player_count,
                 database.managed_nation.as_deref().unwrap_or("narodowej")
             ),
@@ -138,7 +139,7 @@ fn load_fm_database_blocking() -> FmDatabaseLoadResult {
             class_offsets: database.class_offsets,
         },
         Err(message) => FmDatabaseLoadResult::failed(
-            if message.contains("26.3.x") {
+            if message.contains("Profil pamięci") {
                 "unsupported-memory-profile"
             } else {
                 "database-read-failed"

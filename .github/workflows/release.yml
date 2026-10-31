@@ -43,6 +43,15 @@ jobs:
           New-Item -ItemType Directory -Force src-tauri/binaries | Out-Null
           Copy-Item dist/fmstats.exe src-tauri/binaries/fmstats-x86_64-pc-windows-msvc.exe
 
+      - name: Verify edition isolation
+        run: python -m unittest discover -s tests -p "test_*.py"
+
+      - name: Check Windows backend
+        run: cargo check --manifest-path src-tauri/Cargo.toml --locked
+
+      - name: Test build selection
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked --lib fm_version::tests
+
       - name: Verify updater signing key
         shell: pwsh
         env:
@@ -62,8 +71,20 @@ jobs:
           tagName: app-v__VERSION__
           releaseName: FM Player Sorter v__VERSION__
           releaseBody: |
-            Instalator Windows i pliki automatycznej aktualizacji FM Player Sorter.
+            Aktualizacja obecnej aplikacji przez wbudowany aktualizator.
+            Zachowano obsługę FM26 i dodano testowy profil FM27 z rozpoznawaniem aktywnej reprezentacji.
+            Odczyt FM27 wymaga sprawdzenia w działającej grze; statystyki sezonowe FM27 mogą być niedostępne.
           releaseDraft: false
-          prerelease: false
+          prerelease: ${{ github.ref_name == 'agent/fm27-compatibility' }}
           updaterJsonPreferNsis: true
           args: --bundles nsis --config src-tauri/tauri.release.conf.json
+
+      - name: Publish to existing application update channel
+        if: github.ref_name == 'agent/fm26-native-reader'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $appVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          gh release edit "app-v$appVersion" --prerelease=false --latest --repo "${{ github.repository }}"
+          if ($LASTEXITCODE -ne 0) { throw "Nie udało się opublikować kanału aktualizacji." }

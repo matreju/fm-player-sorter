@@ -47,6 +47,7 @@ mod platform {
 
     #[derive(Serialize)]
     struct StatsRequest {
+        edition: u16,
         uids: Vec<u32>,
     }
 
@@ -63,7 +64,11 @@ mod platform {
             return SeasonStatsRows::new();
         }
 
+        let Some(edition) = crate::fm_version::current_edition() else {
+            return SeasonStatsRows::new();
+        };
         let request = match serde_json::to_vec(&StatsRequest {
+            edition,
             uids: uids.to_vec(),
         }) {
             Ok(request) => request,

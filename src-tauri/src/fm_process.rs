@@ -26,7 +26,7 @@ impl FmProcessStatus {
 fn is_known_fm_process_name(name: &str) -> bool {
     matches!(
         name,
-        "fm.exe" | "fm" | "fm24.exe" | "fm24" | "fm25.exe" | "fm25" | "fm26.exe" | "fm26"
+        "fm.exe" | "fm" | "fm24.exe" | "fm24" | "fm25.exe" | "fm25" | "fm26.exe" | "fm26" | "fm27.exe" | "fm27"
     )
 }
 
