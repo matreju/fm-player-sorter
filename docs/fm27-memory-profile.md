@@ -1,4 +1,4 @@
-# FM27 preview 0.6.0-beta.1
+# FM27 preview 0.6.0-beta.2
 
 This is a **trial reader**, not verified live-game compatibility. It keeps FM26's
 existing native field layout as a candidate, applies FM27's verified managed
@@ -44,8 +44,17 @@ so it no longer probes FM26 methods in an FM27 binary.
 
 ## Live validation still required
 
-Native Person/Player/Contract/Team offsets and the human manager registry
-signature have **not** been verified for FM27. In addition to existing national
+Native offsets have not been tested in this environment against live FM27.
+The public [fm-editor FM27 discovery notes](https://github.com/barak14/fm-editor/blob/main/docs/fm27/memory-layout.md)
+provide independent witness evidence for the unchanged Player/Person/Contract
+fields and a changed human-manager Person offset: **0x440** (staff identity
+shift 0x340), compared with FM26's 0x450. This offset is selected per edition.
+A read-only fallback identifies the unique real human manager by its documented
+vtable, nonempty DOB and back-linked contract; it excludes the platform account
+placeholder. The fallback is enabled only for the documented game_plugin SHA-256
+`bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f`.
+No third-party implementation is copied; these are field-location facts.
+The registry byte signature remains inherited and unverified. In addition to existing national
 team consistency checks, the preview checks a deterministic sample of up to
 128 native player records (names, birth dates, nation strings, CA/PA, positions,
 and attributes); at least 90% must pass. This is a corruption check, not proof

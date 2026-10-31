@@ -92,7 +92,6 @@ mod windows_reader {
     const PLAYER_OFFSET: i32 = 0x288;
     const PLAYER_STAFF_OFFSET: i32 = 0x380;
     const STAFF_OFFSET: i32 = 0x100;
-    const HUMAN_MANAGER_OFFSET: i32 = 0x450;
 
     const NATIVE_RECORD_INDEX: usize = 0x08;
     const OBJ_UID: usize = 0x0C;
@@ -293,6 +292,7 @@ mod windows_reader {
     struct RemoteProcess {
         handle: HandleGuard,
         layout: FmLayout,
+        native_plugin_hash: Option<String>,
     }
 
     impl RemoteProcess {
@@ -305,6 +305,7 @@ mod windows_reader {
             Ok(Self {
                 handle: HandleGuard(handle),
                 layout: fm_version::FM26,
+                native_plugin_hash: None,
             })
         }
 
@@ -564,13 +565,46 @@ mod windows_reader {
         let Some(human) = process.read_ptr(begin).filter(|value| *value >= 0x10_000) else {
             return resolution;
         };
-        let person = human.saturating_add(HUMAN_MANAGER_OFFSET as usize);
+        let person = human.saturating_add(process.layout.human_manager_person);
         let Some(team) = contract_team(process, person) else {
             return resolution;
         };
         resolution.active_team_count = 1;
         resolution.team_address = Some(team);
         resolution
+    }
+
+    // Read-only fallback for the independently documented FM27 Steam build.
+    // https://github.com/barak14/fm-editor/blob/main/docs/fm27/memory-layout.md
+    // Offset facts only; no third-party editor implementation is incorporated.
+    fn resolve_fm27_manager_class(
+        process: &RemoteProcess,
+        resolver: &MetaResolver,
+        managers: &HashSet<HumanManagerCandidate>,
+    ) -> Option<usize> {
+        const VERIFIED_PLUGIN: &str = "bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f";
+        const HUMAN_VTABLE_RVA: usize = 0x4CC086C;
+        if process.layout.edition != 27
+            || !process.native_plugin_hash.as_deref()
+                .map(|hash| hash.eq_ignore_ascii_case(VERIFIED_PLUGIN)).unwrap_or(false) {
+            return None;
+        }
+        let mut active = Vec::new();
+        for manager in managers {
+            if process.read_ptr(manager.staff_address)
+                != Some(resolver.game_plugin.base + HUMAN_VTABLE_RVA) { continue; }
+            let Some((year, _)) = process.read_u32(manager.person_address + PERSON_DOB)
+                .and_then(decode_fm_date) else { continue; };
+            // The platform account placeholder shares the class, but has an
+            // empty 1900 birth date and no world contract. Exclude it.
+            if year <= 1900 { continue; }
+            let Some(contract) = process.read_ptr(manager.person_address + PERSON_CONTRACT) else { continue; };
+            if process.read_ptr(contract + 8) != Some(manager.person_address) { continue; }
+            let Some(team) = process.read_ptr(contract + CONTRACT_TEAM).filter(|team| *team >= 0x10_000) else { continue; };
+            active.push(team);
+        }
+        // Multiple managers remain ambiguous even when they share a team.
+        (active.len() == 1).then(|| active[0])
     }
 
     #[derive(Debug)]
@@ -793,6 +827,7 @@ mod windows_reader {
             .ok_or_else(|| "Nie udało się odczytać adresu GameAssembly.dll.".to_string())?;
         let mut process = RemoteProcess::open(pid)?;
         process.layout = fm_version::runtime_layout(std::path::Path::new(&game_assembly_module.path))?;
+        process.native_plugin_hash = game_plugin_module.sha256.clone();
         let regions = process.private_rw_regions();
         if regions.is_empty() {
             return Err("Nie znaleziono czytelnych regionów pamięci bazy FM.".to_string());
@@ -939,7 +974,7 @@ mod windows_reader {
                                 pa,
                             });
                         }
-                    } else if dynamic_offset == HUMAN_MANAGER_OFFSET {
+                    } else if dynamic_offset as usize == process.layout.human_manager_person {
                         let offset = dynamic_offset as usize;
                         if person_address >= offset
                             && looks_like_named_person(&process, person_address)
@@ -993,7 +1028,14 @@ mod windows_reader {
             &uid_objects,
             &club_candidates,
         );
-        let active_human_team = resolve_active_human_team(&process, &resolver);
+        let mut active_human_team = resolve_active_human_team(&process, &resolver);
+        if active_human_team.team_address.is_none() {
+            if let Some(team) = resolve_fm27_manager_class(&process, &resolver, &human_managers) {
+                active_human_team.team_address = Some(team);
+                active_human_team.active_manager_count = 1;
+                active_human_team.active_team_count = 1;
+            }
+        }
         let (human_binding, mut binding_diagnostics) = resolve_human_team_binding(
             &process,
             &regions,
