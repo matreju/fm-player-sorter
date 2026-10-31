@@ -237,6 +237,9 @@ export interface FmDatabaseLoadResult {
   managedNationUid: number | null;
   teamLogoDataUrl: string | null;
   managedSquadGender: string | null;
+  managedMode: "club" | "nation" | "unknown";
+  managedClubUid: number | null;
+  sessionId: number;
   nationalFilterApplied: boolean;
   scanRegionCount: number;
   scannedBytes: number;
@@ -324,4 +327,18 @@ export async function getFootballManagerDateStatus(): Promise<FmDateStatus> {
   }
 
   return invoke<FmDateStatus>("get_fm_date_status");
+}
+
+export interface FmScoutingQuery {
+  sessionId: number; text: string; position: string; status: string; sort: string;
+  minCa?: number; minPa?: number; maxAge?: number; maxFee?: number; maxWage?: number;
+  contractBefore: string; page: number; pageSize: number;
+}
+export interface FmScoutingResult {
+  sessionId: number; total: number; page: number; pageSize: number; gameDate: string | null;
+  rows: Record<string,string>[];
+}
+export async function searchFootballManagerPlayers(query: FmScoutingQuery): Promise<FmScoutingResult> {
+  if (!isTauri()) throw new Error("Wyszukiwarka wymaga połączenia z grą w aplikacji Windows.");
+  return invoke<FmScoutingResult>("search_fm_players", {query});
 }

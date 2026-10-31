@@ -94,6 +94,7 @@ import { compareValues, getSortableNumber } from "./utils/sortTable";
 import { normalizeTextForSearch } from "./utils/textSearch";
 import { getNationTheme } from "./utils/nationTheme";
 
+const TransferSearch = lazy(() => import("./components/transfers/TransferSearch").then(module => ({default:module.TransferSearch})));
 const PlayerCompare = lazy(() =>
   import("./components/player-compare").then((module) => ({
     default: module.PlayerCompare,
@@ -315,10 +316,12 @@ export default function App() {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [scoredRows, setScoredRows] = useState<TableRow[]>([]);
   const databaseLoadSequence = useRef(0);
+  const lastManagedScope = useRef<string | null>(null);
   const analysisSequence = useRef(0);
 
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [clubSquadScope, setClubSquadScope] = useState("all");
   const [minAge, setMinAge] = useState("");
   const [maxAge, setMaxAge] = useState("");
   const [footFilter, setFootFilter] = useState<FootFilter>("any");
@@ -429,6 +432,10 @@ export default function App() {
     const maxAgeNumber = maxAge.trim() ? Number(maxAge) : null;
 
     return rows.filter((row, rowIndex) => {
+      if (snapshot?.managedMode === "club" && clubSquadScope !== "all") {
+        const first = row["Grupa klubowa"] === "Pierwsza drużyna";
+        if ((clubSquadScope === "first" && !first) || (clubSquadScope === "development" && first)) return false;
+      }
       const matchesSearch =
         !normalizedSearch || searchIndex[rowIndex]?.includes(normalizedSearch);
       const age = getSortableNumber(row["Wiek"] ?? "");
@@ -450,6 +457,8 @@ export default function App() {
     });
   }, [
     deferredSearchTerm,
+    clubSquadScope,
+    snapshot?.managedMode,
     footFilter,
     maxAge,
     minAge,
@@ -710,12 +719,16 @@ export default function App() {
 
       // Metadane reprezentacji (w tym motyw) pokazujemy od razu. Statystyki
       // z dużego pliku zapisu i herb z graphics są doładowywane niezależnie.
+      const nextScope = `${result.managedMode}:${result.managedClubUid ?? result.managedNationUid ?? result.managedTeamUid}`;
+      if ((lastManagedScope.current !== null && lastManagedScope.current !== nextScope) || (lastManagedScope.current === null && result.managedMode === "club")) clearPlayerSelection();
+      lastManagedScope.current = nextScope;
       setSnapshot(createFmSnapshot(result));
       setSupplementaryDataLoading(true);
 
       startTransition(() => {
         setHeaders(result.headers);
         setRows(result.rows);
+        setClubSquadScope("all");
         setSortConfig(null);
         setSearchTerm("");
         setMinAge("");
@@ -743,7 +756,7 @@ export default function App() {
       } satisfies FmSeasonStatsResult));
       const logoPromise = loadFootballManagerTeamLogo(
         result.managedNationUid,
-        result.managedTeamUid,
+        result.managedClubUid ?? result.managedTeamUid,
       ).catch(() => null);
 
       void logoPromise.then((teamLogoDataUrl) => {
@@ -782,7 +795,7 @@ export default function App() {
         },
       );
     },
-    [],
+    [clearPlayerSelection],
   );
 
   const handleFmUnavailable = useCallback(() => {
@@ -866,7 +879,7 @@ export default function App() {
         <div className="desktop-header__actions">
           <AppUpdater />
           <FmConnectionPanel
-            loadedNation={snapshot?.managedNation ?? null}
+            loadedNation={snapshot?.managedMode === "club" ? snapshot.managedTeam : snapshot?.managedNation ?? null}
             loadedPlayerCount={rows.length}
             onDatabaseLoaded={handleFmDatabaseLoaded}
             onFmUnavailable={handleFmUnavailable}
@@ -876,6 +889,9 @@ export default function App() {
 
       <section className="desktop-workspace" aria-label="Baza zawodników">
         <MainToolbar
+          clubMode={snapshot?.managedMode === "club"}
+          clubSquadScope={clubSquadScope}
+          onClubSquadScopeChange={setClubSquadScope}
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
           minAge={minAge}
@@ -910,7 +926,7 @@ export default function App() {
 
         <div className="desktop-context-bar" role="status">
           <span>
-            <strong>{dataLabel}</strong>
+            {snapshot && <span>{snapshot.managedMode === "club" ? "Klub" : "Reprezentacja"} · </span>}<strong>{dataLabel}</strong>
             {snapshot?.managedTeam &&
               snapshot.managedTeam !== snapshot.managedNation && (
                 <> · {snapshot.managedTeam}</>
@@ -1029,9 +1045,9 @@ export default function App() {
             <span aria-hidden="true">◎</span>
             <h2>Połącz aplikację z Football Managerem</h2>
             <p>
-              Otwórz zapis reprezentacji w FM26, a następnie użyj przycisku
-              „Połącz z grą”. Aplikacja wczyta tylko zawodników uprawnionych do
-              gry dla prowadzonej reprezentacji.
+              Otwórz karierę klubową lub reprezentacyjną w FM26 albo FM27 i użyj przycisku
+              „Połącz z grą”. Aplikacja rozpozna prowadzony zespół. W klubie wczyta pierwszą drużynę,
+              rezerwy i juniorów; w reprezentacji — uprawnionych zawodników.
             </p>
           </section>
         )}
@@ -1042,7 +1058,7 @@ export default function App() {
           <i data-online={rows.length > 0 || undefined} />
           {rows.length > 0
             ? `${dataLabel}: ${rows.length.toLocaleString("pl-PL")} zawodników`
-            : "Oczekiwanie na dane FM26"}
+            : "Oczekiwanie na dane gry"}
         </span>
         <span>
           {snapshot?.savedAt
@@ -1052,6 +1068,7 @@ export default function App() {
       </footer>
 
       <Suspense fallback={null}>
+        <TransferSearch sessionId={snapshot?.sessionId ?? 0} clubName={snapshot?.managedMode === "club" ? snapshot.managedTeam : null} />
         {rows.length > 1 && (
           <PlayerCompare
             rows={rows}

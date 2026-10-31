@@ -1,4 +1,6 @@
 mod fm_build;
+mod fm_club;
+mod fm_scout;
 mod fm_database;
 mod fm_graphics;
 mod fm_memory;
@@ -26,6 +28,7 @@ pub fn run() {
             fm_modules::inspect_fm_modules,
             fm_profile::inspect_fm_reader_profile,
             fm_database::load_fm_database,
+            fm_database::search_fm_players,
             fm_database::load_fm_season_stats,
             fm_database::load_fm_team_logo,
             fm_database::get_fm_date_status,
