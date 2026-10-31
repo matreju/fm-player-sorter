@@ -207,3 +207,37 @@ Transient read failures preserve session caches and the UI roster for retry;
 only proven identity changes/missing session/unknown class require reconnect.
 Errors carry specific FM-Rxx diagnostics rather than one catch-all message.
 No tests are run; live-game confirmation remains necessary.
+
+## FM shortlists, richer market filters and user columns (0.7.0-beta.9)
+
+The market can select the active human manager's actual FM player shortlists.
+This is read-only access to in-game collections, not app-created lists or file
+exports. The uploaded/verified FM27 DLL supplies these field facts: native
+manager +0x230/+0x238 is the player-shortlist vector (enumerator 0x2684180);
+shortlist +0xE8 is the name FmString (name comparison 0xF059E9, destructor
+0x231164E); +0x4C is the list kind (0/1 human active/inactive lists). An empty
+name uses the game's default-list convention (UI formatter 0x48C430).
+
+Persistent targets +0x50/+0x58 reference Person at target +0x60 (0xF18388 and
+0xF183D5). Materialized members +0x80/+0x88 are wrappers with Person at +0
+(0x26841AA..0x26841ED and 0xF1A57D..0xF1A5C9). Membership requires a pointer
+to an indexed player and that player's current UID. No numeric UID guessing.
+Names/collections are re-read on searches and with the refresh-lists button;
+manager identity is validated before/after and vector mutation is rejected.
+Unknown builds/missing manager data report unavailability. Unresolved entries
+are counted explicitly rather than silently claiming the list is complete.
+Live-game confirmation of these derived field layouts remains necessary.
+
+Additional server-side filters cover nationality, club, league, gender,
+dominant foot or two strong feet, height, condition, PA-minus-CA headroom,
+loan status, not-for-sale/release status and up to 12 simultaneous min/max
+attribute conditions. Sixty decoded visible/hidden/personality ratings are
+kept in a compact 64-byte index field; no extra remote scan per attribute.
+Attributes, height, condition and headroom sort across the complete result
+set before pagination. Unknown values are not treated as zero for filtering.
+
+Transfer column choices and order are saved separately from club preferences;
+all readable native columns are selectable with a search, reorder and reset.
+Shirt number is removed from visible club columns (including prior saved
+choices) and the profile summary, and is excluded from transfer columns.
+Tests are skipped at the user's request; compilation/package only.

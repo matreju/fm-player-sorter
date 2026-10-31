@@ -400,7 +400,7 @@ export default function App() {
   );
 
   const visibleHeaders = useMemo(
-    () => headers.filter((header) => !HIDDEN_COLUMNS.has(header)),
+    () => headers.filter((header) => !HIDDEN_COLUMNS.has(header) && header!=="Numer w składzie"),
     [headers],
   );
   const availableTableHeaders = useMemo(
@@ -411,7 +411,7 @@ export default function App() {
     () =>
       headers.length === 0
         ? []
-        : (snapshot?.managedMode === "club" ? [PLAYER_MARK_COLUMN,"Nazwisko","Numer w składzie","Pozycja","Narodowość",OVERALL_ABILITY_COLUMN,"PA","Wiek","Kondycja","Wartość","Pensja","Koniec kontraktu",ROLE_SCORE_COLUMN] : BASE_TABLE_COLUMNS).filter((header) =>
+        : (snapshot?.managedMode === "club" ? [PLAYER_MARK_COLUMN,"Nazwisko","Pozycja","Narodowość",OVERALL_ABILITY_COLUMN,"PA","Wiek","Kondycja","Wartość","Pensja","Koniec kontraktu",ROLE_SCORE_COLUMN] : BASE_TABLE_COLUMNS).filter((header) =>
             availableTableHeaders.includes(header),
           ),
     [availableTableHeaders, headers.length, snapshot?.managedMode],

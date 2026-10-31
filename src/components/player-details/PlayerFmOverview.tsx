@@ -232,7 +232,6 @@ export function PlayerFmOverview({ player }: PlayerFmOverviewProps) {
           <div title={getGameEuroRate(player) ? FINANCE_NOTE : FINANCE_UNAVAILABLE}><Detail label="Wartość (€)" value={formatPlayerFinance("Wartość",player["Wartość"],getGameEuroRate(player))} /></div>
           <div title={getGameEuroRate(player) ? FINANCE_NOTE : FINANCE_UNAVAILABLE}><Detail label="Pensja (€/rok)" value={formatPlayerFinance("Pensja",player["Pensja"],getGameEuroRate(player))} /></div>
           <Detail label="Kontrakt" value={player["Koniec kontraktu"]} />
-          <Detail label="Nr" value={player["Numer w składzie"]} />
         </div>
       </header>
 

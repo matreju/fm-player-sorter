@@ -338,12 +338,18 @@ export interface FmScoutingQuery {
   sessionId: number; text: string; position: string; status: string; sort: string; sortDirection?: string;
   minCa?: number; maxCa?: number; minPa?: number; maxPa?: number; minAge?: number; maxAge?: number;
   minFee?: number; maxFee?: number; minWage?: number; maxWage?: number;
+  shortlistId?:string; nationality?:string; club?:string; league?:string; foot?:string; gender?:string; loan?:string;
+  minHeight?:number;maxHeight?:number;minCondition?:number;maxCondition?:number;minGrowth?:number;maxGrowth?:number;
+  attributes?:{column:string;min?:number;max?:number}[];
   clubScope: string; contractAfter: string;
   contractBefore: string; page: number; pageSize: number;
 }
 export interface FmScoutingResult {
   sessionId: number; total: number; databaseTotal: number; page: number; pageSize: number; gameDate: string | null;
   rows: Record<string,string>[];
+  headers?:string[];attributeColumns?:string[];
+  shortlists?:{id:string;name:string;playerCount:number;unresolvedCount:number}[];
+  shortlistError?:string|null;
 }
 export async function searchFootballManagerPlayers(query: FmScoutingQuery): Promise<FmScoutingResult> {
   if (!isTauri()) throw new Error("Wyszukiwarka wymaga połączenia z grą w aplikacji Windows.");

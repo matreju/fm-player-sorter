@@ -332,6 +332,12 @@ mod windows_reader {
             .and_then(|(_,_,offset)|player.get(PLAYER_POSITIONS+offset)).copied().unwrap_or(0));
         let age=source.game_date.and_then(|date| read_u32(&person,PERSON_DOB).and_then(|birth| age_at(birth,Some(date),source.derived_year)))
             .and_then(|age| u16::try_from(age).ok()).filter(|age| *age<=90);
+        let mut ratings=[0u8;64];
+        for (index,(_,offset)) in PLAYER_ATTRIBUTE_FIELDS.iter().chain(PLAYER_HIDDEN_FIELDS.iter()).enumerate() {
+            ratings[index]=player.get(PLAYER_ATTRIBUTES+offset).copied().map(decode_attribute).unwrap_or(0);
+        }
+        let base=PLAYER_ATTRIBUTE_FIELDS.len()+PLAYER_HIDDEN_FIELDS.len();
+        for (index,(_,offset)) in PERSONALITY_FIELDS.iter().enumerate() {ratings[base+index]=person.get(*offset).copied().map(valid_twenty).unwrap_or(0);}
         let flags=contract.as_deref().and_then(|bytes| bytes.get(CONTRACT_STATUS)).copied().unwrap_or(0);
         Some(ScoutingEntry {
             candidate_index, name:fm_scout::search_text(&name), club:fm_scout::search_text(club), nationality:fm_scout::search_text(&nationality), search:fm_scout::search_text(&format!("{name} {club} {nationality}")), positions,position_rank,ca,pa,age,
@@ -339,7 +345,16 @@ mod windows_reader {
             asking_price:read_u32(&player,PLAYER_ASKING_PRICE).and_then(money),
             wage:contract.as_deref().and_then(|bytes| read_u32(bytes,CONTRACT_WAGE)).and_then(money),
             expiry:contract.as_deref().and_then(|bytes| read_u32(bytes,CONTRACT_EXPIRY)).and_then(format_fm_date),
-            listed:flags&1!=0,
+            listed:flags&0x09!=0,
+            not_for_sale:flags&0x10!=0,set_for_release:flags&0x20!=0,
+            league:fm_scout::search_text(current.as_ref().and_then(|team|team.division.as_deref()).or_else(||owner.as_ref().and_then(|team|team.division.as_deref())).unwrap_or("")),
+            height:read_u16(&player,PLAYER_HEIGHT).filter(|value|(130..=230).contains(value)),
+            condition:read_u16(&player,PLAYER_CONDITION).filter(|value|*value<=10000),
+            left_foot:player.get(PLAYER_ATTRIBUTES+FOOT_LEFT).copied().map(decode_attribute).unwrap_or(0),
+            right_foot:player.get(PLAYER_ATTRIBUTES+FOOT_RIGHT).copied().map(decode_attribute).unwrap_or(0),
+            female:person[PERSON_GENDER]&GENDER_FEMALE_BIT!=0,
+            on_loan:owner.as_ref().and_then(|team|team.owner_club_address).zip(current.as_ref().and_then(|team|team.owner_club_address)).map(|(a,b)|a!=b),
+            ratings,
             free:contract_address==0 && current_team.is_none(),
             own_player:source.own_uids.contains(&candidate.uid) || owner.as_ref().and_then(|team| team.owner_club_address).map(|club| source.own_clubs.contains(&club)).unwrap_or(false),
         })
@@ -411,6 +426,65 @@ mod windows_reader {
         row.insert("_fmEurPerGbp".into(), rate.map(|rate|rate.to_string()).unwrap_or_default());
     }
 
+    struct NativeShortlist {
+        info: fm_scout::FmShortlistInfo,
+        members: HashSet<u32>,
+    }
+    fn read_manager_shortlists(process:&RemoteProcess,source:&ScoutingSession) -> Result<Vec<NativeShortlist>,String> {
+        let cache=refresh_slot().lock().map_err(|_|"Brak dostępu do menedżera list życzeń.".to_string())?
+            .as_ref().cloned().ok_or("Połącz aplikację z grą, aby odczytać listy życzeń.")?;
+        if cache.database.session_id!=source.session_id { return Err("Sesja gry zmieniła się. Odśwież połączenie.".into()); }
+        if source.layout.edition!=27 || cache.native_plugin_hash.as_deref()!=Some(FM27_PLUGIN_SHA256) {
+            return Err("Odczyt list życzeń nie jest jeszcze rozpoznany dla tego wydania gry.".into());
+        }
+        refresh_identity_check(process,&cache)?;
+        let (person,_)=cache.manager_person.ok_or("Nie potwierdzono aktywnego menedżera.")?;
+        let human=person.checked_sub(source.layout.human_manager_person).ok_or("Nieprawidłowy adres menedżera.")?;
+        // Uploaded FM27 DLL: 0x2684180 enumerates HUMAN +0x230/+0x238;
+        // 0xF059E9 compares shortlist FmString +0xE8; 0xF1A57D and
+        // 0x26841AA enumerate member wrappers +0x80/+0x88. Persistent
+        // targets at +0x50/+0x58 resolve Person through target +0x60
+        // (0xF18388/0xF183D5). No game function is called or memory written.
+        let lists=pointer_vector(process,human+0x230,1024)?;
+        let by_address=source.candidates.iter().flat_map(|candidate|[(candidate.person_address,candidate),(candidate.player_address,candidate)])
+            .collect::<HashMap<_,_>>();
+        let mut result=Vec::new();
+        for list in &lists {
+            let kind=process.read_u8(*list+0x4C).ok_or("Nie można odczytać typu listy życzeń.")?;
+            // 0/1 are the active/inactive human player lists. Engine targets
+            // and staff/nation collections are deliberately not labelled as them.
+            if kind>1 { continue; }
+            let name_ptr=process.read_ptr(*list+0xE8).ok_or("Nie można odczytać nazwy listy życzeń.")?;
+            let name=if name_ptr==0 || process.read_u32(name_ptr)==Some(0) {"Domyślna lista życzeń".to_string()} else {
+                process.indirect_string(*list+0xE8).filter(|name|plausible_label(name,200)).ok_or("Nie rozpoznano nazwy listy życzeń.")?
+            };
+            let targets=pointer_vector(process,*list+0x50,200_000)?;
+            let entries=pointer_vector(process,*list+0x80,200_000)?;
+            let mut members=HashSet::new();let mut resolved_targets=0;
+            for target in &targets {
+                if let Some(address)=process.read_ptr(*target+0x60) {
+                    if let Some(candidate)=by_address.get(&address) {
+                        if process.read_u32(candidate.person_address+OBJ_UID)==Some(candidate.uid) {members.insert(candidate.uid);resolved_targets+=1;}
+                    }
+                }
+            }
+            for entry in &entries {
+                let address=process.read_ptr(*entry).ok_or("Lista jest aktualizowana przez FM. Ponów odczyt list życzeń.")?;
+                if let Some(candidate)=by_address.get(&address) {
+                    if process.read_u32(candidate.person_address+OBJ_UID)==Some(candidate.uid) {members.insert(candidate.uid);}
+                }
+            }
+            let total=targets.len().max(entries.len()).max(members.len());
+            let unresolved=total.saturating_sub(members.len().max(resolved_targets));
+            result.push(NativeShortlist {info:fm_scout::FmShortlistInfo {
+                id:format!("{:x}",list),name,player_count:members.len(),unresolved_count:unresolved,
+            },members});
+        }
+        if pointer_vector(process,human+0x230,1024)?!=lists {return Err("Listy życzeń zmieniły się podczas odczytu. Ponów wyszukiwanie.".into());}
+        refresh_identity_check(process,&cache)?;
+        Ok(result)
+    }
+
     pub(super) fn search_players(query: ScoutingQuery) -> Result<ScoutingResult,String> {
         let _query_guard=SCOUTING_QUERY_LOCK.lock().map_err(|_| "Wyszukiwarka jest niedostępna.".to_string())?;
         let source=scouting_slot().lock().map_err(|_| "Brak dostępu do danych transferowych.".to_string())?
@@ -436,7 +510,13 @@ mod windows_reader {
         if (query.min_age.is_some() || query.max_age.is_some()) && source.game_date.is_none() {
             return Err("Filtr wieku wymaga potwierdzonej daty gry. Usuń limit wieku lub odśwież połączenie.".into());
         }
-        let matches=fm_scout::matching_entries(&index,&query)?;
+        let (shortlists,shortlist_error)=match read_manager_shortlists(&process,&source) {Ok(lists)=>(lists,None),Err(error)=>(Vec::new(),Some(error))};
+        let mut matches=fm_scout::matching_entries(&index,&query)?;
+        if !query.shortlist_id.is_empty() {
+            if let Some(error)=&shortlist_error {return Err(error.clone());}
+            let list=shortlists.iter().find(|list|list.info.id==query.shortlist_id).ok_or("Wybrana lista życzeń nie jest już dostępna w FM. Wybierz listę ponownie.")?;
+            matches.retain(|entry|list.members.contains(&source.candidates[index[*entry].candidate_index].uid));
+        }
         let page_size=if query.page_size==0 {50} else {query.page_size.clamp(10,250)};
         let page=query.page.min(matches.len().saturating_sub(1)/page_size);
         let mut rows=Vec::new(); let mut cache=PlayerReadCache::default();
@@ -451,6 +531,8 @@ mod windows_reader {
                 if source.game_date.is_none() { row.insert("Wiek".into(),String::new()); }
                 row.insert("Status transferu".into(),if entry.free {"Wolny zawodnik"} else if entry.listed {"Lista transferowa"} else {"Kontrakt klubowy"}.into());
                 row.insert("Na liście transferowej".into(),yes_no(entry.listed));
+                row.insert("Zapas potencjału".into(),entry.pa.saturating_sub(entry.ca).to_string());
+                row.insert("Wypożyczenie".into(),entry.on_loan.map(yes_no).unwrap_or_default());
                 rows.push(row);
             }
         }
@@ -458,7 +540,10 @@ mod windows_reader {
             || detect_football_manager().pid!=Some(source.pid) {
             return Err("Sesja gry zmieniła się podczas wyszukiwania. Połącz aplikację ponownie.".into());
         }
-        Ok(ScoutingResult {session_id:source.session_id,total:matches.len(),database_total:index.len(),page,page_size,game_date:source.game_date.and_then(format_fm_date),rows})
+        Ok(ScoutingResult {session_id:source.session_id,total:matches.len(),database_total:index.len(),page,page_size,game_date:source.game_date.and_then(format_fm_date),rows,
+            headers:table_headers().into_iter().filter(|column|column!="Numer w składzie").chain(["Pozostały kontrakt".into(),"Status transferu".into(),"Zapas potencjału".into(),"Wypożyczenie".into()]).collect(),
+            attribute_columns:fm_scout::RATING_COLUMNS.iter().map(|name|(*name).to_string()).collect(),
+            shortlists:shortlists.into_iter().map(|list|list.info).collect(),shortlist_error})
     }
 
     struct HandleGuard(HANDLE);
