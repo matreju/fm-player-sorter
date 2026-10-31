@@ -72,9 +72,9 @@ jobs:
           tagName: app-v__VERSION__
           releaseName: FM Player Sorter v__VERSION__
           releaseBody: |
-            Wersja testowa FM27. Zaktualizowano profil Unity/IL2CPP i powiązania aktywnej reprezentacji.
-            Natywne pola game_plugin oraz odczyt zapisu FM27 wymagają potwierdzenia w uruchomionej grze.
-            FM26 zachowuje dotychczasowy profil. Ta wersja nie zastępuje stabilnej aktualizacji FM26.
+            Aktualizacja obecnej aplikacji przez wbudowany aktualizator.
+            Zachowano obsługę FM26 i dodano testowy profil FM27 z rozpoznawaniem aktywnej reprezentacji.
+            Odczyt FM27 wymaga sprawdzenia w działającej grze; statystyki sezonowe FM27 mogą być niedostępne.
           releaseDraft: false
           prerelease: ${{ github.ref_name == 'agent/fm27-compatibility' }}
           updaterJsonPreferNsis: true

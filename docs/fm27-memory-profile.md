@@ -1,4 +1,4 @@
-# FM27 preview 0.6.0-beta.2
+# FM27 trial support in application update 0.6.0
 
 This is a **trial reader**, not verified live-game compatibility. It keeps FM26's
 existing native field layout as a candidate, applies FM27's verified managed
@@ -72,4 +72,7 @@ Install the prerelease, start FM27, load a national-team career, and choose
 against the game. If reading fails, the dialog contains the profile name and
 native class/binding diagnostics needed for the next adjustment.
 
-The GitHub prerelease does not replace the stable FM26 updater endpoint.
+Version 0.6.0 is distributed through the existing application updater as requested.
+The application identifier, updater public key, storage and stable updater URL
+are unchanged. FM27's reader remains experimental until confirmed live; normal
+release-channel distribution does not imply verified FM27 compatibility.
