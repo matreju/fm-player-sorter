@@ -328,11 +328,13 @@ mod windows_reader {
         let nationality=cached_nation_name(process,candidate.nation_address,cache).unwrap_or_default();
         let positions=POSITION_FIELDS.iter().filter(|(_,_,offset)| player.get(PLAYER_POSITIONS+offset).copied().unwrap_or(0)>=14)
             .map(|(short,_,_)| (*short).to_string()).collect();
+        let position_rank=fm_scout::position_sort_rank(|position|POSITION_FIELDS.iter().find(|(short,_,_)|*short==position)
+            .and_then(|(_,_,offset)|player.get(PLAYER_POSITIONS+offset)).copied().unwrap_or(0));
         let age=source.game_date.and_then(|date| read_u32(&person,PERSON_DOB).and_then(|birth| age_at(birth,Some(date),source.derived_year)))
             .and_then(|age| u16::try_from(age).ok()).filter(|age| *age<=90);
         let flags=contract.as_deref().and_then(|bytes| bytes.get(CONTRACT_STATUS)).copied().unwrap_or(0);
         Some(ScoutingEntry {
-            candidate_index, name:fm_scout::search_text(&name), club:fm_scout::search_text(club), nationality:fm_scout::search_text(&nationality), search:fm_scout::search_text(&format!("{name} {club} {nationality}")), positions,ca,pa,age,
+            candidate_index, name:fm_scout::search_text(&name), club:fm_scout::search_text(club), nationality:fm_scout::search_text(&nationality), search:fm_scout::search_text(&format!("{name} {club} {nationality}")), positions,position_rank,ca,pa,age,
             value:read_u32(&player,PLAYER_VALUE).and_then(money_value),
             asking_price:read_u32(&player,PLAYER_ASKING_PRICE).and_then(money),
             wage:contract.as_deref().and_then(|bytes| read_u32(bytes,CONTRACT_WAGE)).and_then(money),
@@ -4629,26 +4631,19 @@ mod windows_reader {
     }
 
     fn preferred_positions(positions: &BTreeMap<String, u8>) -> String {
-        let top = positions.values().copied().max().unwrap_or(0);
-        let threshold = 15u8.max(top.saturating_sub(2));
-        let mut selected = positions
-            .iter()
-            .filter(|(_, value)| **value >= threshold && **value > 0)
-            .map(|(name, value)| (name.clone(), *value))
-            .collect::<Vec<_>>();
-        selected.sort_by(|left, right| right.1.cmp(&left.1));
+        // Include the additional accomplished positions instead of hiding all
+        // positions more than two points below the player's strongest one.
+        let mut selected=fm_scout::POSITION_GROUPS.iter().flat_map(|group|group.iter())
+            .filter(|name| positions.get(**name).copied().unwrap_or(0)>=15)
+            .map(|name|(*name).to_string()).collect::<Vec<_>>();
         if selected.is_empty() {
-            if let Some((name, value)) = positions.iter().max_by_key(|(_, value)| **value) {
-                if *value > 0 {
-                    selected.push((name.clone(), *value));
-                }
+            let rank=fm_scout::position_sort_rank(|position|positions.get(position).copied().unwrap_or(0));
+            if let Some(group)=fm_scout::POSITION_GROUPS.get(rank as usize) {
+                let top=group.iter().filter_map(|name|positions.get(*name).copied().map(|rating|(*name,rating))).max_by_key(|(_,rating)|*rating);
+                if let Some((name,_))=top { selected.push(name.to_string()); }
             }
         }
-        selected
-            .into_iter()
-            .map(|(name, _)| name)
-            .collect::<Vec<_>>()
-            .join(", ")
+        selected.join(", ")
     }
 
     fn foot_label(value: u8) -> &'static str {

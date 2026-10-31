@@ -170,3 +170,17 @@ statistics remain those of the last full load. Live refresh and search/full
 attach share a lock to prevent session races. Process detection no longer
 refreshes unrelated system-wide statistics. No timing improvement is claimed
 without a live game; compilation is the only validation run as requested.
+
+## Pitch-line position sorting (0.7.0-beta.7)
+
+Separate right/left wingbacks from the defender line. The order is GK, right
+defender, centre back/libero, left defender, right wingback, left wingback, DM,
+right/central/left midfielder, right/central/left attacking midfielder, striker.
+Club and market sorting use the complete native 1-20 proficiency values and
+the earliest group with a value of at least 15 (strongest group as fallback),
+not the shortened position label. Position text now includes all values >=15
+in pitch-line order; the old max-minus-two rule hid additional positions.
+The transfer index stores the numeric rank from the same native helper.
+Players in the same group keep the existing name tie-break. No claim is made
+about reproducing FM's undocumented tie-break between equal-position players.
+Tests remain skipped as requested. Compile/package only.

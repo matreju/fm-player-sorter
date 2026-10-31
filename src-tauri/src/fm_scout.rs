@@ -1,6 +1,21 @@
 use serde::{Deserialize, Serialize};
 use crate::fm_reader::FmTableRow;
 
+// Same pitch-line order as playerPositionType.ts. Sort by complete native
+// proficiency data, never by the shortened display string or filter options.
+pub(crate) const POSITION_GROUPS: &[&[&str]] = &[
+    &["BR"], &["O (P)"], &["O (Ś)","LIB"], &["O (L)"],
+    &["WO (P)"], &["WO (L)"], &["DP"],
+    &["P (P)"], &["P (Ś)"], &["P (L)"],
+    &["OP (P)"], &["OP (Ś)"], &["OP (L)"], &["N (Ś)"],
+];
+pub(crate) fn position_sort_rank(rating: impl Fn(&str) -> u8) -> u8 {
+    let ratings = POSITION_GROUPS.iter().map(|group|group.iter().map(|position|rating(position)).filter(|value|*value<=20).max().unwrap_or(0)).collect::<Vec<_>>();
+    if let Some(rank)=ratings.iter().position(|value|*value>=15) { return rank as u8; }
+    let highest=ratings.iter().copied().max().unwrap_or(0);
+    if highest==0 { 255 } else { ratings.iter().position(|value|*value==highest).unwrap_or(255) as u8 }
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ScoutingQuery {
@@ -46,6 +61,7 @@ pub(crate) struct ScoutingEntry {
     pub club: String,
     pub nationality: String,
     pub positions: Vec<String>,
+    pub position_rank: u8,
     pub ca: u16,
     pub pa: u16,
     pub age: Option<u16>,
@@ -118,14 +134,6 @@ pub(crate) fn matching_entries(entries: &[ScoutingEntry], query: &ScoutingQuery)
         && (query.contract_before.is_empty() || entry.expiry.as_ref().map(|date| date <= &query.contract_before).unwrap_or(false))
         && match query.status.as_str() { "listed" => entry.listed, "free" => entry.free, _ => true }
     }).map(|(i,_)| i).collect::<Vec<_>>();
-    fn position_rank(entry: &ScoutingEntry) -> u8 {
-        entry.positions.iter().filter_map(|position| Some(match position.as_str() {
-            "BR" => 0, "O (P)" | "WO (P)" => 1, "O (Ś)" | "LIB" => 2,
-            "O (L)" | "WO (L)" => 3, "DP" => 4, "P (Ś)" => 5,
-            "OP (Ś)" => 6, "P (P)" | "OP (P)" => 7,
-            "P (L)" | "OP (L)" => 8, "N (Ś)" => 9, _ => return None,
-        })).min().unwrap_or(255)
-    }
     let descending = match query.sort_direction.as_str() {
         "desc" => true, "asc" => false, _ => matches!(query.sort.as_str(), "" | "ca" | "pa"),
     };
@@ -144,7 +152,7 @@ pub(crate) fn matching_entries(entries: &[ScoutingEntry], query: &ScoutingQuery)
             "value" => optional(left.value.map(u64::from), right.value.map(u64::from)),
             "fee" => optional((if left.free {Some(0)} else {left.asking_price.or(left.value)}).map(u64::from), (if right.free {Some(0)} else {right.asking_price.or(right.value)}).map(u64::from)),
             "wage" => optional(left.wage.map(u64::from), right.wage.map(u64::from)),
-            "position" => optional((position_rank(left) != 255).then(|| u64::from(position_rank(left))), (position_rank(right) != 255).then(|| u64::from(position_rank(right)))),
+            "position" => optional((left.position_rank != 255).then(|| u64::from(left.position_rank)), (right.position_rank != 255).then(|| u64::from(right.position_rank))),
             "expiry" => match (&left.expiry, &right.expiry) {
                 (Some(a),Some(b)) => if descending { b.cmp(a) } else { a.cmp(b) },
                 (None,Some(_)) => std::cmp::Ordering::Greater,
@@ -169,7 +177,7 @@ pub(crate) fn matching_entries(entries: &[ScoutingEntry], query: &ScoutingQuery)
 mod tests {
     use super::*;
     fn entry(index: usize, fee: Option<u32>, own: bool) -> ScoutingEntry {
-        ScoutingEntry { candidate_index:index, name:"lukasz zolc".into(), club:"warszawa".into(), nationality:"polska".into(), search:search_text("Łukasz Żółć Warszawa"), positions:vec!["DP".into()],
+        ScoutingEntry { candidate_index:index, name:"lukasz zolc".into(), club:"warszawa".into(), nationality:"polska".into(), search:search_text("Łukasz Żółć Warszawa"), positions:vec!["DP".into()], position_rank:6,
             ca:120, pa:170, age:Some(20), value:fee, asking_price:None, wage:Some(1000), expiry:Some("2027-06-30".into()),
             listed:true, free:false, own_player:own }
     }
