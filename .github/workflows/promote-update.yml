@@ -23,9 +23,25 @@ jobs:
         run: |
           version=$(node -p "require('./.github/promote-update.json').version")
           source_sha=$(node -p "require('./.github/promote-update.json').source_sha")
-          test "$(node -p "require('./package.json').version")" = "$version"
           git merge-base --is-ancestor "$source_sha" HEAD
-          git diff --exit-code "$source_sha" HEAD -- src src-tauri tools tests package.json package-lock.json
+          git diff --exit-code "$source_sha" HEAD -- src src-tauri/src tools tests
+          SOURCE_SHA="$source_sha" node <<'JS'
+          const fs = require('node:fs');
+          const cp = require('node:child_process');
+          const assert = require('node:assert/strict');
+          for (const path of ['package.json', 'package-lock.json', 'src-tauri/tauri.conf.json']) {
+            const before = JSON.parse(cp.execFileSync('git', ['show', process.env.SOURCE_SHA + ':' + path]));
+            const after = JSON.parse(fs.readFileSync(path));
+            delete before.version; delete after.version;
+            if (path === 'package-lock.json') { delete before.packages[''].version; delete after.packages[''].version; }
+            assert.deepEqual(before, after, path);
+          }
+          for (const path of ['src-tauri/Cargo.toml', 'src-tauri/Cargo.lock']) {
+            const before = cp.execFileSync('git', ['show', process.env.SOURCE_SHA + ':' + path], {encoding: 'utf8'});
+            const after = fs.readFileSync(path, 'utf8');
+            assert.equal(before.replaceAll('version = "0.6.0-beta.2"', 'version = "0.6.0"'), after, path);
+          }
+          JS
           mkdir -p update-verify
           for attempt in $(seq 1 60); do
             if gh api "repos/$GITHUB_REPOSITORY/releases/tags/app-v$version" > update-verify/release.json 2>/dev/null; then
