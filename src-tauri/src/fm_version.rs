@@ -24,7 +24,7 @@ pub(crate) struct FmLayout {
 
 pub(crate) const FM26: FmLayout = FmLayout {
     id: "fm26-6000.0.52.8888375-87a0370e9917",
-    name: "FM26 26.3.x native managed national team",
+    name: "FM26 26.3.x native managed team",
     unity_version: "6000.0.52f1-fm26-05f1 (87a0370e9917)",
     edition: 26,
     experimental: false,
@@ -42,7 +42,7 @@ pub(crate) const FM26: FmLayout = FmLayout {
 
 pub(crate) const FM27: FmLayout = FmLayout {
     id: "fm27-6000.3.18.9883062-96cdb67fb884",
-    name: "FM27 native managed national team (experimental)",
+    name: "FM27 native managed team (experimental)",
     unity_version: "6000.3.18f1-custom (96cdb67fb884)",
     edition: 27,
     experimental: true,

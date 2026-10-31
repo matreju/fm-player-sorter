@@ -861,6 +861,8 @@ mod windows_reader {
         decoded_uid_count: usize,
         nation_manager_context_count: usize,
         other_job_context_count: usize,
+        validated_context_count: usize,
+        rejected_context_count: usize,
         uid_object_match_count: usize,
         trusted_team_match_count: usize,
         team_shape_match_count: usize,
@@ -1182,7 +1184,7 @@ mod windows_reader {
         });
         let managed = managed.ok_or_else(|| {
             format!(
-                "Wykryto {}, ale nie udało się jednoznacznie odczytać prowadzonego klubu lub reprezentacji z powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/K{}/D{}/T{}/Q{}/A{}/P{}/L{}/E{}/I{}/F{}/Y{}/N{}/U{}/J{}/X{}/O{}/W{}/S{}/Z{}/G{}/M{}/GT{}/R{}/MC{}.",
+                "Wykryto {}, ale nie udało się jednoznacznie odczytać prowadzonego klubu lub reprezentacji z powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/K{}/D{}/T{}/Q{}/A{}/P{}/L{}/E{}/I{}/F{}/Y{}/N{}/U{}/J{}/X{}/O{}/W{}/S{}/Z{}/G{}/M{}/GT{}/R{}/MC{}/VC{}/IC{}.",
                 process.layout.name,
                 binding_diagnostics.context_candidate_count,
                 binding_diagnostics.binding_candidate_count,
@@ -1212,6 +1214,8 @@ mod windows_reader {
                 binding_diagnostics.active_team_count,
                 binding_diagnostics.national_resolution_count,
                 human_managers.len(),
+                binding_diagnostics.validated_context_count,
+                binding_diagnostics.rejected_context_count,
             )
         })?;
         let manager_team = Some(managed.team_address);
@@ -2293,6 +2297,23 @@ mod windows_reader {
         }
     }
 
+    fn validated_human_context(process: &RemoteProcess, context: &HumanContextCandidate) -> bool {
+        // Il2CppClass's always-valid x64 prefix: image, gc_desc, name, namespaze.
+        // Match the exact types extracted from this edition's managed metadata.
+        let Some(class) = process.read_ptr(context.object_address) else { return false; };
+        let Some(name) = process.read_ptr(class + 0x10).and_then(|pointer| process.read_c_string(pointer, 96)) else { return false; };
+        let Some(namespace_pointer) = process.read_ptr(class + 0x18) else { return false; };
+        let namespace = match process.read_u8(namespace_pointer) {
+            Some(0) => String::new(),
+            Some(_) => match process.read_c_string(namespace_pointer, 96) { Some(value) => value, None => return false },
+            None => return false,
+        };
+        crate::fm_human::context_matches(&name, &namespace, &process.layout.human_contexts,
+            |offset| process.read_ptr(context.object_address + offset),
+            |offset| process.read_u32(context.object_address + offset),
+            context.binding_address, context.job_state)
+    }
+
     fn resolve_human_team_binding(
         process: &RemoteProcess,
         regions: &[(usize, usize)],
@@ -2359,17 +2380,25 @@ mod windows_reader {
             };
             diagnostics.decoded_uid_count += 1;
 
-            let nation_manager_evidence = context_candidates
+            // The heap scan finds numeric patterns, including overlapping views of
+            // unrelated objects. Only a typed context may vote on the active job.
+            let matching_contexts = context_candidates.iter().filter(|candidate| candidate.binding_address == binding).collect::<Vec<_>>();
+            let contexts = matching_contexts.iter().copied()
+                .filter(|candidate| validated_human_context(process, candidate)).collect::<Vec<_>>();
+            diagnostics.validated_context_count += contexts.len();
+            diagnostics.rejected_context_count += matching_contexts.len() - contexts.len();
+            if contexts.is_empty() { continue; }
+            let nation_manager_evidence = contexts
                 .iter()
                 .filter(|candidate| {
                     candidate.binding_address == binding
                         && candidate.job_state == HUMAN_JOB_NATION_MANAGER
                 })
                 .count();
-            let club_manager_evidence = context_candidates.iter().filter(|candidate| {
+            let club_manager_evidence = contexts.iter().filter(|candidate| {
                 candidate.binding_address == binding && candidate.job_state == HUMAN_JOB_CLUB_MANAGER
             }).count();
-            let other_job_evidence = context_candidates
+            let other_job_evidence = contexts
                 .iter()
                 .filter(|candidate| {
                     candidate.binding_address == binding

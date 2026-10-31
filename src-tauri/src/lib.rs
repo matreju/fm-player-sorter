@@ -1,5 +1,6 @@
 mod fm_build;
 mod fm_club;
+mod fm_human;
 mod fm_scout;
 mod fm_database;
 mod fm_graphics;
