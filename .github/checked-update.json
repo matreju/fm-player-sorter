@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.8",
-  "source_sha": "8147a9341939a98887a08fc389e0a42732f7b7af",
-  "run_id": 41227463325,
+  "version": "0.7.0-beta.9",
+  "source_sha": "a3441b9c6e1ab346cca254ff813c633c703cb947",
+  "run_id": 41241597795,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Poprawka fałszywego komunikatu o zmianie połączenia podczas szybkiego odświeżania. Sesja zapamiętuje rzeczywistego menedżera potwierdzonego przez kontrakt, także gdy pełne połączenie korzystało ze ścieżki alternatywnej. Usunięto ponowny wymóg jednego wpisu w globalnym rejestrze i blokowanie klubu przez nieaktualną próbkę obcych zawodników. Normalna zmiana/przeniesienie rejestru piłkarzy może odbudować indeks z natywnej listy bez skanowania całej pamięci. Chwilowe błędy odczytu zachowują sesję i skład do ponowienia, a szczegółowe kody FM-Rxx wskazują przyczynę problemu. Faktyczna zmiana procesu, menedżera lub klubu nadal wymaga ponownego połączenia. Testy pominięto na prośbę użytkownika. Odczyt na żywo pozostaje do potwierdzenia w grze.",
+  "notes": "Wybór rzeczywistych list życzeń aktywnego menedżera z FM27 i odświeżanie list bez ponownego wczytywania bazy. Dodatkowe filtry transferów: narodowość, klub, liga, noga, wzrost, kondycja, zapas potencjału, wypożyczenie, status i do 12 warunków atrybutów. Wybór i kolejność kolumn transferów zapamiętywane osobno; usunięty numer koszulki ze składu i szczegółów. Odczyt list na podstawie rozpoznanego wydania FM27 wymaga potwierdzenia w działającej grze; nierozpoznane wpisy i niedostępność są sygnalizowane. Testy pominięto na życzenie użytkownika; wydanie po kompilacji Windows.",
   "ui_revision": 1
 }
