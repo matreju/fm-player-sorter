@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.9",
-  "source_sha": "a3441b9c6e1ab346cca254ff813c633c703cb947",
-  "run_id": 41241597795,
+  "version": "0.7.0-beta.10",
+  "source_sha": "a10faef8140c1f051cf414fd7c5cf2499bbc347f",
+  "run_id": 41243096856,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Wybór rzeczywistych list życzeń aktywnego menedżera z FM27 i odświeżanie list bez ponownego wczytywania bazy. Dodatkowe filtry transferów: narodowość, klub, liga, noga, wzrost, kondycja, zapas potencjału, wypożyczenie, status i do 12 warunków atrybutów. Wybór i kolejność kolumn transferów zapamiętywane osobno; usunięty numer koszulki ze składu i szczegółów. Odczyt list na podstawie rozpoznanego wydania FM27 wymaga potwierdzenia w działającej grze; nierozpoznane wpisy i niedostępność są sygnalizowane. Testy pominięto na życzenie użytkownika; wydanie po kompilacji Windows.",
+  "notes": "Nowy panel wyszukiwania transferów z kategoriami i klikalnym boiskiem: wybór kilku pozycji, dopasowanie dowolnej lub wszystkich zaznaczonych. Filtry pozostają domyślnie zwinięte. Poprawiony odczyt bieżącego kursu EUR/GBP bezpośrednio z tabeli formatowania gry, niezależny od wyszukiwania rekordów walut i ich nazw; usuwa przyczynę ukrywania wartości i pensji przy braku rozpoznanych rekordów. Kwoty nadal w euro, pensje roczne. Odczyt kwot wymaga potwierdzenia w uruchomionej grze. Testy pominięto na życzenie użytkownika; wydanie po kompilacji Windows.",
   "ui_revision": 1
 }
