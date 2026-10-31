@@ -6,6 +6,8 @@ import {
   MODULE_DOCK_CLOSE_EVENT,
   MODULE_DOCK_OPEN_EVENT,
   openAppModule,
+  isAppModuleAvailable,
+  type ManagedAppMode,
   type AppModuleId,
 } from "../../utils/moduleDock";
 
@@ -50,13 +52,13 @@ const moduleButtons: Array<{
   { id: "camps", label: "Zgrupowania", title: "Zgrupowania i kampanie" },
 ];
 
-export function AppSideDock() {
+export function AppSideDock({mode = "unknown"}: {mode?: ManagedAppMode}) {
   const [activeModule, setActiveModule] = useState<AppModuleId | null>(null);
 
   useEffect(() => {
     function handleOpenModule(event: Event) {
       const module = getModuleFromEvent(event);
-      if (module) setActiveModule(module);
+      if (module && isAppModuleAvailable(module, mode)) setActiveModule(module);
     }
 
     function handleCloseModule(event: Event) {
@@ -72,7 +74,7 @@ export function AppSideDock() {
       window.removeEventListener(MODULE_DOCK_OPEN_EVENT, handleOpenModule);
       window.removeEventListener(MODULE_DOCK_CLOSE_EVENT, handleCloseModule);
     };
-  }, []);
+  }, [mode]);
 
   function handleModuleClick(module: AppModuleId) {
     if (activeModule === module) {
@@ -98,7 +100,7 @@ export function AppSideDock() {
         Zawodnicy
       </button>
 
-      {moduleButtons.map((button) => {
+      {moduleButtons.filter(button => isAppModuleAvailable(button.id, mode)).map((button) => {
         const isActive = activeModule === button.id;
         return (
           <button

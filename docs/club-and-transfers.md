@@ -264,3 +264,15 @@ so finance filters can work even with no matching result rows. Unknown DLLs and
 uninitialized tables still refuse to invent EUR amounts. Annual pay remains
 52 times native weekly pay. Live-game confirmation of the fix is still needed.
 Compilation only; no tests run at the user's request.
+
+## Context-specific app modules (0.7.0-beta.11)
+
+Navigation follows the native managedMode, never a manual mode switch or saved
+preference. Clubs have Transfers, Compare and Squad. National teams have
+Compare, Squad, Core and Camps. Unknown/disconnected contexts expose neither
+Transfers nor national-only modules. Mode-specific drawers are conditionally
+mounted, so hidden modules cannot be opened through module events or trigger
+background reads. Changing the managed mode/team identity or disconnecting
+closes open drawers and returns navigation to Players. A header label identifies
+the detected club/national mode. Existing shared comparison/squad tools remain.
+Compilation/package only; tests skipped at the user's request.

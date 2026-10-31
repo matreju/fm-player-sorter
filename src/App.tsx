@@ -1,4 +1,5 @@
 import { getGameEuroRate } from "./utils/playerFinance";
+import { closeAppModule } from "./utils/moduleDock";
 import {
   lazy,
   startTransition,
@@ -312,6 +313,11 @@ export default function App() {
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<TableRow[]>([]);
   const [snapshot, setSnapshot] = useState<StoredFmSnapshot | null>(null);
+  const managedMode = snapshot?.managedMode ?? "unknown";
+  useEffect(() => {
+    // Close drawers when the managed context changes or FM disconnects.
+    closeAppModule();
+  }, [managedMode, snapshot?.managedTeamUid, snapshot?.managedClubUid, snapshot?.managedNationUid]);
   const [error, setError] = useState("");
   const [supplementaryDataLoading, setSupplementaryDataLoading] =
     useState(false);
@@ -899,10 +905,11 @@ export default function App() {
           </span>
           <span>
             <strong id="app-title">FM Player Sorter</strong>
+            {managedMode !== "unknown" && <small>{managedMode === "club" ? "Tryb klubowy" : "Tryb reprezentacji"}</small>}
           </span>
         </div>
 
-        <AppSideDock />
+        <AppSideDock mode={managedMode} />
 
         <div className="desktop-header__actions">
           <AppUpdater />
@@ -1107,7 +1114,7 @@ export default function App() {
       </footer>
 
       <Suspense fallback={null}>
-        <TransferSearch euroPerGbp={getGameEuroRate(rows[0])} sessionId={snapshot?.sessionId ?? 0} clubName={snapshot?.managedMode === "club" ? snapshot.managedTeam : null} />
+        {managedMode === "club" && <TransferSearch euroPerGbp={getGameEuroRate(rows[0])} sessionId={snapshot?.sessionId ?? 0} clubName={snapshot?.managedTeam ?? null} />}
         {rows.length > 1 && (
           <PlayerCompare
             rows={rows}
@@ -1146,12 +1153,12 @@ export default function App() {
             onClose={() => setSelectedPlayerKey(null)}
           />
         )}
-        <CampsDrawer
+        {managedMode === "nation" && <CampsDrawer
           rows={rows}
           getPlayerMark={getPlayerMark}
           getPlayerSelectionPosition={getPlayerSelectionPosition}
-        />
-        <NationalCoreDrawer rows={rows} />
+        />}
+        {managedMode === "nation" && <NationalCoreDrawer rows={rows} />}
       </Suspense>
 
       <SquadDepthDrawer
