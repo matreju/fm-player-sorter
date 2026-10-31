@@ -137,7 +137,7 @@ export function FmConnectionPanel({
       if (!nextResult.success) {
         setLoadError(nextResult.message);
         setIsOpen(true);
-        if(quick)onFmUnavailable();
+        if(quick && nextResult.stage==="refresh-reconnect-required")onFmUnavailable();
         return;
       }
 

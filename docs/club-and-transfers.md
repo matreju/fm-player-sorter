@@ -189,3 +189,21 @@ Tests remain skipped as requested. Compile/package only.
 A weaker additional position is displayed but does not move a natural left
 back into the centre-back group or a central midfielder into DM. Display
 coverage and sort eligibility are intentionally distinct.
+
+## Refresh session validation fix (0.7.0-beta.8)
+
+Quick refresh no longer requires the global manager vector to contain exactly
+one entry after a successful alternate attach. The actual unique manager Person
+identified by reciprocal contract/team links is cached, excluding account
+placeholders. Refresh checks that manager's UID and current contract against
+the cached process creation time and team/club UIDs. The verified DLL hash is
+retained directly, independently of whether a player-vector signature exists.
+
+Reallocation/mutation of the native player vector triggers a bounded native
+index rebind using previously verified Person classes rather than a heap scan
+or unconditional disconnect. A scoped UID failure permits one rebind retry.
+Unrelated stale sampled world players no longer invalidate the club session.
+Transient read failures preserve session caches and the UI roster for retry;
+only proven identity changes/missing session/unknown class require reconnect.
+Errors carry specific FM-Rxx diagnostics rather than one catch-all message.
+No tests are run; live-game confirmation remains necessary.

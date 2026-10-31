@@ -1005,12 +1005,15 @@ mod windows_reader {
     struct RefreshSession {
         database: FmNativeDatabase,
         created: u64,
-        registry_slot: usize,
+        manager_person: Option<(usize,u32)>,
+        native_plugin_hash: Option<String>,
+        player_classes: Vec<(usize,usize)>,
         team: usize,
         nation: usize,
         club: Option<usize>,
         plugin_base: usize,
         registry_signature: Option<(usize,usize)>,
+        registry_pointer_hash: Option<u64>,
         currency_sources: Vec<(u32,usize,usize,bool)>,
     }
     static REFRESH_CACHE: OnceLock<Mutex<Option<RefreshSession>>> = OnceLock::new();
@@ -1026,6 +1029,11 @@ mod windows_reader {
         let end=process.read_ptr(base+0x57037D8)?;
         let length=end.checked_sub(begin)?;
         (begin>=0x10_000 && length%8==0 && (500..=2_000_000).contains(&(length/8))).then_some((begin,end))
+    }
+    fn registry_pointer_hash(bytes:&[u8]) -> u64 {
+        use std::hash::{Hash,Hasher};
+        let mut hasher=std::collections::hash_map::DefaultHasher::new();
+        bytes.hash(&mut hasher);hasher.finish()
     }
     fn read_native_player_registry(process: &RemoteProcess, resolver: &MetaResolver) -> Option<HashMap<u32,PlayerCandidate>> {
         let (begin,end)=native_player_vector(process,resolver.game_plugin.base)?;
@@ -1083,46 +1091,109 @@ mod windows_reader {
         Some(PlayerCandidate {ca,pa,nation_address:read_u64(&person,PERSON_NATION)? as usize,
             birth_raw:read_u32(&person,PERSON_DOB)?,female:person[PERSON_GENDER]&GENDER_FEMALE_BIT!=0,..cached.clone()})
     }
-    fn refresh_identity_valid(process: &RemoteProcess, cache: &RefreshSession) -> bool {
-        if process.creation_time()!=Some(cache.created) || record_uid(process,cache.team)!=cache.database.managed_team_uid { return false; }
-        let Some(registry)=process.read_ptr(cache.registry_slot).filter(|p|*p>=0x10_000) else { return false; };
-        let Some(begin)=process.read_ptr(registry+HUMAN_MANAGER_REGISTRY_VECTOR) else { return false; };
-        if process.read_ptr(registry+HUMAN_MANAGER_REGISTRY_VECTOR+8)!=begin.checked_add(8) { return false; }
-        let Some(human)=process.read_ptr(begin) else { return false; };
-        if contract_team(process,human+process.layout.human_manager_person)!=Some(cache.team) { return false; }
-        if let Some(club)=cache.club {
-            if process.read_ptr(cache.team+TEAM_CLUB)!=Some(club) || record_uid(process,club)!=cache.database.managed_club_uid { return false; }
+    fn refresh_error(code: &str, text: &str) -> String { format!("{text} [FM-{code}]") }
+    fn refresh_manager_person(process: &RemoteProcess, registry_slot: Option<usize>, managers: &HashSet<HumanManagerCandidate>, team: usize) -> Option<(usize,u32)> {
+        let mut people=managers.iter().map(|manager|manager.person_address).collect::<HashSet<_>>();
+        if let Some(slot)=registry_slot {
+            if let Some(registry)=process.read_ptr(slot).filter(|p|*p>=0x10_000) {
+                if let Ok(humans)=pointer_vector(process,registry+HUMAN_MANAGER_REGISTRY_VECTOR,128) {
+                    people.extend(humans.into_iter().map(|human|human+process.layout.human_manager_person));
+                }
+            }
         }
-        cache.registry_signature.map(|expected| native_player_vector(process,cache.plugin_base)==Some(expected)).unwrap_or(true)
+        if let Some(human)=process.read_ptr(team+TEAM_MANAGER).filter(|p|*p>=0x10_000) {
+            people.insert(human+process.layout.human_manager_person);
+        }
+        let valid=people.into_iter().filter_map(|person| {
+            let uid=record_uid(process,person)?;
+            let (year,_)=process.read_u32(person+PERSON_DOB).and_then(decode_fm_date)?;
+            if year<=1900 { return None; }
+            let contract=process.read_ptr(person+PERSON_CONTRACT)?;
+            if process.read_ptr(contract+8)!=Some(person) || process.read_ptr(contract+CONTRACT_TEAM)!=Some(team) { return None; }
+            Some((person,uid))
+        }).collect::<Vec<_>>();
+        (valid.len()==1).then(||valid[0])
+    }
+    fn refresh_identity_check(process: &RemoteProcess, cache: &RefreshSession) -> Result<(),String> {
+        let read=|text:&str|refresh_error("R10",text);
+        let created=process.creation_time().ok_or_else(||read("Gra nie udostępniła jeszcze informacji o procesie. Ponów odświeżanie."))?;
+        if created!=cache.created { return Err(refresh_error("R02","Proces FM został uruchomiony ponownie. Użyj „Połącz ponownie”.")); }
+        let actual_team=record_uid(process,cache.team).ok_or_else(||read("Nie można teraz odczytać prowadzonego zespołu. Poczekaj na zakończenie operacji w FM i ponów odświeżanie."))?;
+        if Some(actual_team)!=cache.database.managed_team_uid { return Err(refresh_error("R05","Zmienił się obiekt prowadzonego zespołu. Użyj „Połącz ponownie”.")); }
+        let (person,uid)=cache.manager_person.ok_or_else(||refresh_error("R01","Brak potwierdzonej tożsamości menedżera dla szybkiego odczytu. Użyj „Połącz ponownie”."))?;
+        let actual_uid=record_uid(process,person).ok_or_else(||read("Menedżer jest chwilowo niedostępny w pamięci gry. Ponów odświeżanie."))?;
+        if actual_uid!=uid { return Err(refresh_error("R03","Zmienił się menedżer lub zapis gry. Użyj „Połącz ponownie”.")); }
+        let team=contract_team(process,person).ok_or_else(||read("Kontrakt menedżera jest chwilowo niedostępny. Ponów odświeżanie po zakończeniu przetwarzania w FM."))?;
+        if team!=cache.team { return Err(refresh_error("R04","Menedżer prowadzi teraz inny zespół. Użyj „Połącz ponownie”.")); }
+        if let Some(club)=cache.club {
+            let club_uid=record_uid(process,club).ok_or_else(||read("Nie można teraz odczytać klubu. Ponów odświeżanie."))?;
+            let owner=process.read_ptr(cache.team+TEAM_CLUB).filter(|owner|*owner>=0x10_000).ok_or_else(||read("Powiązanie zespołu z klubem jest chwilowo niedostępne. Ponów odświeżanie."))?;
+            if Some(club_uid)!=cache.database.managed_club_uid || owner!=club {
+                return Err(refresh_error("R05","Zmieniło się powiązanie zespołu z klubem. Użyj „Połącz ponownie”."));
+            }
+        }
+        Ok(())
+    }
+    fn rebind_native_player_index(process:&RemoteProcess,cache:&RefreshSession) -> Result<Arc<Vec<PlayerCandidate>>,String> {
+        let error=||refresh_error("R07","Nie można jeszcze odczytać bieżącego rejestru zawodników. Poczekaj na zakończenie przetwarzania w FM i ponów odświeżanie.");
+        let (begin,end)=native_player_vector(process,cache.plugin_base).ok_or_else(error)?;
+        let pointers=process.read_exact(begin,end-begin).ok_or_else(error)?;
+        let mut players=Vec::with_capacity(pointers.len()/8);let mut uids=HashSet::new();
+        let length=cache.player_classes.iter().map(|(offset,_)|offset+0xB0).max().unwrap_or(0x340).max(0x270);
+        for pointer in pointers.chunks_exact(8) {
+            let address=u64::from_le_bytes(pointer.try_into().map_err(|_|error())?) as usize;
+            let bytes=process.read_exact(address,length).ok_or_else(error)?;
+            let offset=cache.player_classes.iter().find(|(offset,vtable)|read_u64(&bytes,*offset)==Some(*vtable as u64))
+                .map(|(offset,_)|*offset).ok_or_else(||refresh_error("R08","Rejestr zawiera nowy typ zawodnika. Użyj „Połącz ponownie”, aby potwierdzić układ danych."))?;
+            let person=bytes.get(offset..offset+0xB0).ok_or_else(error)?;
+            let uid=read_u32(person,OBJ_UID).filter(|uid|*uid!=0 && *uid!=u32::MAX).ok_or_else(error)?;
+            let ca=read_u16(&bytes,PLAYER_CA).ok_or_else(error)?;let pa=read_u16(&bytes,PLAYER_PA).ok_or_else(error)?;
+            if !(1..=200).contains(&ca)||!(1..=200).contains(&pa) { continue; }
+            if !uids.insert(uid) { return Err(error()); }
+            players.push(PlayerCandidate {uid,person_address:address+offset,player_address:address,
+                nation_address:read_u64(person,PERSON_NATION).ok_or_else(error)? as usize,
+                birth_raw:read_u32(person,PERSON_DOB).ok_or_else(error)?,female:person[PERSON_GENDER]&GENDER_FEMALE_BIT!=0,ca,pa});
+        }
+        if players.len()<500 || native_player_vector(process,cache.plugin_base)!=Some((begin,end)) { return Err(error()); }
+        Ok(Arc::new(players))
     }
     pub(super) fn refresh_database() -> Result<FmNativeDatabase,String> {
         let _read_guard=SCOUTING_QUERY_LOCK.lock().map_err(|_|"Czytnik FM jest zajęty.".to_string())?;
-        let result=refresh_database_inner();
-        if result.is_err() {
+        let mut result=refresh_database_inner(false);
+        if result.as_ref().err().is_some_and(|error|error.contains("[FM-R07]")) {
+            result=refresh_database_inner(true);
+        }
+        if result.as_ref().err().is_some_and(|error|["R01","R02","R03","R04","R05","R08"].iter().any(|code|error.contains(&format!("[FM-{code}]")))) {
             if let Ok(mut slot)=refresh_slot().lock() { *slot=None; }
             if let Ok(mut slot)=scouting_slot().lock() { *slot=None; }
             if let Ok(mut slot)=monitor_slot().lock() { *slot=None; }
         }
         result
     }
-    fn refresh_database_inner() -> Result<FmNativeDatabase,String> {
+    fn refresh_database_inner(force_reindex:bool) -> Result<FmNativeDatabase,String> {
         let started=Instant::now();
-        let expired="Połączenie zmieniło się lub zapis został przeładowany. Użyj opcji „Połącz ponownie”, aby odbudować adresy bazy.";
-        let cache=refresh_slot().lock().map_err(|_|expired.to_string())?.as_ref().cloned().ok_or(expired)?;
-        let source=scouting_slot().lock().map_err(|_|expired.to_string())?.as_ref().cloned().ok_or(expired)?;
-        if source.session_id!=cache.database.session_id { return Err(expired.into()); }
+        let missing=||refresh_error("R01","Brak aktywnej sesji szybkiego odświeżania. Użyj „Połącz ponownie”.");
+        let cache=refresh_slot().lock().map_err(|_|refresh_error("R10","Czytnik FM jest zajęty. Ponów odświeżanie."))?.as_ref().cloned().ok_or_else(missing)?;
+        let mut source=scouting_slot().lock().map_err(|_|refresh_error("R10","Indeks FM jest zajęty. Ponów odświeżanie."))?.as_ref().cloned().ok_or_else(missing)?;
+        if source.session_id!=cache.database.session_id { return Err(refresh_error("R10","Inny odczyt zaktualizował sesję. Ponów odświeżanie.")); }
         let detected=detect_football_manager();
-        if !detected.detected || detected.pid!=Some(source.pid) { return Err(expired.into()); }
+        if !detected.detected || detected.pid!=Some(source.pid) { return Err(refresh_error("R02","Nie jest uruchomiony proces FM użyty do połączenia. Użyj „Połącz ponownie”.")); }
         let mut process=RemoteProcess::open(source.pid)?;
         process.layout=source.layout;
-        process.native_plugin_hash=(source.layout.edition==27 && cache.registry_signature.is_some()).then(||FM27_PLUGIN_SHA256.to_string());
-        if !refresh_identity_valid(&process,&cache) { return Err(expired.into()); }
-        // Touch the cached world index only in memory. In club mode remote reads
-        // are limited to squad vectors and current/former members, not the world.
-        let candidates=source.candidates.iter().cloned().map(|p|(p.uid,p)).collect::<HashMap<_,_>>();
-        for sample in source.candidates.iter().step_by((source.candidates.len()/16).max(1)) {
-            if process.read_u32(sample.person_address+OBJ_UID)!=Some(sample.uid) { return Err(expired.into()); }
+        process.native_plugin_hash=cache.native_plugin_hash.clone();
+        refresh_identity_check(&process,&cache)?;
+        let current_registry=if verified_fm27(&process) {
+            Some(native_player_vector(&process,cache.plugin_base).ok_or_else(||refresh_error("R10","Rejestr zawodników jest aktualizowany przez grę. Ponów odświeżanie."))?)
+        } else { None };
+        let mut reindex=force_reindex || current_registry!=cache.registry_signature;
+        let mut current_pointer_hash=None;
+        if let Some((begin,end))=current_registry {
+            let pointers=process.read_exact(begin,end-begin).ok_or_else(||refresh_error("R10","Lista zawodników jest chwilowo niedostępna. Ponów odświeżanie."))?;
+            current_pointer_hash=Some(registry_pointer_hash(&pointers));
+            reindex |= current_pointer_hash!=cache.registry_pointer_hash;
         }
+        if reindex && verified_fm27(&process) { source.candidates=rebind_native_player_index(&process,&cache)?; }
+        let candidates=source.candidates.iter().cloned().map(|p|(p.uid,p)).collect::<HashMap<_,_>>();
         let (groups,own_clubs)=if let Some(club)=cache.club {
             collect_managed_club_players(&process,club,cache.team,&candidates,Some(&source.own_uids))?
         } else { (HashMap::new(),HashSet::new()) };
@@ -1140,25 +1211,30 @@ mod windows_reader {
         let mut rows=Vec::new();let mut read_cache=PlayerReadCache::default();
         for cached in source.candidates.iter() {
             if cache.club.is_some() && !groups.contains_key(&cached.uid) { continue; }
-            let candidate=live_candidate(&process,cached).ok_or(expired)?;
+            let candidate=live_candidate(&process,cached).ok_or_else(||refresh_error("R07","Adres zawodnika zmienił się podczas odczytu. Ponów odświeżanie."))?;
             if cache.club.is_none() && candidate.nation_address!=cache.nation { continue; }
             let gender=cache.database.managed_squad_gender.as_deref();
             if gender==Some("Kobiety") && !candidate.female || gender==Some("Mężczyźni") && candidate.female { continue; }
-            let player=read_player(&process,candidate.uid,candidate.person_address,candidate.player_address,candidate.ca,candidate.pa,&mut read_cache).ok_or(expired)?;
+            let player=read_player(&process,candidate.uid,candidate.person_address,candidate.player_address,candidate.ca,candidate.pa,&mut read_cache).ok_or_else(||refresh_error("R10","Dane zawodnika są aktualizowane przez FM. Ponów odświeżanie."))?;
             let mut row=player_to_row(player,world_date,derived_year);
             attach_euro_rate(&mut row,euro_per_gbp);
             if cache.club.is_some() { row.insert("Grupa klubowa".into(),groups.get(&candidate.uid).cloned().unwrap_or_default()); }
             rows.push(row);
         }
-        if rows.is_empty() || !refresh_identity_valid(&process,&cache) { return Err(expired.into()); }
+        if rows.is_empty() { return Err(refresh_error("R10","Skład jest chwilowo niedostępny. Ponów odświeżanie po zakończeniu operacji w grze.")); }
+        refresh_identity_check(&process,&cache)?;
+        if current_registry.is_some() && native_player_vector(&process,cache.plugin_base)!=current_registry {
+            return Err(refresh_error("R07","Rejestr zawodników zmienił się w trakcie odczytu. Ponów odświeżanie."));
+        }
         rows.sort_by(|a,b|a.get("Nazwisko").cmp(&b.get("Nazwisko")).then_with(||a.get("UID").cmp(&b.get("UID"))));
         let session_id=SCOUTING_SEQUENCE.fetch_add(1,Ordering::Relaxed)+1;
         let mut database=cache.database.clone();
         database.rows=rows;database.player_count=database.rows.len();database.session_id=session_id;
         database.game_date=world_date.and_then(format_fm_date);
+        database.database_player_count=source.candidates.len();
         database.scan_region_count=0;database.scanned_bytes=0;database.scan_duration_ms=started.elapsed().as_millis();
         let own_uids=if cache.club.is_some() { database.rows.iter().filter_map(|row|row.get("UID")?.parse::<u32>().ok()).collect() } else { HashSet::new() };
-        *scouting_slot().lock().map_err(|_|expired.to_string())?=Some(ScoutingSession {
+        *scouting_slot().lock().map_err(|_|refresh_error("R10","Czytnik jest zajęty. Ponów odświeżanie."))?=Some(ScoutingSession {
             session_id,own_uids:Arc::new(own_uids),own_clubs:Arc::new(own_clubs),derived_year,game_date:world_date,euro_per_gbp,index:None,..source
         });
         if let (Some(raw),Some(date))=(world_date,database.game_date.clone()) {
@@ -1166,7 +1242,7 @@ mod windows_reader {
                 monitor.imported_raw=raw;monitor.imported_date=date;monitor.observed_current_raw=None;
             }}
         }
-        *refresh_slot().lock().map_err(|_|expired.to_string())?=Some(RefreshSession {database:database.clone(),..cache});
+        *refresh_slot().lock().map_err(|_|refresh_error("R10","Czytnik jest zajęty. Ponów odświeżanie."))?=Some(RefreshSession {database:database.clone(),registry_signature:current_registry,registry_pointer_hash:current_pointer_hash,..cache});
         Ok(database)
     }
 
@@ -1647,16 +1723,23 @@ mod windows_reader {
             rows,
             class_offsets,
         };
-        if let (Some(registry_slot),Some(created))=(active_human_team.registry_slot,process.creation_time()) {
+        if let Some(created)=process.creation_time() {
+            let manager_person=refresh_manager_person(&process,active_human_team.registry_slot,&human_managers,managed.team_address);
+            let mut class_people=HashMap::new();
+            for candidate in player_candidates.values() {
+                class_people.entry(candidate.person_address-candidate.player_address).or_insert(candidate.person_address);
+            }
+            let player_classes=class_people.into_iter().filter_map(|(offset,person)|process.read_ptr(person).map(|vtable|(offset,vtable))).collect();
             let registry_signature = native_player_vector(&process,resolver.game_plugin.base);
+            let registry_pointer_hash=registry_signature.and_then(|(begin,end)|process.read_exact(begin,end-begin)).map(|bytes|registry_pointer_hash(&bytes));
             let sources = currency_rates.euro.keys().chain(currency_rates.pound.keys()).filter_map(|uid| {
                 let (record,table)=*currency_rates.sources.get(uid)?;
                 Some((*uid,record,table,currency_rates.euro.contains_key(uid)))
             }).collect();
             *refresh_slot().lock().map_err(|_| "Nie można zapamiętać połączenia FM.".to_string())?=Some(RefreshSession {
-                database:database.clone(), created, registry_slot, team:managed.team_address,
+                database:database.clone(), created, manager_person, native_plugin_hash:process.native_plugin_hash.clone(), player_classes, team:managed.team_address,
                 nation:managed_nation_address, club:managed_club, plugin_base:resolver.game_plugin.base,
-                registry_signature, currency_sources:sources,
+                registry_signature, registry_pointer_hash, currency_sources:sources,
             });
         }
         Ok(database)

@@ -152,7 +152,11 @@ fn database_result(result: Result<crate::fm_reader::FmNativeDatabase,String>, pi
             class_offsets: database.class_offsets,
         },
         Err(message) => FmDatabaseLoadResult::failed(
-            if message.contains("Profil pamięci") {
+            if refresh && ["R01","R02","R03","R04","R05","R08"].iter().any(|code|message.contains(&format!("[FM-{code}]"))) {
+                "refresh-reconnect-required"
+            } else if refresh {
+                "refresh-read-failed"
+            } else if message.contains("Profil pamięci") {
                 "unsupported-memory-profile"
             } else {
                 "database-read-failed"
