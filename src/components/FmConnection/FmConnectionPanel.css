@@ -220,3 +220,5 @@
     padding-inline: 13px;
   }
 }
+
+.fm-connect__options{border:1px solid #30394c;border-radius:8px;background:#171e2c;color:#c5cfe3;font-size:20px;line-height:1;padding:7px 10px;cursor:pointer}.fm-connect__options:disabled{opacity:.5;cursor:wait}

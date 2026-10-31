@@ -290,6 +290,11 @@ export async function loadFootballManagerDatabase(): Promise<FmDatabaseLoadResul
   return invoke<FmDatabaseLoadResult>("load_fm_database");
 }
 
+export async function refreshFootballManagerDatabase(): Promise<FmDatabaseLoadResult> {
+  if (!isTauri()) throw new Error("Szybkie odświeżanie wymaga aplikacji Windows.");
+  return invoke<FmDatabaseLoadResult>("refresh_fm_database");
+}
+
 export async function loadFootballManagerSeasonStats(
   uids: number[],
 ): Promise<FmSeasonStatsResult> {
@@ -330,7 +335,7 @@ export async function getFootballManagerDateStatus(): Promise<FmDateStatus> {
 }
 
 export interface FmScoutingQuery {
-  sessionId: number; text: string; position: string; status: string; sort: string;
+  sessionId: number; text: string; position: string; status: string; sort: string; sortDirection?: string;
   minCa?: number; maxCa?: number; minPa?: number; maxPa?: number; minAge?: number; maxAge?: number;
   minFee?: number; maxFee?: number; minWage?: number; maxWage?: number;
   clubScope: string; contractAfter: string;

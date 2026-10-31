@@ -11,7 +11,7 @@ pub struct FmClassOffsetStat {
     pub count: u64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FmNativeDatabase {
     pub pid: u32,
@@ -64,7 +64,7 @@ mod windows_reader {
     use memchr::{memchr_iter, memmem};
 
     use windows::Win32::{
-        Foundation::{CloseHandle, HANDLE},
+        Foundation::{CloseHandle, HANDLE, FILETIME},
         System::{
             Diagnostics::Debug::ReadProcessMemory,
             Memory::{
@@ -72,7 +72,7 @@ mod windows_reader {
                 PAGE_EXECUTE_READWRITE, PAGE_EXECUTE_WRITECOPY, PAGE_GUARD, PAGE_NOACCESS,
                 PAGE_READWRITE, PAGE_WRITECOPY,
             },
-            Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
+            Threading::{GetProcessTimes, OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
         },
     };
 
@@ -294,6 +294,7 @@ mod windows_reader {
         own_clubs: Arc<HashSet<usize>>,
         derived_year: i32,
         game_date: Option<u32>,
+        euro_per_gbp: Option<f64>,
         index: Option<Arc<Vec<ScoutingEntry>>>,
     }
     static SCOUTING_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -331,7 +332,7 @@ mod windows_reader {
             .and_then(|age| u16::try_from(age).ok()).filter(|age| *age<=90);
         let flags=contract.as_deref().and_then(|bytes| bytes.get(CONTRACT_STATUS)).copied().unwrap_or(0);
         Some(ScoutingEntry {
-            candidate_index, search:fm_scout::search_text(&format!("{name} {club} {nationality}")), positions,ca,pa,age,
+            candidate_index, name:fm_scout::search_text(&name), club:fm_scout::search_text(club), nationality:fm_scout::search_text(&nationality), search:fm_scout::search_text(&format!("{name} {club} {nationality}")), positions,ca,pa,age,
             value:read_u32(&player,PLAYER_VALUE).and_then(money_value),
             asking_price:read_u32(&player,PLAYER_ASKING_PRICE).and_then(money),
             wage:contract.as_deref().and_then(|bytes| read_u32(bytes,CONTRACT_WAGE)).and_then(money),
@@ -340,6 +341,72 @@ mod windows_reader {
             free:contract_address==0 && current_team.is_none(),
             own_player:source.own_uids.contains(&candidate.uid) || owner.as_ref().and_then(|team| team.owner_club_address).map(|club| source.own_clubs.contains(&club)).unwrap_or(false),
         })
+    }
+
+    // Uploaded FM27 Steam DLL: Cexr property getter at RVA 0x2F66397 reads
+    // float32 +0x38; its setter at 0x2F665CC writes it and updates the game's
+    // own float64 formatting table. No rate is embedded in the application.
+    const FM27_CURRENCY_VTABLE: usize = 0x4ED4398;
+    const FM27_PLUGIN_SHA256: &str = "bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f";
+
+    #[derive(Default)]
+    struct GameCurrencyRates {
+        euro: HashMap<u32, f64>,
+        pound: HashMap<u32, f64>,
+        conflicting: bool,
+        sources: HashMap<u32,(usize,usize)>,
+    }
+    impl GameCurrencyRates {
+        fn collect(&mut self, process: &RemoteProcess, resolver: &MetaResolver, address: usize) {
+            let Some(bytes) = process.read_exact(address, 0x40) else { return; };
+            let Some(uid) = read_u32(&bytes, OBJ_UID).filter(|id| *id != 0 && *id != u32::MAX) else { return; };
+            let Some(raw) = read_u32(&bytes, 0x38) else { return; };
+            let record_rate = f32::from_bits(raw) as f64;
+            if !record_rate.is_finite() || !(0.000001..1_000_000.0).contains(&record_rate) { return; }
+            let labels = [0x18, 0x20, 0x28, 0x30].into_iter()
+                .filter_map(|offset| process.indirect_string(address + offset))
+                .map(|label| label.trim().to_lowercase()).collect::<Vec<_>>();
+            let euro = labels.iter().any(|label| matches!(label.as_str(), "eur" | "euro" | "euros"));
+            let pound = labels.iter().any(|label| matches!(label.as_str(), "gbp" | "pound sterling" | "pounds sterling" | "british pound" | "uk pound" | "uk pound sterling" | "english pound"));
+            if euro == pound { return; }
+            // Resolve this record's UID through FM's own CURRENCY enum mapping,
+            // then read the active float64 rate from its formatting table. This
+            // also respects loaded-save/custom rates rather than the DLL defaults.
+            let Some(rate_address) = game_currency_table_address(resolver, uid) else { return; };
+            let Some(rate) = read_currency_rate(process, resolver.game_plugin.base, rate_address) else { return; };
+            self.sources.insert(uid,(address,rate_address));
+            let entries = if euro { &mut self.euro } else { &mut self.pound };
+            if entries.insert(uid, rate).is_some_and(|old| old != rate) { self.conflicting = true; }
+        }
+        fn euro_per_gbp(&self) -> Option<f64> {
+            // Require one unambiguous EUR and GBP record from this process.
+            if self.conflicting || self.euro.len() != 1 || self.pound.len() != 1 { return None; }
+            let rate = self.euro.values().next()? / self.pound.values().next()?;
+            (rate.is_finite() && (0.01..100.0).contains(&rate)).then_some(rate)
+        }
+    }
+    fn game_currency_table_address(resolver: &MetaResolver, uid: u32) -> Option<usize> {
+        let base = resolver.game_plugin.base;
+        let index = if (2..=96).contains(&uid) {
+            // Switch in CURRENCY_RECORD UID -> currency-enum helper, RVA 0x2F664C0.
+            let table = base + 0x4ED47B4;
+            let relative = resolver.game_plugin.read_i32(table + (uid as usize - 2) * 4)?;
+            let target = table.checked_add_signed(relative as isize)?;
+            let offset = target.checked_sub(base)?;
+            let code = resolver.game_plugin.bytes.get(offset..offset + 3)?;
+            if code[0] == 0xB0 && code[2] == 0xC3 { code[1] as usize }
+            else if code == [0x31, 0xC0, 0xC3] { 0 }
+            else { return None; }
+        } else if uid == 0x43B7AF2 { 0x35 } else { return None; };
+        (index < 66).then_some(base + 0x5707180 + index * 0x20)
+    }
+    fn read_currency_rate(process: &RemoteProcess, base: usize, rate_address: usize) -> Option<f64> {
+        if process.read_u8(base + 0x570717C)? != 1 { return None; }
+        let rate = f64::from_bits(process.read_u64(rate_address)?);
+        (rate.is_finite() && (0.000001..1_000_000.0).contains(&rate)).then_some(rate)
+    }
+    fn attach_euro_rate(row: &mut FmTableRow, rate: Option<f64>) {
+        row.insert("_fmEurPerGbp".into(), rate.map(|rate|rate.to_string()).unwrap_or_default());
     }
 
     pub(super) fn search_players(query: ScoutingQuery) -> Result<ScoutingResult,String> {
@@ -378,6 +445,7 @@ mod windows_reader {
             }
             if let Some(player)=read_player(&process,candidate.uid,candidate.person_address,candidate.player_address,entry.ca,entry.pa,&mut cache) {
                 let mut row=player_to_row(player,source.game_date,source.derived_year);
+                attach_euro_rate(&mut row, source.euro_per_gbp);
                 if source.game_date.is_none() { row.insert("Wiek".into(),String::new()); }
                 row.insert("Status transferu".into(),if entry.free {"Wolny zawodnik"} else if entry.listed {"Lista transferowa"} else {"Kontrakt klubowy"}.into());
                 row.insert("Na liście transferowej".into(),yes_no(entry.listed));
@@ -419,6 +487,12 @@ mod windows_reader {
                 layout: fm_version::FM26,
                 native_plugin_hash: None,
             })
+        }
+
+        fn creation_time(&self) -> Option<u64> {
+            let (mut created,mut exited,mut kernel,mut user)=(FILETIME::default(),FILETIME::default(),FILETIME::default(),FILETIME::default());
+            unsafe { GetProcessTimes(self.handle.0,&mut created,&mut exited,&mut kernel,&mut user).ok()?; }
+            Some((u64::from(created.dwHighDateTime)<<32)|u64::from(created.dwLowDateTime))
         }
 
         fn read(&self, address: usize, length: usize) -> Option<Vec<u8>> {
@@ -641,19 +715,12 @@ mod windows_reader {
         resolver: &MetaResolver,
     ) -> ActiveHumanTeamResolution {
         let signature = &HUMAN_MANAGER_REGISTRY_SIGNATURE;
-        let matches = resolver
-            .game_plugin
-            .bytes
-            .windows(signature.len())
-            .enumerate()
-            .filter(|(_, window)| {
-                signature
-                    .iter()
-                    .zip(window.iter())
-                    .all(|(expected, actual)| expected.map(|byte| byte == *actual).unwrap_or(true))
-            })
-            .map(|(offset, _)| resolver.game_plugin.base.saturating_add(offset))
-            .collect::<Vec<_>>();
+        let anchor = [0x48,0x8B,0x41,0x18,0x48,0x8B,0x49,0x20,0x48,0x29,0xC1,0x48,0xC1,0xF9,0x03,0x48,0x39,0xCE];
+        let matches = memmem::find_iter(&resolver.game_plugin.bytes, &anchor)
+            .filter_map(|offset| offset.checked_sub(7))
+            .filter(|offset| resolver.game_plugin.bytes.get(*offset..*offset+signature.len())
+                .map(|window| signature.iter().zip(window).all(|(expected,actual)| expected.map(|byte| byte==*actual).unwrap_or(true))).unwrap_or(false))
+            .map(|offset| resolver.game_plugin.base + offset).collect::<Vec<_>>();
         let mut resolution = ActiveHumanTeamResolution {
             signature_match_count: matches.len(),
             ..ActiveHumanTeamResolution::default()
@@ -673,6 +740,7 @@ mod windows_reader {
         } else {
             instruction_end.checked_sub(displacement.unsigned_abs() as usize)
         };
+        resolution.registry_slot = registry_slot;
         let Some(registry) = registry_slot
             .and_then(|slot| process.read_ptr(slot))
             .filter(|value| *value >= 0x10_000)
@@ -850,6 +918,7 @@ mod windows_reader {
 
     #[derive(Clone, Copy, Debug, Default)]
     struct ActiveHumanTeamResolution {
+        registry_slot: Option<usize>,
         team_address: Option<usize>,
         signature_match_count: usize,
         active_manager_count: usize,
@@ -930,7 +999,178 @@ mod windows_reader {
         DATE_MONITOR.get_or_init(|| Mutex::new(None))
     }
 
+    #[derive(Clone)]
+    struct RefreshSession {
+        database: FmNativeDatabase,
+        created: u64,
+        registry_slot: usize,
+        team: usize,
+        nation: usize,
+        club: Option<usize>,
+        plugin_base: usize,
+        registry_signature: Option<(usize,usize)>,
+        currency_sources: Vec<(u32,usize,usize,bool)>,
+    }
+    static REFRESH_CACHE: OnceLock<Mutex<Option<RefreshSession>>> = OnceLock::new();
+    fn refresh_slot() -> &'static Mutex<Option<RefreshSession>> {
+        REFRESH_CACHE.get_or_init(||Mutex::new(None))
+    }
+    fn verified_fm27(process: &RemoteProcess) -> bool {
+        process.layout.edition==27 && process.native_plugin_hash.as_deref()==Some(FM27_PLUGIN_SHA256)
+    }
+    fn native_player_vector(process: &RemoteProcess, base: usize) -> Option<(usize,usize)> {
+        if !verified_fm27(process) { return None; }
+        let begin=process.read_ptr(base+0x57037D0)?;
+        let end=process.read_ptr(base+0x57037D8)?;
+        let length=end.checked_sub(begin)?;
+        (begin>=0x10_000 && length%8==0 && (500..=2_000_000).contains(&(length/8))).then_some((begin,end))
+    }
+    fn read_native_player_registry(process: &RemoteProcess, resolver: &MetaResolver) -> Option<HashMap<u32,PlayerCandidate>> {
+        let (begin,end)=native_player_vector(process,resolver.game_plugin.base)?;
+        let pointers=process.read_exact(begin,end-begin)?;
+        let mut players=HashMap::with_capacity(pointers.len()/8);
+        for pointer in pointers.chunks_exact(8) {
+            let address=u64::from_le_bytes(pointer.try_into().ok()?) as usize;
+            if address<0x10_000 { return None; }
+            let mut bytes=process.read_exact(address,0x340)?;
+            let offset=if read_u64(&bytes,PLAYER_OFFSET as usize)
+                .and_then(|vtable|resolver.dynamic_offset(vtable as usize))==Some(PLAYER_OFFSET) { PLAYER_OFFSET as usize }
+            else {
+                bytes=process.read_exact(address,0x440)?;
+                if read_u64(&bytes,PLAYER_STAFF_OFFSET as usize)
+                    .and_then(|vtable|resolver.dynamic_offset(vtable as usize))!=Some(PLAYER_STAFF_OFFSET) { return None; }
+                PLAYER_STAFF_OFFSET as usize
+            };
+            let person=bytes.get(offset..offset+0xB0)?;
+            let uid=read_u32(person,OBJ_UID)?;
+            let ca=read_u16(&bytes,PLAYER_CA)?; let pa=read_u16(&bytes,PLAYER_PA)?;
+            if uid==0 || uid==u32::MAX || !(1..=200).contains(&ca) || !(1..=200).contains(&pa) { continue; }
+            let candidate=PlayerCandidate {uid,person_address:address+offset,player_address:address,
+                nation_address:read_u64(person,PERSON_NATION)? as usize,birth_raw:read_u32(person,PERSON_DOB)?,
+                female:person[PERSON_GENDER]&GENDER_FEMALE_BIT!=0,ca,pa};
+            if players.insert(uid,candidate).is_some() { return None; }
+        }
+        // A moving registry or a different save must never publish a partial index.
+        if native_player_vector(process,resolver.game_plugin.base)!=Some((begin,end)) || players.len()<500 { return None; }
+        Some(players)
+    }
+    fn collect_registry_currencies(process: &RemoteProcess, resolver: &MetaResolver, rates: &mut GameCurrencyRates) {
+        if !verified_fm27(process) { return; }
+        let vtable=resolver.game_plugin.base+FM27_CURRENCY_VTABLE;
+        if resolver.native_type_name(vtable).as_deref()!=Some(".?AVCURRENCY_RECORD@db@@") { return; }
+        // Inspect only the bounded entity-array cluster; verify every currency
+        // object's RTTI/vtable before treating a vector as currency records.
+        for offset in (0x5703000..0x5705000).step_by(8) {
+            let slot=resolver.game_plugin.base+offset;
+            let Some(begin)=process.read_ptr(slot).filter(|p|*p>=0x10_000) else { continue; };
+            let Some(end)=process.read_ptr(slot+8) else { continue; };
+            let Some(length)=end.checked_sub(begin).filter(|n|*n>=16 && *n<=256*8 && *n%8==0) else { continue; };
+            let Some(pointers)=process.read_exact(begin,length) else { continue; };
+            let entries=pointers.chunks_exact(8).filter_map(|chunk|chunk.try_into().ok().map(u64::from_le_bytes)).map(|v|v as usize).collect::<Vec<_>>();
+            if entries.len()<2 || entries.iter().any(|p|process.read_ptr(*p)!=Some(vtable)) { continue; }
+            for entry in entries { rates.collect(process,resolver,entry); }
+        }
+    }
+    fn live_candidate(process: &RemoteProcess, cached: &PlayerCandidate) -> Option<PlayerCandidate> {
+        let person=process.read_exact(cached.person_address,0xB0)?;
+        if read_u32(&person,OBJ_UID)!=Some(cached.uid) { return None; }
+        let ability=process.read_exact(cached.player_address+PLAYER_CA,4)?;
+        let ca=read_u16(&ability,0)?;
+        let pa=read_u16(&ability,2)?;
+        if !(1..=200).contains(&ca) || !(1..=200).contains(&pa) { return None; }
+        Some(PlayerCandidate {ca,pa,nation_address:read_u64(&person,PERSON_NATION)? as usize,
+            birth_raw:read_u32(&person,PERSON_DOB)?,female:person[PERSON_GENDER]&GENDER_FEMALE_BIT!=0,..cached.clone()})
+    }
+    fn refresh_identity_valid(process: &RemoteProcess, cache: &RefreshSession) -> bool {
+        if process.creation_time()!=Some(cache.created) || record_uid(process,cache.team)!=cache.database.managed_team_uid { return false; }
+        let Some(registry)=process.read_ptr(cache.registry_slot).filter(|p|*p>=0x10_000) else { return false; };
+        let Some(begin)=process.read_ptr(registry+HUMAN_MANAGER_REGISTRY_VECTOR) else { return false; };
+        if process.read_ptr(registry+HUMAN_MANAGER_REGISTRY_VECTOR+8)!=begin.checked_add(8) { return false; }
+        let Some(human)=process.read_ptr(begin) else { return false; };
+        if contract_team(process,human+process.layout.human_manager_person)!=Some(cache.team) { return false; }
+        if let Some(club)=cache.club {
+            if process.read_ptr(cache.team+TEAM_CLUB)!=Some(club) || record_uid(process,club)!=cache.database.managed_club_uid { return false; }
+        }
+        cache.registry_signature.map(|expected| native_player_vector(process,cache.plugin_base)==Some(expected)).unwrap_or(true)
+    }
+    pub(super) fn refresh_database() -> Result<FmNativeDatabase,String> {
+        let _read_guard=SCOUTING_QUERY_LOCK.lock().map_err(|_|"Czytnik FM jest zajęty.".to_string())?;
+        let result=refresh_database_inner();
+        if result.is_err() {
+            if let Ok(mut slot)=refresh_slot().lock() { *slot=None; }
+            if let Ok(mut slot)=scouting_slot().lock() { *slot=None; }
+            if let Ok(mut slot)=monitor_slot().lock() { *slot=None; }
+        }
+        result
+    }
+    fn refresh_database_inner() -> Result<FmNativeDatabase,String> {
+        let started=Instant::now();
+        let expired="Połączenie zmieniło się lub zapis został przeładowany. Użyj opcji „Połącz ponownie”, aby odbudować adresy bazy.";
+        let cache=refresh_slot().lock().map_err(|_|expired.to_string())?.as_ref().cloned().ok_or(expired)?;
+        let source=scouting_slot().lock().map_err(|_|expired.to_string())?.as_ref().cloned().ok_or(expired)?;
+        if source.session_id!=cache.database.session_id { return Err(expired.into()); }
+        let detected=detect_football_manager();
+        if !detected.detected || detected.pid!=Some(source.pid) { return Err(expired.into()); }
+        let mut process=RemoteProcess::open(source.pid)?;
+        process.layout=source.layout;
+        process.native_plugin_hash=(source.layout.edition==27 && cache.registry_signature.is_some()).then(||FM27_PLUGIN_SHA256.to_string());
+        if !refresh_identity_valid(&process,&cache) { return Err(expired.into()); }
+        // Touch the cached world index only in memory. In club mode remote reads
+        // are limited to squad vectors and current/former members, not the world.
+        let candidates=source.candidates.iter().cloned().map(|p|(p.uid,p)).collect::<HashMap<_,_>>();
+        for sample in source.candidates.iter().step_by((source.candidates.len()/16).max(1)) {
+            if process.read_u32(sample.person_address+OBJ_UID)!=Some(sample.uid) { return Err(expired.into()); }
+        }
+        let (groups,own_clubs)=if let Some(club)=cache.club {
+            collect_managed_club_players(&process,club,cache.team,&candidates,Some(&source.own_uids))?
+        } else { (HashMap::new(),HashSet::new()) };
+        let world_date=if verified_fm27(&process) {
+            process.read_u32(cache.plugin_base+0x56AD378).filter(|raw|decode_fm_date(*raw).is_some()).map(normalize_fm_date)
+        } else { None };
+        let derived_year=world_date.and_then(decode_fm_date).map(|(year,_)|year).unwrap_or(source.derived_year);
+        let mut eur=None; let mut gbp=None;
+        for &(uid,record,table,is_euro) in &cache.currency_sources {
+            if record_uid(&process,record)!=Some(uid) { continue; }
+            let rate=read_currency_rate(&process,cache.plugin_base,table);
+            if is_euro { eur=rate; } else { gbp=rate; }
+        }
+        let euro_per_gbp=eur.zip(gbp).map(|(eur,gbp)|eur/gbp).filter(|rate|rate.is_finite() && (0.01..100.0).contains(rate));
+        let mut rows=Vec::new();let mut read_cache=PlayerReadCache::default();
+        for cached in source.candidates.iter() {
+            if cache.club.is_some() && !groups.contains_key(&cached.uid) { continue; }
+            let candidate=live_candidate(&process,cached).ok_or(expired)?;
+            if cache.club.is_none() && candidate.nation_address!=cache.nation { continue; }
+            let gender=cache.database.managed_squad_gender.as_deref();
+            if gender==Some("Kobiety") && !candidate.female || gender==Some("Mężczyźni") && candidate.female { continue; }
+            let player=read_player(&process,candidate.uid,candidate.person_address,candidate.player_address,candidate.ca,candidate.pa,&mut read_cache).ok_or(expired)?;
+            let mut row=player_to_row(player,world_date,derived_year);
+            attach_euro_rate(&mut row,euro_per_gbp);
+            if cache.club.is_some() { row.insert("Grupa klubowa".into(),groups.get(&candidate.uid).cloned().unwrap_or_default()); }
+            rows.push(row);
+        }
+        if rows.is_empty() || !refresh_identity_valid(&process,&cache) { return Err(expired.into()); }
+        rows.sort_by(|a,b|a.get("Nazwisko").cmp(&b.get("Nazwisko")).then_with(||a.get("UID").cmp(&b.get("UID"))));
+        let session_id=SCOUTING_SEQUENCE.fetch_add(1,Ordering::Relaxed)+1;
+        let mut database=cache.database.clone();
+        database.rows=rows;database.player_count=database.rows.len();database.session_id=session_id;
+        database.game_date=world_date.and_then(format_fm_date);
+        database.scan_region_count=0;database.scanned_bytes=0;database.scan_duration_ms=started.elapsed().as_millis();
+        let own_uids=if cache.club.is_some() { database.rows.iter().filter_map(|row|row.get("UID")?.parse::<u32>().ok()).collect() } else { HashSet::new() };
+        *scouting_slot().lock().map_err(|_|expired.to_string())?=Some(ScoutingSession {
+            session_id,own_uids:Arc::new(own_uids),own_clubs:Arc::new(own_clubs),derived_year,game_date:world_date,euro_per_gbp,index:None,..source
+        });
+        if let (Some(raw),Some(date))=(world_date,database.game_date.clone()) {
+            if let Ok(mut slot)=monitor_slot().lock() { if let Some(monitor)=slot.as_mut() {
+                monitor.imported_raw=raw;monitor.imported_date=date;monitor.observed_current_raw=None;
+            }}
+        }
+        *refresh_slot().lock().map_err(|_|expired.to_string())?=Some(RefreshSession {database:database.clone(),..cache});
+        Ok(database)
+    }
+
     pub(super) fn read_database() -> Result<FmNativeDatabase, String> {
+        let _read_guard = SCOUTING_QUERY_LOCK.lock().map_err(|_| "Czytnik FM jest zajęty.".to_string())?;
+        if let Ok(mut slot)=refresh_slot().lock() { *slot=None; }
         if let Ok(mut guard) = monitor_slot().lock() {
             *guard = None;
         }
@@ -984,7 +1224,11 @@ mod windows_reader {
             game_assembly,
         };
 
-        let mut player_candidates = HashMap::<u32, PlayerCandidate>::new();
+        let early_active = resolve_active_human_team(&process, &resolver);
+        let early_club = resolve_active_contract_club(&process, &resolver, &early_active);
+        let native_players = if early_club.is_some() { read_native_player_registry(&process,&resolver) } else { None };
+        let direct_registry = native_players.is_some();
+        let mut player_candidates = native_players.unwrap_or_default();
         let mut club_candidates = HashSet::<usize>::new();
         let mut human_managers = HashSet::<HumanManagerCandidate>::new();
         let mut uid_objects = Vec::<UidObjectCandidate>::new();
@@ -992,8 +1236,14 @@ mod windows_reader {
         let mut human_context_candidates = HashSet::<HumanContextCandidate>::new();
         let mut class_offset_histogram = HashMap::<i32, u64>::new();
         let mut scanned_bytes = 0u64;
+        let currency_vtable = (process.layout.edition == 27
+            && process.native_plugin_hash.as_deref() == Some(FM27_PLUGIN_SHA256))
+            .then_some(resolver.game_plugin.base + FM27_CURRENCY_VTABLE)
+            .filter(|vtable| resolver.native_type_name(*vtable).as_deref() == Some(".?AVCURRENCY_RECORD@db@@"));
+        let mut currency_rates = GameCurrencyRates::default();
+        if direct_registry { collect_registry_currencies(&process,&resolver,&mut currency_rates); }
 
-        for &(region_base, region_size) in &regions {
+        for &(region_base, region_size) in regions.iter().filter(|_| !direct_registry) {
             let mut region_offset = 0usize;
             while region_offset < region_size {
                 let request_size = (region_size - region_offset).min(CHUNK_SIZE);
@@ -1032,6 +1282,9 @@ mod windows_reader {
                         continue;
                     }
 
+                    if currency_vtable == Some(vtable) {
+                        currency_rates.collect(&process, &resolver, chunk_address + local);
+                    }
                     collect_human_binding_candidate(
                         &buffer,
                         local,
@@ -1132,6 +1385,7 @@ mod windows_reader {
             }
         }
 
+        let euro_per_gbp = currency_rates.euro_per_gbp();
         let class_offsets = top_class_offsets(&class_offset_histogram);
         if player_candidates.len() < 500 {
             let diagnostic = class_offsets
@@ -1157,7 +1411,7 @@ mod windows_reader {
                 *counts.entry(candidate.nation_address).or_default() += 1;
                 counts
             });
-        let mut active_human_team = resolve_active_human_team(&process, &resolver);
+        let mut active_human_team = early_active;
         if active_human_team.team_address.is_none() {
             if let Some(team) = resolve_fm27_manager_class(&process, &resolver, &human_managers) {
                 active_human_team.team_address = Some(team);
@@ -1165,7 +1419,7 @@ mod windows_reader {
                 active_human_team.active_team_count = 1;
             }
         }
-        let direct_club = resolve_active_contract_club(&process, &resolver, &active_human_team);
+        let direct_club = early_club.or_else(|| resolve_active_contract_club(&process, &resolver, &active_human_team));
         let (human_binding, mut binding_diagnostics) = if direct_club.is_some() {
             // A proven native club job needs no heap-wide UI binding lookup.
             (None, HumanBindingDiagnostics::default())
@@ -1246,7 +1500,7 @@ mod windows_reader {
             resolve_managed_squad_gender(&process, managed.team_address, &player_candidates);
 
         let (club_groups, own_clubs) = if let Some(club) = managed_club {
-            collect_managed_club_players(&process, club, managed.team_address, &player_candidates)?
+            collect_managed_club_players(&process, club, managed.team_address, &player_candidates, None)?
         } else { (HashMap::new(), HashSet::new()) };
         let selected_candidates = player_candidates
             .values()
@@ -1341,6 +1595,7 @@ mod windows_reader {
             .map(|player| {
                 let uid = player.uid;
                 let mut row = player_to_row(player, current_raw, derived_year);
+                attach_euro_rate(&mut row, euro_per_gbp);
                 if club_mode {
                     row.insert("Klub".into(), managed_team.clone().unwrap_or_default());
                     row.insert("Grupa klubowa".into(), club_groups.get(&uid).cloned().unwrap_or_default());
@@ -1358,9 +1613,9 @@ mod windows_reader {
         let own_uids = if club_mode { rows.iter().filter_map(|row| row.get("UID")?.parse::<u32>().ok()).collect() } else { HashSet::new() };
         *scouting_slot().lock().map_err(|_| "Nie można przygotować wyszukiwarki transferowej.".to_string())? = Some(ScoutingSession {
             session_id, pid, layout: process.layout, candidates: Arc::new(player_candidates.values().cloned().collect()),
-            own_uids: Arc::new(own_uids), own_clubs: Arc::new(own_clubs), derived_year, game_date: world_date, index: None,
+            own_uids: Arc::new(own_uids), own_clubs: Arc::new(own_clubs), derived_year, game_date: world_date, euro_per_gbp, index: None,
         });
-        Ok(FmNativeDatabase {
+        let database = FmNativeDatabase {
             pid,
             managed_mode: if club_mode { "club".into() } else { "nation".into() },
             managed_club_uid,
@@ -1380,7 +1635,7 @@ mod windows_reader {
                 }
             }),
             national_filter_applied: !club_mode,
-            scan_region_count: regions.len(),
+            scan_region_count: if direct_registry { 0 } else { regions.len() },
             scanned_bytes,
             scan_duration_ms: started.elapsed().as_millis(),
             game_date,
@@ -1389,7 +1644,20 @@ mod windows_reader {
             headers,
             rows,
             class_offsets,
-        })
+        };
+        if let (Some(registry_slot),Some(created))=(active_human_team.registry_slot,process.creation_time()) {
+            let registry_signature = native_player_vector(&process,resolver.game_plugin.base);
+            let sources = currency_rates.euro.keys().chain(currency_rates.pound.keys()).filter_map(|uid| {
+                let (record,table)=*currency_rates.sources.get(uid)?;
+                Some((*uid,record,table,currency_rates.euro.contains_key(uid)))
+            }).collect();
+            *refresh_slot().lock().map_err(|_| "Nie można zapamiętać połączenia FM.".to_string())?=Some(RefreshSession {
+                database:database.clone(), created, registry_slot, team:managed.team_address,
+                nation:managed_nation_address, club:managed_club, plugin_base:resolver.game_plugin.base,
+                registry_signature, currency_sources:sources,
+            });
+        }
+        Ok(database)
     }
 
     fn validate_trial_native_layout(
@@ -3005,7 +3273,7 @@ mod windows_reader {
     }
 
     fn collect_managed_club_players(
-        process: &RemoteProcess, root: usize, first_team: usize, candidates: &HashMap<u32,PlayerCandidate>,
+        process: &RemoteProcess, root: usize, first_team: usize, candidates: &HashMap<u32,PlayerCandidate>, prior_own: Option<&HashSet<u32>>,
     ) -> Result<(HashMap<u32,String>,HashSet<usize>),String> {
         let mut own_clubs = HashSet::new();
         let linked_reserves = process.layout.edition==27 && process.native_plugin_hash.as_deref()
@@ -3040,6 +3308,7 @@ mod windows_reader {
         }
         let mut result=HashMap::new();
         for candidate in candidates.values() {
+            if prior_own.is_some_and(|prior| !roster.contains_key(&candidate.uid) && !prior.contains(&candidate.uid)) { continue; }
             let current = process.read_ptr(candidate.player_address+0x130).filter(|team| *team>=0x10_000);
             let on_roster=roster.contains_key(&candidate.uid);
             if fm_club::belongs_to_club(current,&teams,on_roster) {
@@ -4487,3 +4756,8 @@ pub(crate) fn search_fm_players(query: crate::fm_scout::ScoutingQuery) -> Result
 pub(crate) fn search_fm_players(_query: crate::fm_scout::ScoutingQuery) -> Result<crate::fm_scout::ScoutingResult,String> {
     Err("Wyszukiwarka jest dostępna w aplikacji Windows po połączeniu z grą.".into())
 }
+
+#[cfg(target_os = "windows")]
+pub(crate) fn refresh_fm_native_database() -> Result<FmNativeDatabase,String> { windows_reader::refresh_database() }
+#[cfg(not(target_os = "windows"))]
+pub(crate) fn refresh_fm_native_database() -> Result<FmNativeDatabase,String> { Err("Szybkie odświeżanie jest dostępne w aplikacji Windows.".into()) }

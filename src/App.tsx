@@ -1,3 +1,4 @@
+import { getGameEuroRate } from "./utils/playerFinance";
 import {
   lazy,
   startTransition,
@@ -726,6 +727,23 @@ export default function App() {
   const handleFmDatabaseLoaded = useCallback(
     (result: FmDatabaseLoadResult) => {
       const loadSequence = ++databaseLoadSequence.current;
+      if(result.stage==="database-refreshed") {
+        // Live fields replace native data; retain already loaded save statistics
+        // and graphics without opening/parsing a large save again.
+        const merge=(current:TableRow[])=>{
+          const existing=new Map(current.map(row=>[row.UID,row]));
+          return result.rows.map(row=>({...existing.get(row.UID),...row}));
+        };
+        startTransition(()=>{
+          setRows(current=>merge(current));
+          setHeaders(current=>Array.from(new Set([...current,...result.headers])));
+        });
+        setSnapshot(current=>createFmSnapshot({...result,
+          rows:merge(current?.rows??[]),headers:Array.from(new Set([...(current?.headers??[]),...result.headers])),
+          teamLogoDataUrl:current?.teamLogoDataUrl??null}));
+        setSupplementaryDataLoading(false);
+        return;
+      }
 
       // Metadane reprezentacji (w tym motyw) pokazujemy od razu. Statystyki
       // z dużego pliku zapisu i herb z graphics są doładowywane niezależnie.
@@ -747,7 +765,7 @@ export default function App() {
         setAnalysisPositionGroup("any");
         setAnalysisPhase("any");
         setAnalysisRoleId("any");
-        setMinRoleScore("60");
+        setMinRoleScore("0");
         setOnlyRoleMatches(false);
         setShowOnlySelectedPlayers(false);
         setHideMarkedPlayers(false);
@@ -1089,7 +1107,7 @@ export default function App() {
       </footer>
 
       <Suspense fallback={null}>
-        <TransferSearch sessionId={snapshot?.sessionId ?? 0} clubName={snapshot?.managedMode === "club" ? snapshot.managedTeam : null} />
+        <TransferSearch euroPerGbp={getGameEuroRate(rows[0])} sessionId={snapshot?.sessionId ?? 0} clubName={snapshot?.managedMode === "club" ? snapshot.managedTeam : null} />
         {rows.length > 1 && (
           <PlayerCompare
             rows={rows}

@@ -29,6 +29,7 @@ pub fn run() {
             fm_modules::inspect_fm_modules,
             fm_profile::inspect_fm_reader_profile,
             fm_database::load_fm_database,
+            fm_database::refresh_fm_database,
             fm_database::search_fm_players,
             fm_database::load_fm_season_stats,
             fm_database::load_fm_team_logo,

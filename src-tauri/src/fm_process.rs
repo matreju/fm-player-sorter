@@ -1,5 +1,5 @@
 use serde::Serialize;
-use sysinfo::System;
+use sysinfo::{System, ProcessesToUpdate};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,7 +32,8 @@ fn is_known_fm_process_name(name: &str) -> bool {
 
 #[tauri::command]
 pub fn detect_football_manager() -> FmProcessStatus {
-    let system = System::new_all();
+    let mut system = System::new();
+    system.refresh_processes(ProcessesToUpdate::All, true);
 
     /*
      * Pierwsze przejście:

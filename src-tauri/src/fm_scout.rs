@@ -22,6 +22,7 @@ pub struct ScoutingQuery {
     pub club_scope: String,
     pub status: String,
     pub sort: String,
+    pub sort_direction: String,
     pub page: usize,
     pub page_size: usize,
 }
@@ -41,6 +42,9 @@ pub struct ScoutingResult {
 pub(crate) struct ScoutingEntry {
     pub candidate_index: usize,
     pub search: String,
+    pub name: String,
+    pub club: String,
+    pub nationality: String,
     pub positions: Vec<String>,
     pub ca: u16,
     pub pa: u16,
@@ -79,8 +83,11 @@ pub(crate) fn matching_entries(entries: &[ScoutingEntry], query: &ScoutingQuery)
     if !["", "all", "listed", "free"].contains(&query.status.as_str()) {
         return Err("Nieznany filtr dostępności.".into());
     }
-    if !["", "ca", "pa", "fee", "wage", "expiry"].contains(&query.sort.as_str()) {
+    if !["", "name", "position", "nation", "club", "age", "ca", "pa", "value", "fee", "wage", "expiry"].contains(&query.sort.as_str()) {
         return Err("Nieznany sposób sortowania.".into());
+    }
+    if !["", "asc", "desc"].contains(&query.sort_direction.as_str()) {
+        return Err("Nieznany kierunek sortowania.".into());
     }
     for date in [&query.contract_after,&query.contract_before] {
         if date.is_empty() { continue; }
@@ -111,16 +118,49 @@ pub(crate) fn matching_entries(entries: &[ScoutingEntry], query: &ScoutingQuery)
         && (query.contract_before.is_empty() || entry.expiry.as_ref().map(|date| date <= &query.contract_before).unwrap_or(false))
         && match query.status.as_str() { "listed" => entry.listed, "free" => entry.free, _ => true }
     }).map(|(i,_)| i).collect::<Vec<_>>();
+    fn position_rank(entry: &ScoutingEntry) -> u8 {
+        entry.positions.iter().filter_map(|position| Some(match position.as_str() {
+            "BR" => 0, "O (P)" | "WO (P)" => 1, "O (Ś)" | "LIB" => 2,
+            "O (L)" | "WO (L)" => 3, "DP" => 4, "P (Ś)" => 5,
+            "OP (Ś)" => 6, "P (P)" | "OP (P)" => 7,
+            "P (L)" | "OP (L)" => 8, "N (Ś)" => 9, _ => return None,
+        })).min().unwrap_or(255)
+    }
+    let descending = match query.sort_direction.as_str() {
+        "desc" => true, "asc" => false, _ => matches!(query.sort.as_str(), "" | "ca" | "pa"),
+    };
     found.sort_by(|&a,&b| {
         let left = &entries[a]; let right = &entries[b];
-        let order = match query.sort.as_str() {
-            "pa" => right.pa.cmp(&left.pa),
-            "fee" => (if left.free {0} else {left.asking_price.or(left.value).unwrap_or(u32::MAX)}).cmp(&(if right.free {0} else {right.asking_price.or(right.value).unwrap_or(u32::MAX)})),
-            "wage" => left.wage.unwrap_or(u32::MAX).cmp(&right.wage.unwrap_or(u32::MAX)),
-            "expiry" => left.expiry.as_deref().unwrap_or("9999").cmp(right.expiry.as_deref().unwrap_or("9999")),
-            _ => right.ca.cmp(&left.ca),
+        let optional = |left: Option<u64>, right: Option<u64>| -> std::cmp::Ordering {
+            match (left, right) {
+                (Some(a), Some(b)) => if descending { b.cmp(&a) } else { a.cmp(&b) },
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (Some(_), None) => std::cmp::Ordering::Less,
+                _ => std::cmp::Ordering::Equal,
+            }
         };
-        order.then_with(|| left.candidate_index.cmp(&right.candidate_index))
+        let order = match query.sort.as_str() {
+            "age" => optional(left.age.map(u64::from), right.age.map(u64::from)),
+            "value" => optional(left.value.map(u64::from), right.value.map(u64::from)),
+            "fee" => optional((if left.free {Some(0)} else {left.asking_price.or(left.value)}).map(u64::from), (if right.free {Some(0)} else {right.asking_price.or(right.value)}).map(u64::from)),
+            "wage" => optional(left.wage.map(u64::from), right.wage.map(u64::from)),
+            "position" => optional((position_rank(left) != 255).then(|| u64::from(position_rank(left))), (position_rank(right) != 255).then(|| u64::from(position_rank(right)))),
+            "expiry" => match (&left.expiry, &right.expiry) {
+                (Some(a),Some(b)) => if descending { b.cmp(a) } else { a.cmp(b) },
+                (None,Some(_)) => std::cmp::Ordering::Greater,
+                (Some(_),None) => std::cmp::Ordering::Less,
+                _ => std::cmp::Ordering::Equal,
+            },
+            field => {
+                let order = match field {
+                    "name" => left.name.cmp(&right.name), "club" => left.club.cmp(&right.club),
+                    "nation" => left.nationality.cmp(&right.nationality), "pa" => left.pa.cmp(&right.pa),
+                    _ => left.ca.cmp(&right.ca),
+                };
+                if descending { order.reverse() } else { order }
+            },
+        };
+        order.then_with(|| left.name.cmp(&right.name)).then_with(|| left.candidate_index.cmp(&right.candidate_index))
     });
     Ok(found)
 }
@@ -129,7 +169,7 @@ pub(crate) fn matching_entries(entries: &[ScoutingEntry], query: &ScoutingQuery)
 mod tests {
     use super::*;
     fn entry(index: usize, fee: Option<u32>, own: bool) -> ScoutingEntry {
-        ScoutingEntry { candidate_index:index, search:search_text("Łukasz Żółć Warszawa"), positions:vec!["DP".into()],
+        ScoutingEntry { candidate_index:index, name:"lukasz zolc".into(), club:"warszawa".into(), nationality:"polska".into(), search:search_text("Łukasz Żółć Warszawa"), positions:vec!["DP".into()],
             ca:120, pa:170, age:Some(20), value:fee, asking_price:None, wage:Some(1000), expiry:Some("2027-06-30".into()),
             listed:true, free:false, own_player:own }
     }

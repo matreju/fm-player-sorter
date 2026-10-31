@@ -117,3 +117,56 @@ market filters convert EUR/annual bounds back with inclusive integer rounding.
 The currency table is not yet read from the game, so the shared 1 GBP = 1.20 EUR
 rate is explicitly described as approximate in the market and detail tooltips.
 Tests were deliberately skipped for this update at the user's request.
+
+## Game currency, collapsed market filters and sorting (0.7.0-beta.6)
+
+Removed the estimated EUR rate. The verified uploaded FM27 Steam DLL identifies
+CURRENCY_RECORD by primary RTTI/vtable RVA 0x4ED4398. Its Cnam property reads
+a direct name at +0x18; its Cexr getter (RVA 0x2F66397) reads float32 +0x38.
+The Cexr setter writes the same value into the game's active formatting table
+as float64 (0x2F665E9 -> helper 0x1418C50).
+
+The reader identifies the EUR and GBP records by exact currency code/name,
+resolves their UIDs with the game's mapping at 0x2F664C0 (switch table
+0x4ED47B4), and reads their actual live formatter rates at 0x5707180 + enum*0x20.
+The table must be initialized (byte at 0x570717C == 1). The live EUR/GBP ratio
+is attached as private row metadata and retained with the scouting session.
+Conflicting records/rates and unknown builds yield no conversion, never an
+estimate. Financial inputs are disabled when a confirmed game rate is absent.
+Reconnect/refresh the database after updating to capture the rate. Read-only
+implementation; no currency setting or process memory is modified.
+
+Transfer filters start collapsed. Every sortable column toggles ascending/
+descending order across the full filtered native index before pagination.
+Position sorting matches the club's football order, with unknown positions
+and missing numeric/date values kept last in both directions.
+Tests remain deliberately skipped at the user's request. Compilation only.
+Live-process currency reads require confirmation in the running game.
+
+## Fast native loading and one-click live refresh (0.7.0-beta.6)
+
+The verified FM27 club path first reads the actual player entity vector at
+0x57037D0/0x57037D8. Each secondary Person vtable, UID, CA/PA and vector bounds
+is validated; moving/unknown registries fall back to the existing scan. The
+manager registry signature now uses a fixed-tail memmem search rather than a
+byte-by-byte wildcard scan of the whole plugin. Currency discovery examines
+only the bounded native entity-array cluster and verifies currency RTTI.
+
+After attach the toolbar refresh button reuses an in-memory process session.
+It validates Windows process creation time, human-manager contract, team/club
+UIDs, player registry bounds and sampled player UIDs before and after reading.
+In club mode live squad vectors plus prior members determine membership, so
+transfers in/out and all linked reserve/youth squads are refreshed without
+remote reads for every player in the world. Native attributes, abilities,
+condition, finances, contract dates and the live EUR rate are re-read.
+The world index's pointers are retained; its derived transfer-search index is
+invalidated, then rebuilt lazily so market finances are not presented as fresh
+when they are stale. Any changed save/process invalidates the caches and asks
+for explicit reconnect; no hidden full scan is started by quick refresh.
+
+Fast refresh preserves UI filters/selection, graphics and already loaded save
+statistics. It does not reparse a large save file or reload logos; season
+statistics remain those of the last full load. Live refresh and search/full
+attach share a lock to prevent session races. Process detection no longer
+refreshes unrelated system-wide statistics. No timing improvement is claimed
+without a live game; compilation is the only validation run as requested.

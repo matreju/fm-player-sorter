@@ -3,7 +3,7 @@ use serde::Serialize;
 use crate::{
     fm_graphics::find_managed_team_logo,
     fm_reader::{
-        read_fm_date_status, read_fm_native_database, FmClassOffsetStat, FmDateStatus, FmTableRow,
+        read_fm_date_status, read_fm_native_database, refresh_fm_native_database, FmClassOffsetStat, FmDateStatus, FmTableRow,
     },
     fm_stats::{load_latest_save_stats, SeasonStatsRows, SEASON_STATS_HEADERS},
     fm_process::detect_football_manager,
@@ -108,10 +108,14 @@ fn load_fm_database_blocking() -> FmDatabaseLoadResult {
         );
     }
 
-    match read_fm_native_database() {
+    database_result(read_fm_native_database(),process.pid,false)
+}
+
+fn database_result(result: Result<crate::fm_reader::FmNativeDatabase,String>, pid:Option<u32>, refresh:bool) -> FmDatabaseLoadResult {
+    match result {
         Ok(database) => FmDatabaseLoadResult {
             success: true,
-            stage: "database-loaded".to_string(),
+            stage: if refresh {"database-refreshed"} else {"database-loaded"}.to_string(),
             message: format!(
                 "{}Wczytano {} zawodników — {}.",
                 if database.profile.contains("experimental") { "FM27 — profil testowy. " } else { "" },
@@ -154,9 +158,15 @@ fn load_fm_database_blocking() -> FmDatabaseLoadResult {
                 "database-read-failed"
             },
             message,
-            process.pid,
+            pid,
         ),
     }
+}
+
+#[tauri::command]
+pub async fn refresh_fm_database() -> Result<FmDatabaseLoadResult,String> {
+    tauri::async_runtime::spawn_blocking(|| database_result(refresh_fm_native_database(),None,true))
+        .await.map_err(|error| format!("Odświeżanie FM zakończyło się błędem: {error}"))
 }
 
 #[tauri::command(rename_all = "camelCase")]

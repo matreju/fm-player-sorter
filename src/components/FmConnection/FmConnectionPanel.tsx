@@ -4,6 +4,7 @@ import {
   getFootballManagerDateStatus,
   isDesktopApp,
   loadFootballManagerDatabase,
+  refreshFootballManagerDatabase,
   probeFootballManagerMemory,
   type FmDatabaseLoadResult,
   type FmDateStatus,
@@ -43,10 +44,11 @@ export function FmConnectionPanel({
   const [isLoading, setIsLoading] = useState(false);
   const [probeError, setProbeError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const loadingRef=useRef(false);
   const processDetectedRef = useRef<boolean | null>(null);
 
   const refreshStatus = useCallback(async () => {
-    if (!desktopMode) return;
+    if (!desktopMode || loadingRef.current) return;
 
     try {
       const nextStatus = await probeFootballManagerMemory();
@@ -92,6 +94,7 @@ export function FmConnectionPanel({
 
     let cancelled = false;
     const refreshDate = async () => {
+      if(loadingRef.current)return;
       try {
         const nextStatus = await getFootballManagerDateStatus();
         if (!cancelled) setDateStatus(nextStatus);
@@ -121,16 +124,20 @@ export function FmConnectionPanel({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [isOpen]);
 
-  const connect = async () => {
+  const connect = async (quick=false) => {
+    if(loadingRef.current)return;
+    loadingRef.current=true;
     try {
       setIsLoading(true);
       setLoadError(null);
       setDateStatus(null);
-      const nextResult = await loadFootballManagerDatabase();
+      const nextResult = await (quick?refreshFootballManagerDatabase():loadFootballManagerDatabase());
       setResult({ ...nextResult, rows: [], headers: [] });
 
       if (!nextResult.success) {
         setLoadError(nextResult.message);
+        setIsOpen(true);
+        if(quick)onFmUnavailable();
         return;
       }
 
@@ -143,6 +150,7 @@ export function FmConnectionPanel({
           : String(unknownError),
       );
     } finally {
+      loadingRef.current=false;
       setIsLoading(false);
     }
   };
@@ -152,7 +160,7 @@ export function FmConnectionPanel({
   const dataStale = dateStatus?.dataStale ?? false;
   const displayedDate = dateStatus?.currentDate ?? result?.gameDate ?? null;
   const connectionLabel = isLoading
-    ? "Wczytywanie…"
+    ? "Odświeżanie…"
     : processConnected
       ? loadedPlayerCount > 0
         ? "Odśwież dane"
@@ -185,7 +193,8 @@ export function FmConnectionPanel({
         type="button"
         className="fm-connect__trigger"
         data-connected={processConnected || undefined}
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={() => loadedPlayerCount>0 ? void connect(true) : setIsOpen(current=>!current)}
+        title={loadedPlayerCount>0?"Szybki odczyt aktualnych danych bez skanowania całej pamięci":"Połącz z grą"}
         disabled={isLoading}
         aria-expanded={isOpen}
       >
@@ -194,6 +203,7 @@ export function FmConnectionPanel({
         <span aria-hidden="true">»</span>
       </button>
 
+      {loadedPlayerCount>0 && <button type="button" className="fm-connect__options" disabled={isLoading} onClick={()=>setIsOpen(open=>!open)} aria-label="Opcje połączenia" title="Opcje połączenia i pełny odczyt">⋯</button>}
       {isOpen && (
         <>
           <button
@@ -245,7 +255,7 @@ export function FmConnectionPanel({
 
               {result?.success && (
                 <p className="fm-connect__message" data-tone="success">
-                  {result.managedNation}:{" "}
+                  {result.managedTeam ?? result.managedNation}:{" "}
                   {result.playerCount.toLocaleString("pl-PL")} zawodników w{" "}
                   {formatDuration(result.scanDurationMs)}.
                 </p>
@@ -258,9 +268,9 @@ export function FmConnectionPanel({
                 disabled={!processConnected || isLoading}
               >
                 {isLoading
-                  ? "Wykrywanie reprezentacji i zawodników…"
+                  ? "Odczytywanie danych z gry…"
                   : loadedPlayerCount > 0
-                    ? "Wczytaj nowy snapshot"
+                    ? "Połącz ponownie — pełny odczyt"
                     : "Połącz i wczytaj zawodników"}
               </button>
             </div>

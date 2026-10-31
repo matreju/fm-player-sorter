@@ -1,4 +1,4 @@
-import { formatPlayerFinance, FINANCE_NOTE } from "../../utils/playerFinance";
+import { formatPlayerFinance, FINANCE_NOTE, FINANCE_UNAVAILABLE, getGameEuroRate } from "../../utils/playerFinance";
 import {
   useEffect,
   useMemo,
@@ -319,10 +319,10 @@ function columnLabel(header: string): string {
   const labels: Record<string,string> = {Nazwisko:"Imię i nazwisko",PA:"Potencjał","Numer w składzie":"Numer",Pensja:"Płaca (€/rok)",Wartość:"Wartość (€)","Cena wywoławcza":"Cena wywoławcza (€)"};
   return labels[header] ?? header;
 }
-function displayCell(header:string, value:string|undefined):string {
+function displayCell(header:string, value:string|undefined, rate:number|undefined):string {
   if (!value?.trim()) return "—";
   if (["Wartość","Cena wywoławcza","Pensja"].includes(header) && Number.isFinite(Number(value))) {
-    return formatPlayerFinance(header, value);
+    return formatPlayerFinance(header, value, rate);
   }
   return value;
 }
@@ -830,9 +830,9 @@ export function PlayerTable({
                           ...getMarkedCellStyle(mark),
                           width,
                         }}
-                        title={["Pensja","Wartość","Cena wywoławcza"].includes(header) ? FINANCE_NOTE : row[header] || undefined}
+                        title={["Pensja","Wartość","Cena wywoławcza"].includes(header) ? (getGameEuroRate(row) ? FINANCE_NOTE : FINANCE_UNAVAILABLE) : row[header] || undefined}
                       >
-                        {displayCell(header,row[header])}
+                        {displayCell(header,row[header],getGameEuroRate(row))}
                       </td>
                     );
                   })}
