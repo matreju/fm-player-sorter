@@ -81,8 +81,10 @@ export function getPlayerPositionSortRank(row: TableRow): number {
     return Number.isFinite(value)&&value>=1&&value<=20 ? value : 0;
   })));
   if(ratings.some(value=>value>0)) {
-    const qualified=ratings.findIndex(value=>value>=15);
-    return qualified>=0 ? qualified : ratings.indexOf(Math.max(...ratings));
+    const highest=Math.max(...ratings);
+    const threshold=Math.max(15,highest-2);
+    const qualified=ratings.findIndex(value=>value>=threshold);
+    return qualified>=0 ? qualified : ratings.indexOf(highest);
   }
   // Text fallback for imported files that do not contain the 1-20 ratings.
   const position = normalizePositionText(row["Pozycja"])

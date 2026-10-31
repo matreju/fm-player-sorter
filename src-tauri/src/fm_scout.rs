@@ -11,8 +11,9 @@ pub(crate) const POSITION_GROUPS: &[&[&str]] = &[
 ];
 pub(crate) fn position_sort_rank(rating: impl Fn(&str) -> u8) -> u8 {
     let ratings = POSITION_GROUPS.iter().map(|group|group.iter().map(|position|rating(position)).filter(|value|*value<=20).max().unwrap_or(0)).collect::<Vec<_>>();
-    if let Some(rank)=ratings.iter().position(|value|*value>=15) { return rank as u8; }
     let highest=ratings.iter().copied().max().unwrap_or(0);
+    let threshold=15u8.max(highest.saturating_sub(2));
+    if let Some(rank)=ratings.iter().position(|value|*value>=threshold) { return rank as u8; }
     if highest==0 { 255 } else { ratings.iter().position(|value|*value==highest).unwrap_or(255) as u8 }
 }
 

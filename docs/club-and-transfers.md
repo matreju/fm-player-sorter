@@ -177,10 +177,15 @@ Separate right/left wingbacks from the defender line. The order is GK, right
 defender, centre back/libero, left defender, right wingback, left wingback, DM,
 right/central/left midfielder, right/central/left attacking midfielder, striker.
 Club and market sorting use the complete native 1-20 proficiency values and
-the earliest group with a value of at least 15 (strongest group as fallback),
+the earliest strongly rated group (at least 15 and within two points of the
+strongest position, with the strongest group as fallback),
 not the shortened position label. Position text now includes all values >=15
 in pitch-line order; the old max-minus-two rule hid additional positions.
 The transfer index stores the numeric rank from the same native helper.
 Players in the same group keep the existing name tie-break. No claim is made
 about reproducing FM's undocumented tie-break between equal-position players.
 Tests remain skipped as requested. Compile/package only.
+
+A weaker additional position is displayed but does not move a natural left
+back into the centre-back group or a central midfielder into DM. Display
+coverage and sort eligibility are intentionally distinct.
