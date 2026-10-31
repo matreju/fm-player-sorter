@@ -1,6 +1,7 @@
 {
-  "version": "0.7.0-beta.1",
-  "source_sha": "7af59ca089d250e9c1c3e44ca7ff374c968ae552",
-  "run_id": 41198319310,
-  "release_tag": "app-v0.6.0-beta.2"
+  "version": "0.7.0-beta.2",
+  "source_sha": "bbbc9305e1ead42337868eb3db60e0180014b624",
+  "run_id": 41200810807,
+  "release_tag": "app-v0.6.0-beta.2",
+  "notes": "Naprawa rozpoznawania prowadzonego zespołu w FM27: stany zatrudnienia są odczytywane tylko ze zweryfikowanych typów obiektów interfejsu. Usuwa to blokowanie humanTeam przez przypadkowe trafienia skanera, widoczne m.in. jako sprzeczne J2/X1 przy M1/GT1. Dodano diagnostykę VC/IC. Obsługa klubu, rezerw, juniorów i wyszukiwarki transferowej pozostaje dostępna. Odczyt na żywo wymaga ponownego sprawdzenia w grze."
 }
