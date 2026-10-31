@@ -12,34 +12,17 @@ use crate::{
     fm_build::calculate_sha256,
     fm_modules::{inspect_fm_modules_blocking, FmLoadedModule},
     fm_process::detect_football_manager,
+    fm_version::{self, FmLayout},
 };
 
-pub(crate) const SUPPORTED_PROFILE_ID: &str = "fm26-6000.0.52.8888375-87a0370e9917";
-pub(crate) const SUPPORTED_FM_VERSION: &str = "6000.0.52f1-fm26-05f1 (87a0370e9917)";
-
-const EXPECTED_FM_EXE_SHA256: &str =
-    "3653c97f9ccec2be28edc4faae67304b5b6c26733f2f07dea3e7c591d3b9ff73";
-const EXPECTED_GAME_ASSEMBLY_SHA256: &str =
-    "7ce3eb474dc6093df633f979e869e55b2ec7953fde2e732392a694d379ff7a0c";
-const EXPECTED_GLOBAL_METADATA_SHA256: &str =
-    "52287eadeb07d3d222c9e370e64f308260934911807e2073fb0e72f49c273213";
+pub(crate) const SUPPORTED_PROFILE_ID: &str = fm_version::FM26.id;
+pub(crate) const SUPPORTED_FM_VERSION: &str = fm_version::FM26.unity_version;
 
 const IL2CPP_METADATA_MAGIC: u32 = 0xFAB1_1BAF;
 
-/*
- * RVA metody FM_GamePlugin_ReferenceRegistration.Initialise
- * z profilu Cpp2IL dla obsługiwanego buildu FM26.
- *
- * Ten odczyt nie uruchamia funkcji. Sprawdzamy tylko, czy
- * GameAssembly.dll pod adresem po ASLR rzeczywiście jest czytelne.
- */
-const GAME_ASSEMBLY_PROBE_RVA: usize = 0x2AA6E0;
+const GAME_ASSEMBLY_PROBE_RVA: usize = fm_version::FM26.probe_rva;
 const GAME_ASSEMBLY_PROBE_SIZE: usize = 16;
 
-const STATIC_POINTER_PROBE_METHODS: [(&str, usize); 2] = [
-    ("GameRecordSerialisation.get_Instance", 0x2AE010),
-    ("GamePlugin.get_ChannelDataPool", 0x2A8D50),
-];
 const STATIC_POINTER_METHOD_BYTES: usize = 128;
 
 #[derive(Debug, Clone, Serialize)]
@@ -231,10 +214,20 @@ pub(crate) fn inspect_fm_reader_profile_blocking() -> Result<FmReaderProfileStat
     let game_assembly_sha256 = hash_optional(&game_assembly_path);
     let global_metadata_sha256 = hash_optional(&global_metadata_path);
 
-    let fm_exe_matches = hash_matches(&fm_exe_sha256, EXPECTED_FM_EXE_SHA256);
-    let game_assembly_matches = hash_matches(&game_assembly_sha256, EXPECTED_GAME_ASSEMBLY_SHA256);
-    let global_metadata_matches =
-        hash_matches(&global_metadata_sha256, EXPECTED_GLOBAL_METADATA_SHA256);
+    let layout = fm_version::profile_for_hashes(
+        game_assembly_sha256.as_deref().unwrap_or(""),
+        global_metadata_sha256.as_deref().unwrap_or(""),
+    ).unwrap_or_else(|| {
+        if game_assembly_sha256.as_deref() == Some(fm_version::FM27.assembly_hash)
+            || global_metadata_sha256.as_deref() == Some(fm_version::FM27.metadata_hash) {
+            fm_version::FM27
+        } else {
+            fm_version::FM26
+        }
+    });
+    let fm_exe_matches = hash_matches(&fm_exe_sha256, layout.exe_hash);
+    let game_assembly_matches = hash_matches(&game_assembly_sha256, layout.assembly_hash);
+    let global_metadata_matches = hash_matches(&global_metadata_sha256, layout.metadata_hash);
 
     let metadata_header_valid = read_metadata_magic(&global_metadata_path)
         .map(|magic| magic == IL2CPP_METADATA_MAGIC)
@@ -287,9 +280,9 @@ pub(crate) fn inspect_fm_reader_profile_blocking() -> Result<FmReaderProfileStat
     let mut method_probe_readable = false;
     let mut method_probe_bytes = None;
 
-    if let Some(base_text) = game_assembly_base.as_deref() {
+    if let Some(base_text) = game_assembly_base.as_deref().filter(|_| game_assembly_matches) {
         if let Some(base_address) = parse_hex_address(base_text) {
-            let probe_address = base_address.saturating_add(GAME_ASSEMBLY_PROBE_RVA);
+            let probe_address = base_address.saturating_add(layout.probe_rva);
 
             method_probe_address = Some(format!("0x{probe_address:X}"));
 
@@ -310,8 +303,9 @@ pub(crate) fn inspect_fm_reader_profile_blocking() -> Result<FmReaderProfileStat
 
     let static_pointer_candidates = game_assembly_base
         .as_deref()
+        .filter(|_| game_assembly_matches)
         .and_then(parse_hex_address)
-        .map(|base_address| collect_static_pointer_candidates(pid, base_address))
+        .map(|base_address| collect_static_pointer_candidates(pid, base_address, &layout))
         .unwrap_or_default();
 
     let resolved_runtime_root_count = static_pointer_candidates
@@ -360,11 +354,11 @@ pub(crate) fn inspect_fm_reader_profile_blocking() -> Result<FmReaderProfileStat
     let error = if let Some(error) = module_error {
         Some(error)
     } else if !fm_exe_matches {
-        Some("Hash fm.exe nie pasuje do obsługiwanego profilu FM26.".to_string())
+        Some("Hash fm.exe nie pasuje do wybranego profilu FM.".to_string())
     } else if !game_assembly_matches {
-        Some("Hash GameAssembly.dll nie pasuje do obsługiwanego profilu FM26.".to_string())
+        Some("Hash GameAssembly.dll nie pasuje do wybranego profilu FM.".to_string())
     } else if !global_metadata_matches {
-        Some("Hash global-metadata.dat nie pasuje do obsługiwanego profilu FM26.".to_string())
+        Some("Hash global-metadata.dat nie pasuje do wybranego profilu FM.".to_string())
     } else if !metadata_header_valid {
         Some("Plik global-metadata.dat nie ma prawidłowego nagłówka IL2CPP.".to_string())
     } else if !game_assembly_module_ready {
@@ -383,8 +377,8 @@ pub(crate) fn inspect_fm_reader_profile_blocking() -> Result<FmReaderProfileStat
         executable_path: Some(executable_path.clone()),
         game_directory: Some(game_directory.to_string_lossy().to_string()),
 
-        profile_id: SUPPORTED_PROFILE_ID.to_string(),
-        expected_fm_version: SUPPORTED_FM_VERSION.to_string(),
+        profile_id: layout.id.to_string(),
+        expected_fm_version: layout.unity_version.to_string(),
         supported_build,
         runtime_ready,
 
@@ -407,7 +401,7 @@ pub(crate) fn inspect_fm_reader_profile_blocking() -> Result<FmReaderProfileStat
         game_plugin_base,
         game_plugin_module_ready,
 
-        method_probe_rva: format!("0x{GAME_ASSEMBLY_PROBE_RVA:X}"),
+        method_probe_rva: format!("0x{:X}", layout.probe_rva),
         method_probe_address,
         method_probe_readable,
         method_probe_bytes,
@@ -719,10 +713,11 @@ fn bytes_to_hex(bytes: &[u8]) -> String {
 fn collect_static_pointer_candidates(
     pid: u32,
     game_assembly_base: usize,
+    layout: &FmLayout,
 ) -> Vec<FmStaticPointerCandidate> {
     let mut result = Vec::new();
 
-    for (source_method, source_rva) in STATIC_POINTER_PROBE_METHODS {
+    for (source_method, source_rva) in layout.static_methods {
         let method_address = game_assembly_base.saturating_add(source_rva);
 
         let Ok(bytes) = read_remote_bytes(pid, method_address, STATIC_POINTER_METHOD_BYTES) else {

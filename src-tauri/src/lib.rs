@@ -7,6 +7,7 @@ mod fm_process;
 mod fm_profile;
 mod fm_reader;
 mod fm_stats;
+mod fm_version;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

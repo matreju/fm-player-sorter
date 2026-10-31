@@ -35,6 +35,9 @@ jobs:
           New-Item -ItemType Directory -Force src-tauri/binaries | Out-Null
           Copy-Item dist/fmstats.exe src-tauri/binaries/fmstats-x86_64-pc-windows-msvc.exe
 
+      - name: Test edition isolation
+        run: python -m unittest discover -s tests -p "test_*.py"
+
       - name: Build frontend
         run: npm run build
 

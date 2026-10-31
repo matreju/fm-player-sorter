@@ -76,12 +76,12 @@ mod windows_reader {
     use crate::{
         fm_modules::inspect_fm_modules_blocking,
         fm_process::detect_football_manager,
+        fm_version::{self, FmLayout},
         fm_reader::{
             FmClassOffsetStat, FmDateStatus, FmNativeDatabase, FmTableRow,
         },
     };
 
-    const PROFILE_NAME: &str = "FM26 26.3.x native managed national team";
     const CHUNK_SIZE: usize = 16 * 1024 * 1024;
     const IMAGE_CHUNK_SIZE: usize = 8 * 1024 * 1024;
     const MAX_REGION_SIZE: usize = 512 * 1024 * 1024;
@@ -144,9 +144,6 @@ mod windows_reader {
     // FM26 26.3.2 IL2CPP layout (Cpp2IL profile for the supported build).
     // BindingSubsystem derives directly from Bindings, so these offsets are
     // relative to the managed BindingSubsystem object.
-    const BINDINGS_ROOT: usize = 0x40;
-    const BINDINGS_NODES: usize = 0x48;
-    const BINDINGS_DATA: usize = 0x78;
     const BINDING_NODE_BINDINGS: usize = 0x10;
     const BINDING_NODE_NAME: usize = 0x18;
     const BINDING_NODE_FIRST_CHILD: usize = 0x28;
@@ -192,15 +189,6 @@ mod windows_reader {
         Some(0xF9), Some(0x03), Some(0x48), Some(0x39), Some(0xCE),
     ];
     const HUMAN_MANAGER_REGISTRY_VECTOR: usize = 0x18;
-
-    // Known UI owners of BindingSubsystem + CurrentHumanJobState in FM.UI.
-    // Multiple layouts are intentionally sampled; agreement between instances
-    // is evidence that the binding belongs to the active game world.
-    const HUMAN_CONTEXT_LAYOUTS: [(usize, usize); 3] = [
-        (0x208, 0x230), // GameWorldTabsAndBookmarksModule
-        (0x90, 0x74),  // FM.UI.IGEModule
-        (0x5B0, 0x5C0), // FM.UI.TileSearchPanel
-    ];
 
     const PLAYER_ATTRIBUTE_FIELDS: [(&str, usize); 47] = [
         ("Dośrodkowania", 0x00),
@@ -304,6 +292,7 @@ mod windows_reader {
 
     struct RemoteProcess {
         handle: HandleGuard,
+        layout: FmLayout,
     }
 
     impl RemoteProcess {
@@ -315,6 +304,7 @@ mod windows_reader {
 
             Ok(Self {
                 handle: HandleGuard(handle),
+                layout: fm_version::FM26,
             })
         }
 
@@ -801,7 +791,8 @@ mod windows_reader {
             .ok_or_else(|| "Nie udało się odczytać adresu game_plugin.dll.".to_string())?;
         let game_assembly_base = parse_hex_address(&game_assembly_module.base_address)
             .ok_or_else(|| "Nie udało się odczytać adresu GameAssembly.dll.".to_string())?;
-        let process = RemoteProcess::open(pid)?;
+        let mut process = RemoteProcess::open(pid)?;
+        process.layout = fm_version::runtime_layout(std::path::Path::new(&game_assembly_module.path))?;
         let regions = process.private_rw_regions();
         if regions.is_empty() {
             return Err("Nie znaleziono czytelnych regionów pamięci bazy FM.".to_string());
@@ -855,6 +846,7 @@ mod windows_reader {
                     &resolver,
                     &mut binding_candidates,
                     &mut human_context_candidates,
+                    &process.layout,
                 );
 
                 let mut local = (8 - chunk_address % 8) % 8;
@@ -877,6 +869,7 @@ mod windows_reader {
                         chunk_address,
                         &regions,
                         &mut binding_candidates,
+                        &process.layout,
                     );
 
                     let person_address = chunk_address.saturating_add(local);
@@ -979,9 +972,13 @@ mod windows_reader {
                 .collect::<Vec<_>>()
                 .join(", ");
             return Err(format!(
-                "Profil pamięci FM26 26.3.x nie przeszedł walidacji: znaleziono tylko {} graczy. Najczęstsze offsety klas: {}. Nie pokazano częściowych ani losowych danych.",
-                player_candidates.len(), diagnostic
+                "Profil pamięci {} nie przeszedł walidacji: znaleziono tylko {} graczy. Najczęstsze offsety klas: {}. Nie pokazano częściowych ani losowych danych.",
+                process.layout.name, player_candidates.len(), diagnostic
             ));
+        }
+
+        if process.layout.experimental {
+            validate_trial_native_layout(&process, &player_candidates)?;
         }
 
         let nation_counts = player_candidates
@@ -1023,7 +1020,8 @@ mod windows_reader {
         });
         let managed = managed.ok_or_else(|| {
             format!(
-                "Wykryto FM26, ale nie udało się odczytać aktywnej reprezentacji z globalnego powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/K{}/D{}/T{}/Q{}/A{}/P{}/L{}/E{}/I{}/F{}/Y{}/N{}/U{}/J{}/X{}/O{}/W{}/S{}/Z{}/G{}/M{}/GT{}/R{}/MC{}.",
+                "Wykryto {}, ale nie udało się odczytać aktywnej reprezentacji z globalnego powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/K{}/D{}/T{}/Q{}/A{}/P{}/L{}/E{}/I{}/F{}/Y{}/N{}/U{}/J{}/X{}/O{}/W{}/S{}/Z{}/G{}/M{}/GT{}/R{}/MC{}.",
+                process.layout.name,
                 binding_diagnostics.context_candidate_count,
                 binding_diagnostics.binding_candidate_count,
                 binding_diagnostics.validated_binding_count,
@@ -1146,7 +1144,7 @@ mod windows_reader {
 
         Ok(FmNativeDatabase {
             pid,
-            profile: PROFILE_NAME.to_string(),
+            profile: process.layout.name.to_string(),
             database_player_count,
             player_count: rows.len(),
             managed_team,
@@ -1171,6 +1169,40 @@ mod windows_reader {
             rows,
             class_offsets,
         })
+    }
+
+    fn validate_trial_native_layout(
+        process: &RemoteProcess,
+        candidates: &HashMap<u32, PlayerCandidate>,
+    ) -> Result<(), String> {
+        let mut sample = candidates.values().collect::<Vec<_>>();
+        sample.sort_by_key(|candidate| candidate.uid);
+        let mut valid = 0usize;
+        let checked = sample.len().min(128);
+        for candidate in sample.into_iter().take(checked) {
+            let Some(player) = process.read_exact(candidate.player_address, PLAYER_OFFSET as usize) else {
+                continue;
+            };
+            let positions = &player[PLAYER_POSITIONS..PLAYER_POSITIONS + POSITION_FIELDS.len()];
+            let attributes = &player[PLAYER_ATTRIBUTES..PLAYER_ATTRIBUTES + 0x32];
+            let named = looks_like_named_person(process, candidate.person_address);
+            let birth = decode_fm_date(candidate.birth_raw).is_some();
+            let nation = process.indirect_string(candidate.nation_address + NATION_NAME)
+                .map(|name| plausible_label(&name, 80)).unwrap_or(false);
+            if named && birth && nation && candidate.ca <= candidate.pa
+                && positions.iter().all(|value| *value <= 20)
+                && positions.contains(&20)
+                && attributes.iter().all(|value| *value <= 100)
+                && attributes.iter().filter(|value| **value > 0).count() >= 30 {
+                valid += 1;
+            }
+        }
+        if checked < 32 || valid * 100 < checked * 90 {
+            return Err(format!(
+                "Profil pamięci FM27: pola zawodników wymagają dalszej aktualizacji ({valid}/{checked} poprawnych rekordów próbnych). Nie zaimportowano danych."
+            ));
+        }
+        Ok(())
     }
 
     fn read_player(
@@ -1980,6 +2012,7 @@ mod windows_reader {
         resolver: &MetaResolver,
         binding_candidates: &mut HashSet<usize>,
         context_candidates: &mut HashSet<HumanContextCandidate>,
+        layout: &FmLayout,
     ) {
         for job_state in [
             HUMAN_JOB_NATION_MANAGER,
@@ -1988,7 +2021,7 @@ mod windows_reader {
         ] {
             let needle = job_state.to_le_bytes();
             for state_local in memmem::find_iter(buffer, &needle) {
-                for (binding_offset, state_offset) in HUMAN_CONTEXT_LAYOUTS {
+                for (binding_offset, state_offset) in layout.human_contexts {
                     let Some(local) = state_local.checked_sub(state_offset) else {
                         continue;
                     };
@@ -2033,16 +2066,17 @@ mod windows_reader {
         chunk_address: usize,
         regions: &[(usize, usize)],
         binding_candidates: &mut HashSet<usize>,
+        layout: &FmLayout,
     ) {
         let object_address = chunk_address.saturating_add(local);
 
-        let root = read_u64(buffer, local.saturating_add(BINDINGS_ROOT))
+        let root = read_u64(buffer, local.saturating_add(layout.binding_root))
             .map(|value| value as usize)
             .unwrap_or(0);
-        let nodes = read_u64(buffer, local.saturating_add(BINDINGS_NODES))
+        let nodes = read_u64(buffer, local.saturating_add(layout.binding_nodes))
             .map(|value| value as usize)
             .unwrap_or(0);
-        let data = read_u64(buffer, local.saturating_add(BINDINGS_DATA))
+        let data = read_u64(buffer, local.saturating_add(layout.binding_data))
             .map(|value| value as usize)
             .unwrap_or(0);
         if pointer_in_regions(root, regions)
@@ -2079,7 +2113,7 @@ mod windows_reader {
                 continue;
             }
             let Some(root) = process
-                .read_ptr(binding + BINDINGS_ROOT)
+                .read_ptr(binding + process.layout.binding_root)
                 .filter(|value| pointer_in_regions(*value, regions))
             else {
                 continue;
@@ -2089,11 +2123,11 @@ mod windows_reader {
                 .map(|owner| owner == binding)
                 .unwrap_or(false);
             let valid_nodes = process
-                .read_ptr(binding + BINDINGS_NODES)
+                .read_ptr(binding + process.layout.binding_nodes)
                 .map(|value| pointer_in_regions(value, regions))
                 .unwrap_or(false);
             let valid_data = process
-                .read_ptr(binding + BINDINGS_DATA)
+                .read_ptr(binding + process.layout.binding_data)
                 .map(|value| pointer_in_regions(value, regions))
                 .unwrap_or(false);
             if !valid_root || !valid_nodes || !valid_data {
@@ -2196,7 +2230,7 @@ mod windows_reader {
         binding: usize,
         expected_name: &str,
     ) -> Option<usize> {
-        let root = process.read_ptr(binding + BINDINGS_ROOT)?;
+        let root = process.read_ptr(binding + process.layout.binding_root)?;
         let mut queue = VecDeque::<usize>::from([root]);
         let mut visited = HashSet::<usize>::new();
 
@@ -2264,7 +2298,7 @@ mod windows_reader {
     ) -> Option<HumanTeamReference> {
         let data_key = process.read_u64(node + BINDING_NODE_DATA_KEY)?;
         let raw_index = (data_key & u64::from(u32::MAX)) as usize;
-        let data_list = process.read_ptr(binding + BINDINGS_DATA)?;
+        let data_list = process.read_ptr(binding + process.layout.binding_data)?;
         let data_size = process.read_u32(data_list + MANAGED_LIST_SIZE)? as usize;
         if data_size == 0 || data_size > MAX_BINDING_NODES * 4 {
             return None;
