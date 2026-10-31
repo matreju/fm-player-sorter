@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.4",
-  "source_sha": "abeee6f8047e305f15b8e2059ebc66e0b896a278",
-  "run_id": 41209417678,
+  "version": "0.7.0-beta.5",
+  "source_sha": "496bf9c6ef5ad8c25911cd6adfb6481ef981719e",
+  "run_id": 41216441068,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Pełna lista zawodników klubu: domyślnie cały klub, bez progu oceny i ograniczania do wybranej jedenastki. Zakładki drużyn z liczebnością, domyślne kolumny składu z potencjałem, kondycją i finansami oraz pełny skład na jednej przewijanej stronie. Transfery obejmują całą odczytaną bazę, również własnych graczy. Dodano zakresy od–do OU, potencjału, wieku, ceny/wartości, płacy i końca kontraktu, opcjonalny zakres klubów oraz 50/100/250 wyników na stronę z pełnymi licznikami. Zachowano bezpośredni odczyt klubu z kontraktu menedżera.",
-  "ui_revision": 2
+  "notes": "Sortowanie pozycji: bramkarze, prawy bok obrony i wahadłowi, środek obrony, lewy bok obrony i wahadłowi, defensywni pomocnicy, środkowi pomocnicy, ofensywni pomocnicy, prawe skrzydło, lewe skrzydło, napastnicy. Zarobki roczne w euro w tabeli klubu, transferach i szczegółach zawodnika. Ceny i filtry finansowe w euro; pensje przeliczane z 52 tygodni. Kwoty EUR są orientacyjne (1 GBP = 1,20 EUR), co opisano w aplikacji. Testy pominięto na wyraźną prośbę użytkownika.",
+  "ui_revision": 1
 }
