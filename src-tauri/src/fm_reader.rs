@@ -422,6 +422,20 @@ mod windows_reader {
         let rate = f64::from_bits(process.read_u64(rate_address)?);
         (rate.is_finite() && (0.000001..1_000_000.0).contains(&rate)).then_some(rate)
     }
+    // Exact FM27 ISO-code parser (RVA 0x448EDA0): GBP -> enum 0,
+    // EUR -> enum 7. Read the live formatting table directly; locating the
+    // database's currency-object vector or its localized names is unnecessary.
+    fn read_fm27_euro_rate(process:&RemoteProcess, plugin_base:usize) -> Option<f64> {
+        if !verified_fm27(process) { return None; }
+        let pound_address=plugin_base.checked_add(0x5707180)?;
+        let euro_address=pound_address.checked_add(7*0x20)?;
+        let pound=read_currency_rate(process,plugin_base,pound_address)?;
+        let euro=read_currency_rate(process,plugin_base,euro_address)?;
+        if read_currency_rate(process,plugin_base,pound_address)!=Some(pound)
+            || read_currency_rate(process,plugin_base,euro_address)!=Some(euro) {return None;}
+        let rate=euro/pound;
+        (rate.is_finite()&&(0.01..100.0).contains(&rate)).then_some(rate)
+    }
     fn attach_euro_rate(row: &mut FmTableRow, rate: Option<f64>) {
         row.insert("_fmEurPerGbp".into(), rate.map(|rate|rate.to_string()).unwrap_or_default());
     }
@@ -496,6 +510,9 @@ mod windows_reader {
             return Err("Połączenie z grą wygasło. Połącz aplikację ponownie.".into());
         }
         let mut process=RemoteProcess::open(source.pid)?; process.layout=source.layout;
+        let finance_cache=refresh_slot().lock().ok().and_then(|slot|slot.as_ref().filter(|cache|cache.database.session_id==source.session_id).cloned());
+        if let Some(cache)=&finance_cache {process.native_plugin_hash=cache.native_plugin_hash.clone();}
+        let euro_per_gbp=finance_cache.as_ref().and_then(|cache|read_fm27_euro_rate(&process,cache.plugin_base)).or(source.euro_per_gbp);
         let index=if let Some(index)=source.index.clone() { index } else {
             let mut entries=Vec::new(); let mut cache=PlayerReadCache::default();
             for (i,candidate) in source.candidates.iter().enumerate() {
@@ -527,7 +544,7 @@ mod windows_reader {
             }
             if let Some(player)=read_player(&process,candidate.uid,candidate.person_address,candidate.player_address,entry.ca,entry.pa,&mut cache) {
                 let mut row=player_to_row(player,source.game_date,source.derived_year);
-                attach_euro_rate(&mut row, source.euro_per_gbp);
+                attach_euro_rate(&mut row, euro_per_gbp);
                 if source.game_date.is_none() { row.insert("Wiek".into(),String::new()); }
                 row.insert("Status transferu".into(),if entry.free {"Wolny zawodnik"} else if entry.listed {"Lista transferowa"} else {"Kontrakt klubowy"}.into());
                 row.insert("Na liście transferowej".into(),yes_no(entry.listed));
@@ -540,7 +557,7 @@ mod windows_reader {
             || detect_football_manager().pid!=Some(source.pid) {
             return Err("Sesja gry zmieniła się podczas wyszukiwania. Połącz aplikację ponownie.".into());
         }
-        Ok(ScoutingResult {session_id:source.session_id,total:matches.len(),database_total:index.len(),page,page_size,game_date:source.game_date.and_then(format_fm_date),rows,
+        Ok(ScoutingResult {euro_per_gbp,session_id:source.session_id,total:matches.len(),database_total:index.len(),page,page_size,game_date:source.game_date.and_then(format_fm_date),rows,
             headers:table_headers().into_iter().filter(|column|column!="Numer w składzie").chain(["Pozostały kontrakt".into(),"Status transferu".into(),"Zapas potencjału".into(),"Wypożyczenie".into()]).collect(),
             attribute_columns:fm_scout::RATING_COLUMNS.iter().map(|name|(*name).to_string()).collect(),
             shortlists:shortlists.into_iter().map(|list|list.info).collect(),shortlist_error})
@@ -1292,7 +1309,7 @@ mod windows_reader {
             let rate=read_currency_rate(&process,cache.plugin_base,table);
             if is_euro { eur=rate; } else { gbp=rate; }
         }
-        let euro_per_gbp=eur.zip(gbp).map(|(eur,gbp)|eur/gbp).filter(|rate|rate.is_finite() && (0.01..100.0).contains(rate));
+        let euro_per_gbp=read_fm27_euro_rate(&process,cache.plugin_base).or_else(||eur.zip(gbp).map(|(eur,gbp)|eur/gbp).filter(|rate|rate.is_finite() && (0.01..100.0).contains(rate)));
         let mut rows=Vec::new();let mut read_cache=PlayerReadCache::default();
         for cached in source.candidates.iter() {
             if cache.club.is_some() && !groups.contains_key(&cached.uid) { continue; }
@@ -1548,7 +1565,7 @@ mod windows_reader {
             }
         }
 
-        let euro_per_gbp = currency_rates.euro_per_gbp();
+        let euro_per_gbp = read_fm27_euro_rate(&process,resolver.game_plugin.base).or_else(||currency_rates.euro_per_gbp());
         let class_offsets = top_class_offsets(&class_offset_histogram);
         if player_candidates.len() < 500 {
             let diagnostic = class_offsets

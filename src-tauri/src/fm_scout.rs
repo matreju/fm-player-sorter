@@ -31,6 +31,8 @@ pub struct ScoutingQuery {
     pub session_id: u64,
     pub text: String,
     pub position: String,
+    pub positions: Vec<String>,
+    pub position_match: String,
     pub shortlist_id: String,
     pub nationality: String,
     pub club: String,
@@ -68,6 +70,7 @@ pub struct ScoutingQuery {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScoutingResult {
+    pub euro_per_gbp: Option<f64>,
     pub session_id: u64,
     pub total: usize,
     pub database_total: usize,
@@ -160,6 +163,10 @@ pub(crate) fn matching_entries(entries: &[ScoutingEntry], query: &ScoutingQuery)
         }
     }
     if [&query.nationality,&query.club,&query.league,&query.shortlist_id].iter().any(|value|value.len()>256) {return Err("Zbyt długi filtr tekstowy.".into());}
+    if query.positions.len()>15 || query.positions.iter().any(|position|!POSITION_GROUPS.iter().flat_map(|group|group.iter()).any(|known|*known==position.as_str()))
+        || !["","any","all"].contains(&query.position_match.as_str()) {
+        return Err("Nieprawidłowy wybór pozycji.".into());
+    }
     for date in [&query.contract_after,&query.contract_before] {
         if date.is_empty() { continue; }
         let value = date.as_bytes();
@@ -189,7 +196,9 @@ pub(crate) fn matching_entries(entries: &[ScoutingEntry], query: &ScoutingQuery)
         && match query.loan.as_str() {"yes"=>entry.on_loan==Some(true),"no"=>entry.on_loan==Some(false),_=>true}
         && query.attributes.iter().all(|filter|RATING_COLUMNS.iter().position(|column|*column==filter.column)
             .map(|index|within((entry.ratings[index]>0).then_some(entry.ratings[index]),filter.min,filter.max)).unwrap_or(false))
-        && (query.position.is_empty() || query.position == "any" || entry.positions.contains(&query.position))
+        && (if query.positions.is_empty() {query.position.is_empty() || query.position == "any" || entry.positions.contains(&query.position)}
+            else if query.position_match=="all" {query.positions.iter().all(|position|entry.positions.contains(position))}
+            else {query.positions.iter().any(|position|entry.positions.contains(position))})
         && within(Some(entry.ca),query.min_ca,query.max_ca)
         && within(Some(entry.pa),query.min_pa,query.max_pa)
         && within(entry.age,query.min_age,query.max_age)

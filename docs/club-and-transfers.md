@@ -241,3 +241,26 @@ all readable native columns are selectable with a search, reorder and reset.
 Shirt number is removed from visible club columns (including prior saved
 choices) and the profile summary, and is excluded from transfer columns.
 Tests are skipped at the user's request; compilation/package only.
+
+## Advanced search pitch and currency-table recovery (0.7.0-beta.10)
+
+Transfer filters use category navigation (general, ability, contract, attributes)
+and a persistent pitch selector. Position buttons support multiple selections,
+with any/all semantics evaluated on the native index before pagination. No
+selection preserves the whole position range. Categories retain draft values;
+Search applies the entire draft, and Clear resets all positions and categories.
+The filter panel remains collapsed by default.
+
+The native direct-registry path could fail to locate currency objects or their
+localized names, leaving the exact EUR rate unavailable and all finance cells
+blank. In the verified uploaded FM27 DLL, ISO parser RVA 0x448EDA0 compares GBP
+at 0x448EDCD (return enum 0, 0x448F4D2) and EUR at 0x448EDFB (return enum 7,
+0x448F4DA). The existing formatting getter at 0x1418C50 uses +0x5707180 plus
+enum*0x20; the +0x570717C flag confirms initialization. Read both live float64
+entries twice consistently and take EUR/GBP, without embedding any exchange
+rate or requiring database currency-object discovery. Used at connect, quick
+refresh and transfer search. Transfer results also include the rate as metadata
+so finance filters can work even with no matching result rows. Unknown DLLs and
+uninitialized tables still refuse to invent EUR amounts. Annual pay remains
+52 times native weekly pay. Live-game confirmation of the fix is still needed.
+Compilation only; no tests run at the user's request.
