@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.6",
-  "source_sha": "ba8133e3d0c29672e0ddc201383ccae1a0d58bef",
-  "run_id": 41220266702,
+  "version": "0.7.0-beta.7",
+  "source_sha": "22de9f9b83fc60fa4c65798736d8a7f74127479c",
+  "run_id": 41226232058,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Szybkie odświeżanie jednym kliknięciem bez ponownego skanowania całej pamięci: odczyt aktualnych zawodników klubu, rezerw i juniorów, atrybutów, OU/PA, kondycji i kontraktów z zapamiętanej sesji. Zachowanie filtrów, wyboru i herbu; statystyki z pliku zapisu pozostają z ostatniego pełnego odczytu. Menu ⋯ zawiera osobną opcję pełnego połączenia. Weryfikacja procesu, menedżera i rejestru zapobiega użyciu starych adresów po zmianie zapisu. Pierwsze połączenie klubowe w zweryfikowanym FM27 może korzystać bezpośrednio z rejestru piłkarzy zamiast skanowania całej pamięci. Kurs EUR odczytywany z aktywnej tabeli walut gry, bez stałego przybliżenia. Pensje roczne w euro; filtry transferowe domyślnie zwinięte; sortowanie nagłówkami całej listy transferowej, w tym pozycji według kolejności piłkarskiej. Testy pominięto na wyraźną prośbę użytkownika. Odczyt i rzeczywista szybkość wymagają potwierdzenia przy uruchomionej grze.",
+  "notes": "Poprawione sortowanie pozycji w klubie i transferach: wahadłowi mają osobną grupę po całej linii obrony. Kolejność linii: bramkarze, obrońcy (prawa/środek/lewa), wahadłowi (prawa/lewa), defensywni pomocnicy, pomocnicy (prawa/środek/lewa), ofensywni pomocnicy (prawa/środek/lewa), napastnicy. Sortowanie korzysta z kompletnych ocen pozycji 1–20, a nie ze skróconego opisu. Uwzględnia mocne pozycje (minimum 15 i do dwóch punktów od najwyższej oceny), dzięki czemu słabsza dodatkowa pozycja nie przesuwa zawodnika do wcześniejszej grupy. Opis pokazuje również dodatkowe pozycje z oceną co najmniej 15. W obrębie tej samej grupy zachowano porządek nazwisk. Testy pominięto zgodnie z prośbą użytkownika.",
   "ui_revision": 1
 }
