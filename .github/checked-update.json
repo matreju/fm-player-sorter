@@ -3,5 +3,6 @@
   "source_sha": "abeee6f8047e305f15b8e2059ebc66e0b896a278",
   "run_id": 41209417678,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Pełna lista zawodników klubu: domyślnie cały klub, bez progu oceny i ograniczania do wybranej jedenastki. Zakładki drużyn z liczebnością, domyślne kolumny składu z potencjałem, kondycją i finansami oraz pełny skład na jednej przewijanej stronie. Transfery obejmują całą odczytaną bazę, również własnych graczy. Dodano zakresy od–do OU, potencjału, wieku, ceny/wartości, płacy i końca kontraktu, opcjonalny zakres klubów oraz 50/100/250 wyników na stronę z pełnymi licznikami. Zachowano bezpośredni odczyt klubu z kontraktu menedżera."
+  "notes": "Pełna lista zawodników klubu: domyślnie cały klub, bez progu oceny i ograniczania do wybranej jedenastki. Zakładki drużyn z liczebnością, domyślne kolumny składu z potencjałem, kondycją i finansami oraz pełny skład na jednej przewijanej stronie. Transfery obejmują całą odczytaną bazę, również własnych graczy. Dodano zakresy od–do OU, potencjału, wieku, ceny/wartości, płacy i końca kontraktu, opcjonalny zakres klubów oraz 50/100/250 wyników na stronę z pełnymi licznikami. Zachowano bezpośredni odczyt klubu z kontraktu menedżera.",
+  "ui_revision": 2
 }

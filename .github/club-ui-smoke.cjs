@@ -42,7 +42,7 @@ const assert=require('node:assert/strict');
  await page.getByText('Kandydat Testowy',{exact:true}).waitFor();
  assert.equal(await page.locator('.transfer-search tbody tr').count(),29);
  assert.equal((await page.evaluate(()=>window.__scoutQueries.at(-1))).clubScope,'all');
- for(const [label,value]of Object.entries({'OU od':'100','OU do':'150','Potencjał od':'130','Potencjał do':'180','Wiek od':'18','Wiek do':'26','Cena od':'100000','Cena do':'3000000','Płaca od':'500','Płaca do':'5000'}))await page.getByLabel(label,{exact:true}).fill(value);
+ for(const [label,value]of Object.entries({'OU od':'100','OU do':'150','Potencjał od':'130','Potencjał do':'180','Wiek od':'18','Wiek do':'26','Cena od':'100000','Cena do':'3000000','Płaca od':'500','Płaca do':'5000'}))await page.locator('.transfer-search').getByLabel(label,{exact:true}).fill(value);
  await page.getByRole('button',{name:'Szukaj piłkarzy',exact:true}).click();
  await page.getByText('Kandydat Testowy',{exact:true}).waitFor();
  const q=await page.evaluate(()=>window.__scoutQueries.at(-1));
