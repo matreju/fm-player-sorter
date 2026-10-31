@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.5",
-  "source_sha": "496bf9c6ef5ad8c25911cd6adfb6481ef981719e",
-  "run_id": 41216441068,
+  "version": "0.7.0-beta.6",
+  "source_sha": "ba8133e3d0c29672e0ddc201383ccae1a0d58bef",
+  "run_id": 41220266702,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Sortowanie pozycji: bramkarze, prawy bok obrony i wahadłowi, środek obrony, lewy bok obrony i wahadłowi, defensywni pomocnicy, środkowi pomocnicy, ofensywni pomocnicy, prawe skrzydło, lewe skrzydło, napastnicy. Zarobki roczne w euro w tabeli klubu, transferach i szczegółach zawodnika. Ceny i filtry finansowe w euro; pensje przeliczane z 52 tygodni. Kwoty EUR są orientacyjne (1 GBP = 1,20 EUR), co opisano w aplikacji. Testy pominięto na wyraźną prośbę użytkownika.",
+  "notes": "Szybkie odświeżanie jednym kliknięciem bez ponownego skanowania całej pamięci: odczyt aktualnych zawodników klubu, rezerw i juniorów, atrybutów, OU/PA, kondycji i kontraktów z zapamiętanej sesji. Zachowanie filtrów, wyboru i herbu; statystyki z pliku zapisu pozostają z ostatniego pełnego odczytu. Menu ⋯ zawiera osobną opcję pełnego połączenia. Weryfikacja procesu, menedżera i rejestru zapobiega użyciu starych adresów po zmianie zapisu. Pierwsze połączenie klubowe w zweryfikowanym FM27 może korzystać bezpośrednio z rejestru piłkarzy zamiast skanowania całej pamięci. Kurs EUR odczytywany z aktywnej tabeli walut gry, bez stałego przybliżenia. Pensje roczne w euro; filtry transferowe domyślnie zwinięte; sortowanie nagłówkami całej listy transferowej, w tym pozycji według kolejności piłkarskiej. Testy pominięto na wyraźną prośbę użytkownika. Odczyt i rzeczywista szybkość wymagają potwierdzenia przy uruchomionej grze.",
   "ui_revision": 1
 }
