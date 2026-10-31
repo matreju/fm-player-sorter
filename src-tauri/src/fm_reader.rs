@@ -294,7 +294,6 @@ mod windows_reader {
         own_clubs: Arc<HashSet<usize>>,
         derived_year: i32,
         game_date: Option<u32>,
-        gender: Option<bool>,
         index: Option<Arc<Vec<ScoutingEntry>>>,
     }
     static SCOUTING_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -357,7 +356,6 @@ mod windows_reader {
         let index=if let Some(index)=source.index.clone() { index } else {
             let mut entries=Vec::new(); let mut cache=PlayerReadCache::default();
             for (i,candidate) in source.candidates.iter().enumerate() {
-                if source.gender.map(|female| female!=candidate.female).unwrap_or(false) { continue; }
                 if let Some(entry)=read_transfer_entry(&process,candidate,i,&source,&mut cache) { entries.push(entry); }
             }
             let index=Arc::new(entries);
@@ -366,11 +364,11 @@ mod windows_reader {
                 .ok_or("Podczas indeksowania odświeżono dane gry. Powtórz wyszukiwanie.")?;
             current.index=Some(index.clone()); index
         };
-        if query.max_age.is_some() && source.game_date.is_none() {
+        if (query.min_age.is_some() || query.max_age.is_some()) && source.game_date.is_none() {
             return Err("Filtr wieku wymaga potwierdzonej daty gry. Usuń limit wieku lub odśwież połączenie.".into());
         }
         let matches=fm_scout::matching_entries(&index,&query)?;
-        let page_size=if query.page_size==0 {50} else {query.page_size.clamp(10,100)};
+        let page_size=if query.page_size==0 {50} else {query.page_size.clamp(10,250)};
         let page=query.page.min(matches.len().saturating_sub(1)/page_size);
         let mut rows=Vec::new(); let mut cache=PlayerReadCache::default();
         for &entry_index in matches.iter().skip(page.saturating_mul(page_size)).take(page_size) {
@@ -390,7 +388,7 @@ mod windows_reader {
             || detect_football_manager().pid!=Some(source.pid) {
             return Err("Sesja gry zmieniła się podczas wyszukiwania. Połącz aplikację ponownie.".into());
         }
-        Ok(ScoutingResult {session_id:source.session_id,total:matches.len(),page,page_size,game_date:source.game_date.and_then(format_fm_date),rows})
+        Ok(ScoutingResult {session_id:source.session_id,total:matches.len(),database_total:index.len(),page,page_size,game_date:source.game_date.and_then(format_fm_date),rows})
     }
 
     struct HandleGuard(HANDLE);
@@ -1360,7 +1358,7 @@ mod windows_reader {
         let own_uids = if club_mode { rows.iter().filter_map(|row| row.get("UID")?.parse::<u32>().ok()).collect() } else { HashSet::new() };
         *scouting_slot().lock().map_err(|_| "Nie można przygotować wyszukiwarki transferowej.".to_string())? = Some(ScoutingSession {
             session_id, pid, layout: process.layout, candidates: Arc::new(player_candidates.values().cloned().collect()),
-            own_uids: Arc::new(own_uids), own_clubs: Arc::new(own_clubs), derived_year, game_date: world_date, gender: managed_gender, index: None,
+            own_uids: Arc::new(own_uids), own_clubs: Arc::new(own_clubs), derived_year, game_date: world_date, index: None,
         });
         Ok(FmNativeDatabase {
             pid,

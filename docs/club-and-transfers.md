@@ -13,7 +13,7 @@ included and outgoing loans excluded using the player's current team, with a
 roster fallback for players with no current-team pointer. The primary squad and
 reserve/youth group can be filtered; all groups feed the existing role rankings
 and squad builder. The market is a separate drawer and never replaces those
-rows. Club-owned outgoing loans are also excluded from transfer targets.
+rows. The transfer search includes owned players by default; an explicit outside-club scope excludes them.
 
 Native reserve links and the hash-gated FM27 world-date location are field facts
 from https://github.com/barak14/fm-editor/blob/main/docs/fm27/memory-layout.md .
@@ -36,7 +36,7 @@ Money is FM's GBP base unit. Remaining contract months use a verified game date,
 never the computer's clock or a fixture date; unknown dates produce no duration.
 
 Tests cover nested reserves/youth, cyclic and incomplete club graphs, incoming
-and outgoing loans, own-player exclusion, unknown prices, exact positions,
+and outgoing loans, own-player scope filters, unknown prices, exact positions,
 inclusive expiry limits, and remaining contract dates.
 
 ## humanTeam context validation (0.7.0-beta.2)
@@ -80,3 +80,27 @@ hardcoding the club vtable address. No game DLL is redistributed.
 Regression tests cover the reported H0/VC0 with M1/GT1, wrong native type,
 unrelated team, unreadable owner, multiple managers/teams and missing contract.
 Live-game validation is still required after installing the update.
+
+## Full club roster and unfiltered market (0.7.0-beta.4)
+
+The club table opens with every imported player, with the score threshold
+turned off both at load and on filter reset. Club tabs show all squads, the
+first team or reserves/youth with counts. The club's table displays its full
+roster on one scrollable page, and has a separate column preference key with
+position, nationality, CA, PA, age, condition, value, wage and expiry by default.
+Selecting a role still ranks the club's players; hiding players under a score
+threshold is now an explicit choice.
+
+The market defaults to every readable player in the imported database,
+including owned players and all genders. No managed-club or gender exclusion
+is applied automatically. Optional club scope filters can select own/outside
+players. Numeric ranges include both bounds for CA, PA, age, price/value and
+current weekly wage. Contract expiry has both date bounds. Invalid/inverted
+ranges are rejected; missing finances aren't zero, free agents have fee zero.
+The UI shows the indexed database count and filtered count, with pagination
+(50/100/250 rows) across all results and first/last controls.
+
+Tests cover inclusive ranges, invalid ranges, missing values, free-agent fees,
+unfiltered own-player inclusion, and optional club scopes. The UI smoke fixture
+uses 27 club players including low-score players to verify the complete roster,
+team tabs, column defaults, reset behavior and transfer range transport.

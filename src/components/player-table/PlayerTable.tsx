@@ -6,7 +6,6 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { BASE_TABLE_COLUMNS } from "../../constants/appColumns";
 import type { PlayerMark } from "../../constants/selection";
 import { styles } from "../../styles";
 import type { SortConfig, TableRow } from "../../types/table";
@@ -20,6 +19,8 @@ import "./PlayerTable.css";
 
 type PlayerTableProps = {
   tableHeaders: string[];
+  columnStorageKey?: string;
+  pageSize?: number;
   availableHeaders: string[];
   sortedRows: TableRow[];
   sortConfig: SortConfig;
@@ -313,8 +314,21 @@ function readStoredWidths(): Record<string, number> {
   }
 }
 
+function columnLabel(header: string): string {
+  const labels: Record<string,string> = {Nazwisko:"Imię i nazwisko",PA:"Potencjał","Numer w składzie":"Numer",Pensja:"Płaca (£/tydz.)",Wartość:"Wartość (£)","Cena wywoławcza":"Cena wywoławcza (£)"};
+  return labels[header] ?? header;
+}
+function displayCell(header:string, value:string|undefined):string {
+  if (!value?.trim()) return "—";
+  if (["Wartość","Cena wywoławcza","Pensja"].includes(header) && Number.isFinite(Number(value))) {
+    return new Intl.NumberFormat("pl-PL",{maximumFractionDigits:0}).format(Number(value));
+  }
+  return value;
+}
+
 function getDefaultColumnWidth(header: string): number {
   if (header === "Nazwisko") return 190;
+  if (["Wartość","Cena wywoławcza","Pensja"].includes(header)) return 140;
   if (header === "Pozycja" || header === "Klub" || header === "Liga") return 150;
   if (header === "Wybór") return 82;
   if (header.length >= 22) return 160;
@@ -331,6 +345,8 @@ function getColumnAriaSort(
 }
 
 export function PlayerTable({
+  columnStorageKey = COLUMN_STORAGE_KEY,
+  pageSize = PAGE_SIZE,
   tableHeaders,
   availableHeaders,
   sortedRows,
@@ -349,8 +365,8 @@ export function PlayerTable({
   const [columnManagerOpen, setColumnManagerOpen] = useState(false);
   const [columnSearch, setColumnSearch] = useState("");
   const [selectedColumns, setSelectedColumns] = useState<string[]>(() => {
-    const stored = readStoredStringArray(COLUMN_STORAGE_KEY);
-    return stored.length > 0 ? stored : [...BASE_TABLE_COLUMNS];
+    const stored = readStoredStringArray(columnStorageKey);
+    return stored.length > 0 ? stored : [...tableHeaders];
   });
   const [columnWidths, setColumnWidths] =
     useState<Record<string, number>>(readStoredWidths);
@@ -394,7 +410,7 @@ export function PlayerTable({
     [columnGroups, normalizedColumnSearch],
   );
 
-  const pageCount = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize));
   const safePage = Math.min(page, pageCount - 1);
 
   useEffect(() => {
@@ -403,20 +419,20 @@ export function PlayerTable({
   }, [sortedRows]);
 
   useEffect(() => {
-    localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(effectiveHeaders));
-  }, [effectiveHeaders]);
+    localStorage.setItem(columnStorageKey, JSON.stringify(effectiveHeaders));
+  }, [effectiveHeaders, columnStorageKey]);
 
   useEffect(() => {
     localStorage.setItem(WIDTH_STORAGE_KEY, JSON.stringify(columnWidths));
   }, [columnWidths]);
 
   const visibleRows = useMemo(() => {
-    const start = safePage * PAGE_SIZE;
-    return sortedRows.slice(start, start + PAGE_SIZE);
-  }, [safePage, sortedRows]);
+    const start = safePage * pageSize;
+    return sortedRows.slice(start, start + pageSize);
+  }, [safePage, sortedRows, pageSize]);
 
-  const firstVisible = sortedRows.length === 0 ? 0 : safePage * PAGE_SIZE + 1;
-  const lastVisible = Math.min((safePage + 1) * PAGE_SIZE, sortedRows.length);
+  const firstVisible = sortedRows.length === 0 ? 0 : safePage * pageSize + 1;
+  const lastVisible = Math.min((safePage + 1) * pageSize, sortedRows.length);
   const tableWidth = effectiveHeaders.reduce(
     (total, header) =>
       total + (columnWidths[header] ?? getDefaultColumnWidth(header)),
@@ -445,7 +461,7 @@ export function PlayerTable({
   }
 
   function resetColumns() {
-    updateColumns([...BASE_TABLE_COLUMNS]);
+    updateColumns([...tableHeaders]);
   }
 
   function selectAllColumns() {
@@ -647,7 +663,7 @@ export function PlayerTable({
                       disabled={REQUIRED_COLUMNS.has(header)}
                       onChange={() => toggleColumn(header)}
                     />
-                    <span>{header}</span>
+                    <span>{columnLabel(header)}</span>
                   </label>
                 ))}
               </fieldset>
@@ -666,7 +682,7 @@ export function PlayerTable({
           }}
         >
           <caption style={styles.visuallyHidden}>
-            Interaktywna tabela kandydatów do prowadzonej reprezentacji.
+            Pełna tabela zawodników prowadzonego zespołu.
           </caption>
 
           <thead>
@@ -721,7 +737,7 @@ export function PlayerTable({
                       style={styles.sortableHeaderButton}
                       title={`Sortuj po kolumnie ${header}`}
                     >
-                      <span>{header}</span>
+                      <span>{columnLabel(header)}</span>
                       <span aria-hidden="true">
                         {getSortIcon(header, sortConfig)}
                       </span>
@@ -741,7 +757,7 @@ export function PlayerTable({
           <tbody>
             {visibleRows.map((row, rowIndex) => {
               const rowPlayerKey = getPlayerKey(row);
-              const absoluteRowIndex = safePage * PAGE_SIZE + rowIndex;
+              const absoluteRowIndex = safePage * pageSize + rowIndex;
               const isSelectedPlayer = selectedPlayerKey === rowPlayerKey;
 
               return (
@@ -815,7 +831,7 @@ export function PlayerTable({
                         }}
                         title={row[header] || undefined}
                       >
-                        {row[header] || "–"}
+                        {displayCell(header,row[header])}
                       </td>
                     );
                   })}

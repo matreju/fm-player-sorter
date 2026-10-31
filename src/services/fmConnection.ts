@@ -331,11 +331,13 @@ export async function getFootballManagerDateStatus(): Promise<FmDateStatus> {
 
 export interface FmScoutingQuery {
   sessionId: number; text: string; position: string; status: string; sort: string;
-  minCa?: number; minPa?: number; maxAge?: number; maxFee?: number; maxWage?: number;
+  minCa?: number; maxCa?: number; minPa?: number; maxPa?: number; minAge?: number; maxAge?: number;
+  minFee?: number; maxFee?: number; minWage?: number; maxWage?: number;
+  clubScope: string; contractAfter: string;
   contractBefore: string; page: number; pageSize: number;
 }
 export interface FmScoutingResult {
-  sessionId: number; total: number; page: number; pageSize: number; gameDate: string | null;
+  sessionId: number; total: number; databaseTotal: number; page: number; pageSize: number; gameDate: string | null;
   rows: Record<string,string>[];
 }
 export async function searchFootballManagerPlayers(query: FmScoutingQuery): Promise<FmScoutingResult> {

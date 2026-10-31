@@ -330,7 +330,7 @@ export default function App() {
     useState<RolePhaseFilter>("any");
   const [analysisRoleId, setAnalysisRoleId] = useState("any");
   const [minRoleScore, setMinRoleScore] = useState("60");
-  const [onlyRoleMatches, setOnlyRoleMatches] = useState(true);
+  const [onlyRoleMatches, setOnlyRoleMatches] = useState(false);
   const [showOnlySelectedPlayers, setShowOnlySelectedPlayers] = useState(false);
   const [hideMarkedPlayers, setHideMarkedPlayers] = useState(false);
   const [playerViewMode, setPlayerViewMode] =
@@ -409,10 +409,10 @@ export default function App() {
     () =>
       headers.length === 0
         ? []
-        : BASE_TABLE_COLUMNS.filter((header) =>
+        : (snapshot?.managedMode === "club" ? [PLAYER_MARK_COLUMN,"Nazwisko","Numer w składzie","Pozycja","Narodowość",OVERALL_ABILITY_COLUMN,"PA","Wiek","Kondycja","Wartość","Pensja","Koniec kontraktu",ROLE_SCORE_COLUMN] : BASE_TABLE_COLUMNS).filter((header) =>
             availableTableHeaders.includes(header),
           ),
-    [availableTableHeaders, headers.length],
+    [availableTableHeaders, headers.length, snapshot?.managedMode],
   );
 
   const searchIndex = useMemo(
@@ -738,7 +738,7 @@ export default function App() {
         setAnalysisPhase("any");
         setAnalysisRoleId("any");
         setMinRoleScore("60");
-        setOnlyRoleMatches(true);
+        setOnlyRoleMatches(false);
         setShowOnlySelectedPlayers(false);
         setHideMarkedPlayers(false);
         setSelectedPlayerKey(null);
@@ -888,6 +888,14 @@ export default function App() {
       </header>
 
       <section className="desktop-workspace" aria-label="Baza zawodników">
+        {snapshot?.managedMode === "club" && <section className="club-roster" aria-label="Skład klubu">
+          <div className="club-roster__heading"><div><strong>{snapshot.managedTeam}</strong><span>Pełna lista zawodników · {rows.length} piłkarzy w klubie</span></div><span className="club-roster__badge">KLUB</span></div>
+          <div className="club-roster__tabs" role="tablist" aria-label="Zespoły klubu">{[
+            {id:"all",label:"Cały klub",count:rows.length},
+            {id:"first",label:"Pierwsza drużyna",count:rows.filter(row=>row["Grupa klubowa"]==="Pierwsza drużyna").length},
+            {id:"development",label:"Rezerwy i juniorzy",count:rows.filter(row=>row["Grupa klubowa"]!=="Pierwsza drużyna").length},
+          ].map(group=><button key={group.id} role="tab" aria-selected={clubSquadScope===group.id} onClick={()=>setClubSquadScope(group.id)}>{group.label}<span>{group.count}</span></button>)}</div>
+        </section>}
         <MainToolbar
           clubMode={snapshot?.managedMode === "club"}
           clubSquadScope={clubSquadScope}
@@ -928,7 +936,7 @@ export default function App() {
           <span>
             {snapshot && <span>{snapshot.managedMode === "club" ? "Klub" : "Reprezentacja"} · </span>}<strong>{dataLabel}</strong>
             {snapshot?.managedTeam &&
-              snapshot.managedTeam !== snapshot.managedNation && (
+              snapshot.managedMode !== "club" && snapshot.managedTeam !== snapshot.managedNation && (
                 <> · {snapshot.managedTeam}</>
               )}
           </span>
@@ -1013,6 +1021,9 @@ export default function App() {
             <div className="desktop-data-panel__body">
               {playerViewMode === "table" ? (
                 <PlayerTable
+                  key={snapshot?.managedMode === "club" ? "club-roster" : "nation-roster"}
+                  columnStorageKey={snapshot?.managedMode === "club" ? "fm-player-sorter.club-roster-columns.v1" : undefined}
+                  pageSize={snapshot?.managedMode === "club" ? Math.max(100, rows.length) : undefined}
                   tableHeaders={tableHeaders}
                   availableHeaders={availableTableHeaders}
                   sortedRows={sortedRows}

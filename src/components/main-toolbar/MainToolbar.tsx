@@ -121,7 +121,7 @@ export function MainToolbar({
     analysisPhase !== "any" ||
     analysisRoleId !== "any" ||
     minRoleScore !== "60" ||
-    !onlyRoleMatches ||
+    onlyRoleMatches ||
     showOnlySelectedPlayers ||
     hideMarkedPlayers;
   const hasPlayerMarks = selectedPlayersCount > 0 || rejectedPlayersCount > 0;
@@ -137,7 +137,7 @@ export function MainToolbar({
     setAnalysisPhase("any");
     setAnalysisRoleId("any");
     setMinRoleScore("60");
-    setOnlyRoleMatches(true);
+    setOnlyRoleMatches(false);
     setShowOnlySelectedPlayers(false);
     setHideMarkedPlayers(false);
   }
@@ -164,10 +164,6 @@ export function MainToolbar({
       </h2>
 
       <div style={styles.toolbarGrid}>
-        {clubMode && <AppSelectField label="Zespoły klubu" value={clubSquadScope}
-          onChange={value => onClubSquadScopeChange?.(value)}
-          options={[{value:"all",label:"Cały klub"},{value:"first",label:"Pierwsza drużyna"},{value:"development",label:"Rezerwy i juniorzy"}]}
-          fieldStyle={styles.filterField} labelStyle={styles.filterLabel} selectStyle={styles.fieldInput} />}
         <AppTextField
           label="Szukaj zawodnika"
           type="search"
@@ -245,7 +241,7 @@ export function MainToolbar({
             onChange={setShowOnlySelectedPlayers}
             style={styles.toolbarCheckbox}
           >
-            Tylko powołani
+            {clubMode ? "Tylko wybrani" : "Tylko powołani"}
           </AppCheckbox>
 
           <AppCheckbox
@@ -260,7 +256,7 @@ export function MainToolbar({
 
         <div style={styles.toolbarMeta}>
           <span style={styles.toolbarCounter}>
-            Powołani <strong>{selectedPlayersCount}</strong>
+            {clubMode ? "Wybrani" : "Powołani"} <strong>{selectedPlayersCount}</strong>
           </span>
           <span style={styles.toolbarCounter}>
             Z pozycją <strong>{selectedPlayersWithPositionCount}</strong>

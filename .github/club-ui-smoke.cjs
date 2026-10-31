@@ -1,35 +1,54 @@
 const {chromium}=require('playwright');
+const assert=require('node:assert/strict');
 (async()=>{
  require('node:fs').mkdirSync('update-output',{recursive:true});
  const browser=await chromium.launch({headless:true});
  const page=await browser.newPage({viewport:{width:1440,height:960}});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.addInitScript(()=>{
-  const make=(uid,name,group,position)=>({UID:String(uid),Nazwisko:name,Imię:name.split(' ')[0],Klub:'Klub testowy',Pozycja:position,Wiek:'21',OU:'120',PA:'170','Grupa klubowa':group,'Lewa noga (wartość)':'15','Prawa noga (wartość)':'20',Podania:'14',Drybling:'13',Technika:'14','Gra bez piłki':'14','Przyjęcie piłki':'13','Przewidywanie':'13',Decyzje:'13','Opanowanie':'14','Przyspieszenie':'15','Szybkość':'15','Wykańczanie akcji':'15','Pozycja: N (Ś)':'20','Pozycja: DP':'14'});
-  const rows=[make(1,'Senior Testowy','Pierwsza drużyna','N (Ś)'),make(2,'Rezerwowy Testowy','Rezerwy i juniorzy','DP'),make(3,'Junior Testowy','Rezerwy i juniorzy','N (Ś)')];
-  window.isTauri=true; window.__TAURI_INTERNALS__={metadata:{currentWindow:{label:'main'},currentWebview:{label:'main'}},invoke:async(cmd,args)=>{
+ await page.addInitScript((version)=>{
+  const make=(uid,name,group,position,low=false)=>({UID:String(uid),Nazwisko:name,Imię:name.split(' ')[0],Klub:'Klub testowy',Pozycja:position,Narodowość:'Polska',Wiek:'21',OU:low?'65':'120',PA:'170',Kondycja:'95',Wartość:'2000000',Pensja:'4000','Koniec kontraktu':'2028-06-30','Numer w składzie':String(uid),'Grupa klubowa':group,'Lewa noga (wartość)':'15','Prawa noga (wartość)':'20',...Object.fromEntries(['Podania','Drybling','Technika','Gra bez piłki','Przyjęcie piłki','Przewidywanie','Decyzje','Opanowanie','Przyspieszenie','Szybkość','Wykańczanie akcji'].map(key=>[key,low?'3':'15'])),'Pozycja: N (Ś)':'20','Pozycja: DP':'14'});
+  const rows=Array.from({length:27},(_,i)=>make(i+1,i===0?'Senior Testowy':i===26?'Junior Testowy':`Piłkarz Testowy ${i+1}`,i<15?'Pierwsza drużyna':'Rezerwy i juniorzy',i%2?'DP':'N (Ś)',i>=11));
+  const market=[...rows,{...make(99,'Kandydat Testowy','','DP'),Klub:'Inny klub','Cena wywoławcza':'2500000','Status transferu':'Lista transferowa'},{...make(98,'Wolny Testowy','','N (Ś)'),Klub:'',Wartość:'',Pensja:'','Koniec kontraktu':'','Status transferu':'Wolny zawodnik'}];
+  window.__scoutQueries=[];
+  window.isTauri=true;window.__TAURI_INTERNALS__={metadata:{currentWindow:{label:'main'},currentWebview:{label:'main'}},invoke:async(cmd,args)=>{
    if(cmd==='probe_fm_memory')return {processDetected:true,memoryReadable:true,pid:123,error:null};
-   if(cmd==='plugin:app|version')return '0.7.0-beta.1';
+   if(cmd==='plugin:app|version')return version;
    if(cmd==='plugin:updater|check')return null;
-   if(cmd==='load_fm_database')return {success:true,stage:'database-loaded',message:'Wczytano klub',pid:123,managedMode:'club',managedClubUid:100,sessionId:1,managedTeam:'Klub testowy',managedNation:null,managedTeamUid:100,managedNationUid:null,gameDate:'2026-07-14',databasePlayerCount:10000,playerCount:3,headers:Object.keys(rows[0]),rows};
+   if(cmd==='load_fm_database')return {success:true,stage:'database-loaded',message:'Wczytano klub',pid:123,managedMode:'club',managedClubUid:100,sessionId:1,managedTeam:'Klub testowy',managedNation:null,managedTeamUid:100,managedNationUid:null,gameDate:'2026-07-14',databasePlayerCount:10000,playerCount:rows.length,headers:Object.keys(rows[0]),rows};
    if(cmd==='load_fm_season_stats')return {headers:[],rows:{},playerCount:0};
    if(cmd==='load_fm_team_logo')return null;
    if(cmd==='get_fm_date_status')return {processDetected:true,available:true,importedDate:'2026-07-14',currentDate:'2026-07-14',dataStale:false,source:'test',candidateCount:1,error:null};
-   if(cmd==='search_fm_players')return {sessionId:1,total:2,page:0,pageSize:50,gameDate:'2026-07-14',rows:[{...make(99,'Kandydat Testowy','','DP'),Klub:'Inny klub',Wartość:'2000000','Cena wywoławcza':'2500000',Pensja:'4000','Koniec kontraktu':'2028-06-30','Status transferu':'Lista transferowa'},{...make(98,'Wolny Testowy','','N (Ś)'),Klub:'',Pensja:'','Koniec kontraktu':'','Status transferu':'Wolny zawodnik'}]};
+   if(cmd==='search_fm_players'){window.__scoutQueries.push(args.query);return {sessionId:1,total:market.length,databaseTotal:market.length,page:0,pageSize:args.query.pageSize,gameDate:'2026-07-14',rows:market};}
    return null;
   }};
- });
+ },require('../package.json').version);
  await page.goto('http://127.0.0.1:4173');
  await page.getByRole('button',{name:'Połącz z grą',exact:false}).first().click();
  await page.getByRole('button',{name:'Połącz i wczytaj zawodników',exact:true}).click();
- await page.getByLabel('Zespoły klubu').waitFor({timeout:15000});
- await page.getByLabel('Zespoły klubu').selectOption('first');
- await page.waitForTimeout(1000);
+ const roster=page.locator('.player-table-scroll tbody tr');
+ await page.getByRole('tab',{name:/Cały klub/}).waitFor();
+ await page.waitForFunction(()=>document.querySelectorAll('.player-table-scroll tbody tr').length===27);
+ assert.equal(await roster.count(),27);
+ assert.equal(await page.getByLabel('Pokaż tylko powyżej progu').isChecked(),false);
+ await page.getByRole('columnheader',{name:/Potencjał/}).waitFor();
+ await page.getByRole('tab',{name:/Pierwsza drużyna/}).click();
+ await page.waitForFunction(()=>document.querySelectorAll('.player-table-scroll tbody tr').length===15);
+ await page.getByRole('tab',{name:/Rezerwy i juniorzy/}).click();
+ await page.waitForFunction(()=>document.querySelectorAll('.player-table-scroll tbody tr').length===12);
+ await page.getByRole('button',{name:'Wyczyść filtry',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelectorAll('.player-table-scroll tbody tr').length===27);
  await page.screenshot({path:'update-output/club.png',fullPage:true});
  await page.getByRole('button',{name:'Transfery',exact:true}).click();
  await page.getByText('Kandydat Testowy',{exact:true}).waitFor();
+ assert.equal(await page.locator('.transfer-search tbody tr').count(),29);
+ assert.equal((await page.evaluate(()=>window.__scoutQueries.at(-1))).clubScope,'all');
+ for(const [label,value]of Object.entries({'OU od':'100','OU do':'150','Potencjał od':'130','Potencjał do':'180','Wiek od':'18','Wiek do':'26','Cena od':'100000','Cena do':'3000000','Płaca od':'500','Płaca do':'5000'}))await page.getByLabel(label,{exact:true}).fill(value);
+ await page.getByRole('button',{name:'Szukaj piłkarzy',exact:true}).click();
+ await page.getByText('Kandydat Testowy',{exact:true}).waitFor();
+ const q=await page.evaluate(()=>window.__scoutQueries.at(-1));
+ for(const [key,value]of Object.entries({minCa:100,maxCa:150,minPa:130,maxPa:180,minAge:18,maxAge:26,minFee:100000,maxFee:3000000,minWage:500,maxWage:5000}))assert.equal(q[key],value,key);
  await page.screenshot({path:'update-output/transfers.png',fullPage:true});
- if(!(await page.getByText('1 rok 11 mies.',{exact:true}).count())) throw Error('Missing contract duration');
- console.log(JSON.stringify({errors,clubFilter:true,transferPanel:true}));
+ assert.equal(errors.length,0,errors.join('\n'));
+ console.log(JSON.stringify({errors,fullRoster:27,firstTeam:15,reservesYouth:12,marketIncludesOwnPlayers:true,rangeTransport:true}));
  await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});
