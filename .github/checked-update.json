@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.15",
-  "source_sha": "8dec8cae1b7fbf7cb2f3fef306b1a427698d1763",
-  "run_id": 41297411148,
+  "version": "0.7.0-beta.16",
+  "source_sha": "2612c5b59ef503cd0dd0ae20ecc2683f7431c0f3",
+  "run_id": 41317434332,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Eksperymentalna opcja Zasady ligi: wyłączenie minimum 3 U22 w kadrze meczowej Ekstraklasy przez zmianę 3 → 0, bez zmieniania wieku piłkarzy. Odczyt prowadzi bezpośrednio przez rozgrywki i pojedynczą fazę ligową do reguły typu U22; nie używa próbek ze skanowania pamięci. Zapis obejmuje potwierdzone aktywne kopie i jednoznaczną odpowiadającą im definicję. Niepotwierdzone, współdzielone lub niejednoznaczne warianty blokują zapis. Dostępne przywrócenie poprzedniego limitu w tej sesji aplikacji. Używaj przy wstrzymanym FM, poza rozgrywanym meczem; po zmianie ponownie otwórz ekran zasad i wyboru składu. Odczyt po zapisie potwierdza wartości pamięci; skuteczność ograniczenia ławki i trwałość w konkretnej karierze wymagają potwierdzenia w grze. Nowy sezon lub przebudowa reguł mogą wymagać ponownej operacji. Wydanie po kompilacji Windows; testy pominięto na życzenie użytkownika.",
+  "notes": "Poprawka odczytu wymogu U22: czytnik nie odrzuca już minimum U22 w kadrze meczowej tylko dlatego, że ma dodatkowe parametry. Parametry, data kwalifikacji, wiek zawodników, tryb reguły i powiązania z ligą pozostają chronione; zmieniany jest wyłącznie limit 3 → 0 w potwierdzonych aktywnych i źródłowych kopiach. Zachowano blokady dla nierozpoznanych trybów, niepewnego właściciela i niejednoznacznych definicji. Błąd odczytu jasno informuje, że niczego nie zmieniono, oraz zawiera ograniczony opis odczytanych reguł i przycisk Kopiuj komunikat. Poprawiono rozróżnienie błędu odczytu od niepotwierdzonego zapisu. Ta poprawka usuwa jeden błąd filtra; działanie w konkretnej karierze nadal wymaga potwierdzenia w FM. Testy pominięto na życzenie użytkownika; wydanie po kompilacji Windows.",
   "ui_revision": 1
 }
