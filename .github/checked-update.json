@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.18",
-  "source_sha": "18c7a1ee3715200d08dc97d8d6a6b61e5dd17522",
-  "run_id": 41320392906,
+  "version": "0.7.0-beta.19",
+  "source_sha": "8062468c881a12281e30c193907ad38a4a2bb0a0",
+  "run_id": 41322776585,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Obsługa domyślnych zasad U22 z właścicielem -1, potwierdzonych w odczycie Ekstraklasy: faza używa domyślnego indeksu zasad sezonu. Edytor akceptuje tę konkretną ścieżkę FM zamiast wymagać bezpośredniego identyfikatora ligi. Pozostają kontrole procesu, fazy, indeksu, typu minimum U22, limitu 3, parametrów oraz jednoznacznego dopasowania aktywnych i źródłowych reguł. Domyślne zasady mogą być współdzielone: podgląd wyraźnie informuje, że zmiana może objąć inne rozgrywki używające tej samej listy lub definicji. Zapis wymaga zaznaczenia tego zakresu w edytorze, a backend niezależnie odrzuca zapis bez tej zgody. Zmieniany jest wyłącznie limit 3 → 0; wiek zawodników i data kwalifikacji pozostają bez zmian. Dostępne cofnięcie w tej sesji. Naprawiono konkretną blokadę właściciela -1; skuteczność wyboru ławki i pozostałe kontrole wymagają jeszcze potwierdzenia w grze. Testy pominięto na życzenie użytkownika; publikacja po kompilacji Windows.",
+  "notes": "Zasady ligi otwierają teraz Zasady rozgrywek z wyborem rozgrywek powiązanych z drużyną w danych FM oraz faz, grup i rund pucharowych. Nie dodaje się fikcyjnych lig lub pucharów na podstawie nazw. Rozpoznane minima i maksima liczby zawodników można edytować w zakresie 0–99: m.in. U22/U21, wychowankowie, obcokrajowcy, wypożyczeni i wielkość kadry. Nieobsługiwane typy i warianty pozostają tylko do odczytu. Nie jest to jeszcze edytor wszystkich przepisów: brak edycji punktów, dogrywki, liczby zmian i nierozpoznanych pól rejestracji. Naprawiono blokadę niejednoznacznej definicji źródłowej: gdy nie można wybrać źródła, użytkownik może zmienić tylko potwierdzoną aktywną kopię, wyraźnie oznaczoną jako tymczasowa. FM może odbudować jej poprzednią wartość. Jednoznacznie dopasowane źródło i aktywna reguła są zapisywane razem. Wiek, data kwalifikacji i warunki nie są modyfikowane. Domyślne zasady mogą być współdzielone przez inne rozgrywki; zapis wymaga zaznaczenia tego zakresu. Dostępne cofnięcie ostatniej zgodnej zmiany w tej fazie. Lista rozgrywek i działanie w konkretnej karierze wymagają potwierdzenia w grze; możliwe są nieobsługiwane fazy i niepełna lista przy odmowie odczytu. Testy pominięto na życzenie użytkownika; publikacja po kompilacji Windows.",
   "ui_revision": 1
 }
