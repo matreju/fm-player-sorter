@@ -5317,14 +5317,19 @@ pub(crate) fn inspect_league_rules(session_id:u64)->Result<crate::fm_league::Lea
 pub(crate) fn inspect_league_rules(_session_id:u64)->Result<crate::fm_league::LeagueRuleReport,String> {Err("Diagnostyka ligi jest dostępna w aplikacji Windows.".into())}
 
 #[cfg(windows)]
-pub(crate) fn get_league_u22_editor(session_id:u64)->Result<crate::fm_league::LeagueU22Snapshot,String> {windows_reader::get_league_u22_editor(session_id)}
+pub(crate) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:String)->Result<crate::fm_league::LeagueU22Snapshot,String> {windows_reader::get_league_u22_editor(session_id,competition_uid,phase_id)}
 #[cfg(not(windows))]
-pub(crate) fn get_league_u22_editor(_session_id:u64)->Result<crate::fm_league::LeagueU22Snapshot,String> {Err("Edycja zasad ligi jest dostępna w aplikacji Windows.".into())}
+pub(crate) fn get_league_u22_editor(_session_id:u64,_competition_uid:u32,_phase_id:String)->Result<crate::fm_league::LeagueU22Snapshot,String> {Err("Edycja zasad ligi jest dostępna w aplikacji Windows.".into())}
 #[cfg(windows)]
-pub(crate) fn disable_league_u22(token:String,accept_shared_default:bool)->Result<crate::fm_league::LeagueU22Result,String> {windows_reader::disable_league_u22(token,accept_shared_default)}
+pub(crate) fn disable_league_u22(token:String,value:u32,accept_shared_default:bool)->Result<crate::fm_league::LeagueU22Result,String> {windows_reader::disable_league_u22(token,value,accept_shared_default)}
 #[cfg(not(windows))]
-pub(crate) fn disable_league_u22(_token:String,_accept_shared_default:bool)->Result<crate::fm_league::LeagueU22Result,String> {Err("Edycja zasad ligi jest dostępna w aplikacji Windows.".into())}
+pub(crate) fn disable_league_u22(_token:String,_value:u32,_accept_shared_default:bool)->Result<crate::fm_league::LeagueU22Result,String> {Err("Edycja zasad ligi jest dostępna w aplikacji Windows.".into())}
 #[cfg(windows)]
 pub(crate) fn undo_league_u22(token:String)->Result<crate::fm_league::LeagueU22Result,String> {windows_reader::undo_league_u22(token)}
 #[cfg(not(windows))]
 pub(crate) fn undo_league_u22(_token:String)->Result<crate::fm_league::LeagueU22Result,String> {Err("Edycja zasad ligi jest dostępna w aplikacji Windows.".into())}
+
+#[cfg(windows)]
+pub(crate) fn get_league_competitions(session_id:u64)->Result<crate::fm_league::LeagueCompetitionList,String> {windows_reader::get_league_competitions(session_id)}
+#[cfg(not(windows))]
+pub(crate) fn get_league_competitions(_session_id:u64)->Result<crate::fm_league::LeagueCompetitionList,String> {Err("Zasady rozgrywek są dostępne w aplikacji Windows.".into())}
