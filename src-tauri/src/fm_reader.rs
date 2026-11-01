@@ -737,6 +737,115 @@ mod windows_reader {
         finish_player_edit(&process,&cache,&source,&candidate,patches,None)
     }
 
+    // Research report only. No write handle, inferred ownership or edit token.
+    fn league_native_type(process:&RemoteProcess,base:usize,vtable:usize)->Option<String> {
+        let in_data=|address:usize,length:usize|address>=base+0x4AD9000&&address.checked_add(length).is_some_and(|end|end<=base+0x5768000);
+        if !in_data(vtable.checked_sub(8)?,8) {return None;}
+        let locator=process.read_ptr(vtable-8)?;
+        if !in_data(locator,24) {return None;}
+        let header=process.read_exact(locator,24)?;
+        if read_u32(&header,0)!=Some(1)||read_u32(&header,4)!=Some(0)||base.checked_add(read_u32(&header,20)? as usize)?!=locator {return None;}
+        let name=base.checked_add(read_u32(&header,12)? as usize)?.checked_add(16)?;
+        if !in_data(name,128) {return None;}
+        let text=process.read_c_string(name,128)?;
+        (text.starts_with(".?AV")&&text.is_ascii()).then_some(text)
+    }
+    pub(super) fn inspect_league_rules(session_id:u64)->Result<crate::fm_league::LeagueRuleReport,String> {
+        use crate::fm_league::{LeagueRoot,LeagueLink,AgeRuleSample,LeagueRuleReport};
+        let _guard=SCOUTING_QUERY_LOCK.lock().map_err(|_|"Czytnik FM jest zajęty.")?;
+        let cache=refresh_slot().lock().map_err(|_|"Czytnik FM jest zajęty.")?.as_ref().cloned().ok_or("Najpierw połącz aplikację z grą.")?;
+        let source=scouting_slot().lock().map_err(|_|"Czytnik FM jest zajęty.")?.as_ref().cloned().ok_or("Najpierw połącz aplikację z grą.")?;
+        if source.session_id!=session_id||cache.database.session_id!=session_id {return Err("Dane gry odświeżono. Otwórz diagnostykę ponownie.".into());}
+        if cache.club.is_none() {return Err("Diagnostyka reguł ligi wymaga prowadzonego klubu.".into());}
+        if detect_football_manager().pid!=Some(source.pid) {return Err("Zmienił się proces FM. Połącz aplikację ponownie.".into());}
+        let mut process=RemoteProcess::open(source.pid)?;process.layout=source.layout;process.native_plugin_hash=cache.native_plugin_hash.clone();
+        if !verified_fm27(&process) {return Err("Diagnostyka reguł jest dostępna tylko dla rozpoznanego wydania FM27.".into());}
+        refresh_identity_check(&process,&cache)?;
+        let started=Instant::now();let regions=process.private_rw_regions();
+        let base=cache.plugin_base;
+        let game_date=process.read_u32(base+0x56AD378).filter(|raw|decode_fm_date(*raw).is_some()).map(normalize_fm_date);
+        let age_vtable=base+0x4DF74B8;let eligibility_vtable=base+0x4E27288;
+        let age_type=".?AVAGE_EXTRA_SQUAD_SELECTION_RULE@sicomps@@";
+        let eligibility_type=".?AVUNDER_AGE_PLAYERS_ELIGIBLE_EXTRA_SQUAD_SELECTION_RULE@sicomps@@";
+        if league_native_type(&process,base,age_vtable).as_deref()!=Some(age_type)||league_native_type(&process,base,eligibility_vtable).as_deref()!=Some(eligibility_type) {return Err("Nie potwierdzono struktur reguł wieku w pamięci gry.".into());}
+        let mut roots=Vec::new();let mut queue=VecDeque::new();
+        for offset in TEAM_COMPETITION {
+            let Some(address)=process.read_ptr(cache.team+offset).filter(|p|pointer_in_regions(*p,&regions)) else {continue;};
+            let native_type=process.read_ptr(address).and_then(|vtable|league_native_type(&process,base,vtable));
+            let name=process.indirect_string(address+COMPETITION_NAME).filter(|name|plausible_label(name,96));
+            roots.push(LeagueRoot {field:format!("team+0x{offset:X}"),address:format!("0x{address:X}"),uid:record_uid(&process,address),name,native_type:native_type.clone()});
+            if native_type.is_some() {queue.push_back((address,0usize));}
+        }
+        let mut links=Vec::new();let mut visited=HashSet::new();let mut type_cache=HashMap::<usize,Option<String>>::new();
+        let mut graph_limited=false;
+        'graph: while let Some((address,depth))=queue.pop_front() {
+            if depth>3 {graph_limited=true;continue;}
+            if !visited.insert(address) {continue;}
+            if visited.len()>96||links.len()>=512||started.elapsed().as_secs()>=3 {graph_limited=true;break;}
+            let Some(bytes)=process.read_exact(address,0x300) else {continue;};
+            for offset in (8..bytes.len()-8).step_by(8) {
+                if started.elapsed().as_secs()>=3 {graph_limited=true;break 'graph;}
+                let Some(pointer)=read_u64(&bytes,offset).map(|p|p as usize).filter(|p|*p%8==0&&pointer_in_regions(*p,&regions)) else {continue;};
+                let mut targets=vec![(pointer,format!("+0x{offset:X}"))];
+                if let Some(end)=read_u64(&bytes,offset+8).map(|p|p as usize).filter(|end|*end>=pointer&&(*end-pointer)%8==0&&*end-pointer<=32*8) {
+                    if end>pointer {
+                        if let Some(array)=process.read_exact(pointer,end-pointer) {
+                            for (i,chunk) in array.chunks_exact(8).enumerate() {
+                                if let Ok(value)=<[u8;8]>::try_from(chunk) {let target=u64::from_le_bytes(value) as usize;if target%8==0&&pointer_in_regions(target,&regions) {targets.push((target,format!("+0x{offset:X}[{i}]")));}}
+                            }
+                        }
+                    }
+                }
+                for (target,field) in targets {
+                    let Some(vtable)=process.read_ptr(target) else {continue;};
+                    let name=type_cache.entry(vtable).or_insert_with(||league_native_type(&process,base,vtable));
+                    let Some(name)=name.as_ref().filter(|name|["COMP","STAGE","RULE","SQUAD","DIVISION","SEASON","LEAGUE","ROUND"].iter().any(|key|name.contains(*key))) else {continue;};
+                    if links.len()>=512 {graph_limited=true;break;}
+                    links.push(LeagueLink {from:format!("0x{address:X}"),field,target:format!("0x{target:X}"),native_type:name.clone()});
+                    if name.as_str()!=age_type&&name.as_str()!=eligibility_type {queue.push_back((target,depth+1));}
+                }
+            }
+        }
+        // Explicit, bounded on-demand heap scan. These are candidate objects,
+        // not proof that any one of them belongs to the user's league/stage.
+        let mut samples=Vec::new();let mut seen=HashSet::new();let mut scanned=0u64;let mut read_failures=0;let mut truncated=graph_limited;
+        let patterns=[age_vtable.to_le_bytes(),eligibility_vtable.to_le_bytes()];
+        'scan: for &(region,size) in &regions {
+            let mut offset=0;
+            while offset<size {
+                if scanned>=2*1024*1024*1024u64||started.elapsed().as_secs()>=20||samples.len()>=256 {truncated=true;break 'scan;}
+                let length=(size-offset).min(8*1024*1024);
+                let Some(bytes)=process.read_exact(region+offset,length) else {read_failures+=1;offset+=length;continue;};
+                scanned+=bytes.len() as u64;
+                for (kind,pattern) in patterns.iter().enumerate() {
+                    for hit in memmem::find_iter(&bytes,pattern) {
+                        let address=region+offset+hit;
+                        if address%8!=0||!seen.insert(address) {continue;}
+                        let record_size=if kind==0 {0x18} else {0x20};
+                        let Some(record)=process.read_exact(address,record_size) else {continue;};
+                        if read_u64(&record,0)!=Some(if kind==0 {age_vtable as u64} else {eligibility_vtable as u64}) {continue;}
+                        let age=record[if kind==0 {0x14} else {0x18}] as i8;
+                        // Include neighboring age settings as native fields may
+                        // encode an exclusive bound (e.g. 23 for displayed U22).
+                        if !(19..=24).contains(&age) {continue;}
+                        let date_raw=read_u32(&record,0x10).unwrap_or(0);
+                        let stable_read=process.read_exact(address,record_size).as_ref()==Some(&record);
+                        samples.push(AgeRuleSample {address:format!("0x{address:X}"),native_type:if kind==0 {age_type.into()} else {eligibility_type.into()},kind:record[8],date_raw,date:format_fm_date(date_raw),age_parameter:age,extra_parameter:if kind==0 {Some(record[0x15] as i8)} else {None},stable_read});
+                        if samples.len()>=256 {truncated=true;break 'scan;}
+                    }
+                }
+                offset+=length;
+            }
+        }
+        refresh_identity_check(&process,&cache)?;
+        if scouting_slot().lock().map_err(|_|"Czytnik FM jest zajęty.")?.as_ref().map(|source|source.session_id)!=Some(session_id) {return Err("Dane gry zmieniły się podczas diagnostyki. Ponów odczyt.".into());}
+        if process.read_u32(base+0x56AD378).filter(|raw|decode_fm_date(*raw).is_some()).map(normalize_fm_date)!=game_date {return Err("Data gry zmieniła się podczas diagnostyki. Wstrzymaj FM i ponów odczyt.".into());}
+        let mut warnings=vec!["Raport tylko do odczytu. Nie potwierdza aktywnej reguły ani adresu do edycji.".into(),"Łącza są kandydatami z ograniczonego przeglądu pamięci; wymagają sprawdzenia układu i powiązania z sezonem/fazą.".into(),"Próbki wieku 19–24 mogą pochodzić z innych lig, sezonów lub z pamięci podręcznej interfejsu.".into(),"Skan pomija regiony większe niż 512 MiB. Brak próbki nie oznacza braku reguły.".into()];
+        if truncated {warnings.push("Odczyt ograniczony limitem czasu, danych lub liczby obiektów; raport jest częściowy.".into());}
+        if read_failures>0 {warnings.push("Część regionów była chwilowo niedostępna.".into());}
+        Ok(LeagueRuleReport {schema:1,read_only:true,session_id,game_date:game_date.and_then(format_fm_date),managed_team:cache.database.managed_team.clone(),managed_club_uid:cache.database.managed_club_uid,roots,candidate_links:links,age_rule_samples:samples,scanned_bytes:scanned,read_failures,elapsed_ms:started.elapsed().as_millis(),truncated,warnings})
+    }
+
     struct HandleGuard(HANDLE);
 
     impl Drop for HandleGuard {
@@ -5140,3 +5249,8 @@ pub(crate) fn apply_player_edit(_request:crate::fm_editor::PlayerEditRequest)->R
 pub(crate) fn undo_player_edit(token:String)->Result<crate::fm_editor::PlayerEditResult,String> {windows_reader::undo_player_edit(token)}
 #[cfg(not(target_os="windows"))]
 pub(crate) fn undo_player_edit(_token:String)->Result<crate::fm_editor::PlayerEditResult,String> {Err("Edytor jest dostępny w aplikacji Windows.".into())}
+
+#[cfg(target_os="windows")]
+pub(crate) fn inspect_league_rules(session_id:u64)->Result<crate::fm_league::LeagueRuleReport,String> {windows_reader::inspect_league_rules(session_id)}
+#[cfg(not(target_os="windows"))]
+pub(crate) fn inspect_league_rules(_session_id:u64)->Result<crate::fm_league::LeagueRuleReport,String> {Err("Diagnostyka ligi jest dostępna w aplikacji Windows.".into())}

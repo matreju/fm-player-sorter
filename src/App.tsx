@@ -1,3 +1,4 @@
+import { LeagueRuleDiagnostics } from "./components/league-rules/LeagueRuleDiagnostics";
 import { getGameEuroRate } from "./utils/playerFinance";
 import type { PlayerEditResult } from "./services/fmEditor";
 import { closeAppModule } from "./utils/moduleDock";
@@ -932,7 +933,7 @@ export default function App() {
 
       <section className="desktop-workspace" aria-label="Baza zawodników">
         {snapshot?.managedMode === "club" && <section className="club-roster" aria-label="Skład klubu">
-          <div className="club-roster__heading"><div><strong>{snapshot.managedTeam}</strong><span>Pełna lista zawodników · {rows.length} piłkarzy w klubie</span></div><span className="club-roster__badge">KLUB</span></div>
+          <div className="club-roster__heading"><div><strong>{snapshot.managedTeam}</strong><span>Pełna lista zawodników · {rows.length} piłkarzy w klubie</span></div><div style={{display:"flex",alignItems:"center",gap:10}}><LeagueRuleDiagnostics key={snapshot.sessionId} sessionId={snapshot.sessionId}/><span className="club-roster__badge">KLUB</span></div></div>
           <div className="club-roster__tabs" role="tablist" aria-label="Zespoły klubu">{[
             {id:"all",label:"Cały klub",count:rows.length},
             {id:"first",label:"Pierwsza drużyna",count:rows.filter(row=>row["Grupa klubowa"]==="Pierwsza drużyna").length},
