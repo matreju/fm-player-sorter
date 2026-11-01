@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.16",
-  "source_sha": "2612c5b59ef503cd0dd0ae20ecc2683f7431c0f3",
-  "run_id": 41317434332,
+  "version": "0.7.0-beta.17",
+  "source_sha": "d381b9249744ab31792df12af3e4865cd2396b33",
+  "run_id": 41319049882,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Poprawka odczytu wymogu U22: czytnik nie odrzuca już minimum U22 w kadrze meczowej tylko dlatego, że ma dodatkowe parametry. Parametry, data kwalifikacji, wiek zawodników, tryb reguły i powiązania z ligą pozostają chronione; zmieniany jest wyłącznie limit 3 → 0 w potwierdzonych aktywnych i źródłowych kopiach. Zachowano blokady dla nierozpoznanych trybów, niepewnego właściciela i niejednoznacznych definicji. Błąd odczytu jasno informuje, że niczego nie zmieniono, oraz zawiera ograniczony opis odczytanych reguł i przycisk Kopiuj komunikat. Poprawiono rozróżnienie błędu odczytu od niepotwierdzonego zapisu. Ta poprawka usuwa jeden błąd filtra; działanie w konkretnej karierze nadal wymaga potwierdzenia w FM. Testy pominięto na życzenie użytkownika; wydanie po kompilacji Windows.",
+  "notes": "Uzupełniono komunikat blokady właściciela zasad U22: pokazuje odczytany i oczekiwany identyfikator rozgrywek, główną lub podrzędną listę zasad, indeks fazy i parametry odczytanej reguły. Skopiuj cały komunikat przyciskiem Kopiuj komunikat, aby ustalić przyczynę blokady. To wydanie zbiera brakujące dane z odczytu; nie usuwa kontroli właściciela i nie naprawia jeszcze niepotwierdzonego powiązania. Gdy odczyt jest zablokowany, niczego w grze nie zmieniono. Nie zmienia wieku zawodników, zasad innych lig ani mechanizmu zapisu i cofania. Testy pominięto na życzenie użytkownika; publikacja po kompilacji Windows.",
   "ui_revision": 1
 }
