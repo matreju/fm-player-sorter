@@ -5,7 +5,7 @@ use crate::fm_reader::FmTableRow;
 #[serde(rename_all="camelCase")]
 pub struct EditorField {
     pub key:String, pub label:String, pub value:String, pub kind:String,
-    pub min:Option<u16>, pub max:Option<u16>,
+    pub min:Option<u32>, pub max:Option<u32>,
 }
 #[derive(Clone, Serialize)]
 #[serde(rename_all="camelCase")]

@@ -1,4 +1,4 @@
-import { LeagueRuleDiagnostics } from "./components/league-rules/LeagueRuleDiagnostics";
+import { useClubAppearance } from "./hooks/useClubAppearance";
 import { getGameEuroRate } from "./utils/playerFinance";
 import type { PlayerEditResult } from "./services/fmEditor";
 import { closeAppModule } from "./utils/moduleDock";
@@ -798,7 +798,7 @@ export default function App() {
         playerCount: 0,
       } satisfies FmSeasonStatsResult));
       const logoPromise = loadFootballManagerTeamLogo(
-        result.managedNationUid,
+        result.managedMode === "club" ? null : result.managedNationUid,
         result.managedClubUid ?? result.managedTeamUid,
       ).catch(() => null);
 
@@ -890,23 +890,26 @@ export default function App() {
     snapshot?.managedTeam ??
     (rows.length > 0 ? "Reprezentacja" : "Brak danych");
   const nationTheme = getNationTheme(snapshot?.managedNation);
+  const clubAppearance=useClubAppearance(managedMode==="club"?(snapshot?.managedClubUid??snapshot?.managedTeamUid??null):null,snapshot?.teamLogoDataUrl);
+  const teamTheme=managedMode==="club"?clubAppearance.theme:nationTheme;
+  const teamCrest=managedMode==="club"?clubAppearance.crest:snapshot?.teamLogoDataUrl;
 
   return (
     <main
       className="desktop-app"
       aria-labelledby="app-title"
-      style={nationTheme.style}
+      style={teamTheme.style}
     >
       <header className="desktop-header">
         <div className="desktop-brand">
           <span
             className="desktop-brand__mark"
-            data-logo={snapshot?.teamLogoDataUrl ? "image" : undefined}
+            data-logo={teamCrest ? "image" : undefined}
             aria-hidden="true"
           >
-            {snapshot?.teamLogoDataUrl ? (
-              <img src={snapshot.teamLogoDataUrl} alt="" />
-            ) : snapshot?.managedNation ? (
+            {teamCrest ? (
+              <img src={teamCrest} alt="" />
+            ) : managedMode==="nation" && snapshot?.managedNation ? (
               nationTheme.flag
             ) : (
               "FM"
@@ -933,7 +936,8 @@ export default function App() {
 
       <section className="desktop-workspace" aria-label="Baza zawodników">
         {snapshot?.managedMode === "club" && <section className="club-roster" aria-label="Skład klubu">
-          <div className="club-roster__heading"><div><strong>{snapshot.managedTeam}</strong><span>Pełna lista zawodników · {rows.length} piłkarzy w klubie</span></div><div style={{display:"flex",alignItems:"center",gap:10}}><LeagueRuleDiagnostics key={snapshot.sessionId} sessionId={snapshot.sessionId}/><span className="club-roster__badge">KLUB</span></div></div>
+          <div className="club-roster__heading"><div className="club-roster__identity">{teamCrest&&<img className="club-roster__crest" src={teamCrest} alt={`Herb ${snapshot.managedTeam}`}/>}<div><strong>{snapshot.managedTeam}</strong><span>Pełna lista zawodników · {rows.length} piłkarzy w klubie</span></div></div><div className="club-roster__appearance"><label className="club-roster__upload">{teamCrest?"Zmień herb":"Dodaj herb"}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={clubAppearance.upload}/></label>{clubAppearance.custom&&<button onClick={clubAppearance.reset}>Herb z FM</button>}<span className="club-roster__badge">KLUB</span></div></div>
+          {clubAppearance.error&&<p role="alert" className="club-roster__error">{clubAppearance.error}</p>}
           <div className="club-roster__tabs" role="tablist" aria-label="Zespoły klubu">{[
             {id:"all",label:"Cały klub",count:rows.length},
             {id:"first",label:"Pierwsza drużyna",count:rows.filter(row=>row["Grupa klubowa"]==="Pierwsza drużyna").length},

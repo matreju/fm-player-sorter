@@ -97,3 +97,47 @@ records, arbitrary raw heap blocks, user path names or credentials are exported.
 The user explicitly copies JSON for follow-up analysis; nothing is sent remotely
 by the application. Game/session/manager identity is checked before and after.
 This is a diagnostic step towards rule editing, not completed league editing.
+
+
+## Confirmed scalar extensions and club appearance — 0.7.0-beta.14
+
+Height uses the existing reader's Player +0x22E u16 mapping, 130–230 cm.
+Only exact FM27 FULL_CONTRACT (vtable RVA 0x4B00AE8 plus matching native RTTI)
+exposes the existing base-wage +0x20 and expiry +0x48 fields. Salary is shown in
+annual EUR using the current live game rate; writes round to the native integral
+weekly GBP unit, and the receipt reports the actual represented annual EUR amount.
+Missing rate disables salary editing. A changed rate rejects a pending write.
+No salary-linked bonus or derived contract recalculation is invoked: this is a
+base scalar edit, not a renegotiation. Expiry uses packed date flags, requires the
+confirmed game date and start date +0x44, and cannot precede either. Contract
+pointer, vtable, reciprocal Person link and team owner join the preview/undo
+identity guards, including before each write and conditional rollback.
+
+Names refer to shared database name records; arbitrary string replacement is not
+implemented. Weight and playing-time enum mappings are unconfirmed. Existing
+FULL_CONTRACT +0x68/+0x70 entries are 8 bytes, type at +6, not the guessed type-at-0
+layout. Bonus/clauses insertion needs native allocation and ownership handling;
+neither guessed labels nor direct vector append is exposed. These requested
+features remain outstanding, alongside league-rule editing / individual U22
+exemption. No app-only marker is presented as satisfying FM's rule.
+
+The user's runtime report on 2027-11-20 confirms candidate competition UID129558
+for Korona UID129577. Native getter 0x6E0020 independently confirms LEAGUE_STAGE
++0xF0 settings. Further static tracing at 0x1273220/0x12639E0 routes the stage's
+settings +0x175 index through ACTUAL_COMP +0x370 -> +0x1E0 -> pointer vector +0x60.
+This does not yet prove season/phase identity or identify the U22 quota/penalty
+field. Heuristic links at +0x240/+0x2C0 must not be assumed owned fields: the
+prefix scan can cross allocation boundaries. Zero age samples in the user's
+truncated 2GiB report does not disprove the rule. No writes use report addresses.
+The diagnostic control is removed from the main club UI at the user's request;
+the read-only backend is retained for development, not needed in the user flow.
+
+Club theming uses a crest from the graphics loader, looked up by club UID without
+national-team precedence. The crest is displayed in the club header and brand.
+Saturated crest colour buckets supply primary/accent colours; neutral fallback
+is used without a readable crest. Optional PNG/JPG/WebP upload is resized to PNG
+and stored per club UID, with an action to return to the FM graphics source.
+Old-club asynchronous palette results cannot apply to a new club. National-team
+palettes retain their existing behaviour. No crest or palette is downloaded from
+an unrelated club by a guessed name. Built-in FM .fmf archive graphics remain
+unsupported by the existing graphics loader; local overrides cover that case.

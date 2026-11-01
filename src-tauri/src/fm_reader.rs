@@ -565,11 +565,11 @@ mod windows_reader {
 
     use crate::fm_editor::{EditorField,PlayerEditSnapshot,PlayerEditRequest,PlayerEditResult,AppliedChange};
     #[derive(Clone, Copy)]
-    enum EditEncoding {Ability,ScaledAttribute,PlainAttribute,BirthDate}
+    enum EditEncoding {Ability,Height,ScaledAttribute,PlainAttribute,BirthDate,ContractExpiry,Wage {euro_per_gbp:f64}}
     #[derive(Clone)]
     struct NativeEditorField {ui:EditorField,address:usize,bytes:Vec<u8>,encoding:EditEncoding}
     #[derive(Clone)]
-    struct EditorIdentity {session_id:u64,uid:u32,pid:u32,created:u64,person:usize,player:usize,vtable:usize}
+    struct EditorIdentity {session_id:u64,uid:u32,pid:u32,created:u64,person:usize,player:usize,vtable:usize,contract:Option<(usize,usize,usize)>}
     struct EditorDraft {identity:EditorIdentity,fields:Vec<NativeEditorField>,opened:Instant}
     #[derive(Clone)]
     struct EditorPatch {address:usize,before:Vec<u8>,after:Vec<u8>,change:AppliedChange}
@@ -597,10 +597,14 @@ mod windows_reader {
         Ok((process,cache,source,candidate))
     }
     fn editor_identity(process:&RemoteProcess,source:&ScoutingSession,candidate:&PlayerCandidate)->Result<EditorIdentity,String> {
-        Ok(EditorIdentity {session_id:source.session_id,uid:candidate.uid,pid:source.pid,created:process.creation_time().ok_or("Nie można potwierdzić procesu gry.")?,person:candidate.person_address,player:candidate.player_address,vtable:process.read_ptr(candidate.person_address).ok_or("Nie można potwierdzić rekordu zawodnika.")?})
+        let contract=process.read_ptr(candidate.person_address+PERSON_CONTRACT).filter(|address|*address>=0x10_000).map(|address| {
+            if process.read_ptr(address+8)!=Some(candidate.person_address) {return Err("Nie potwierdzono właściciela kontraktu.");}
+            Ok((address,process.read_ptr(address).ok_or("Nie można odczytać kontraktu.")?,process.read_ptr(address+CONTRACT_TEAM).ok_or("Nie można odczytać klubu kontraktu.")?))
+        }).transpose()?;
+        Ok(EditorIdentity {contract,session_id:source.session_id,uid:candidate.uid,pid:source.pid,created:process.creation_time().ok_or("Nie można potwierdzić procesu gry.")?,person:candidate.person_address,player:candidate.player_address,vtable:process.read_ptr(candidate.person_address).ok_or("Nie można potwierdzić rekordu zawodnika.")?})
     }
     fn verify_editor_identity(expected:&EditorIdentity,actual:&EditorIdentity)->Result<(),String> {
-        if expected.session_id!=actual.session_id || expected.uid!=actual.uid || expected.pid!=actual.pid || expected.created!=actual.created || expected.person!=actual.person || expected.player!=actual.player || expected.vtable!=actual.vtable {return Err("Zmieniła się gra lub adres zawodnika. Otwórz edytor ponownie.".into());} Ok(())
+        if expected.session_id!=actual.session_id || expected.uid!=actual.uid || expected.pid!=actual.pid || expected.created!=actual.created || expected.person!=actual.person || expected.player!=actual.player || expected.vtable!=actual.vtable || expected.contract!=actual.contract {return Err("Zmieniła się gra lub adres zawodnika. Otwórz edytor ponownie.".into());} Ok(())
     }
     fn editor_row(process:&RemoteProcess,cache:&RefreshSession,source:&ScoutingSession,candidate:&PlayerCandidate)->Result<FmTableRow,String> {
         let mut reads=PlayerReadCache::default();
@@ -626,6 +630,31 @@ mod windows_reader {
         let bytes=process.read_exact(address,4).ok_or("Nie można odczytać daty urodzenia.")?;
         let value=read_u32(&bytes,0).and_then(format_fm_date).ok_or("Nie potwierdzono daty urodzenia.")?;
         fields.push(NativeEditorField {ui:EditorField {key:"birthDate".into(),label:"Data urodzenia".into(),value,kind:"date".into(),min:None,max:None},address,bytes,encoding:EditEncoding::BirthDate});
+        let address=candidate.player_address+PLAYER_HEIGHT;
+        if let Some(bytes)=process.read_exact(address,2) {
+            if let Some(height)=read_u16(&bytes,0).filter(|height|(130..=230).contains(height)) {
+                fields.push(NativeEditorField {ui:EditorField {key:"height".into(),label:"Wzrost · cm".into(),value:height.to_string(),kind:"number".into(),min:Some(130),max:Some(230)},address,bytes,encoding:EditEncoding::Height});
+            }
+        }
+        // Only confirmed full contracts: no guessed layout for trials or loans.
+        if let Some((contract,vtable,_))=identity.contract.filter(|(_,vtable,_)|*vtable==cache.plugin_base+0x4B00AE8) {
+            if league_native_type(&process,cache.plugin_base,vtable).as_deref()==Some(".?AVFULL_CONTRACT@db@@") {
+                if let Some(rate)=read_fm27_euro_rate(&process,cache.plugin_base).filter(|rate|rate.is_finite()&&*rate>0.0) {
+                    let address=contract+CONTRACT_WAGE;
+                    if let Some(bytes)=process.read_exact(address,4) {
+                        if let Some(wage)=read_u32(&bytes,0).filter(|wage|*wage<=10_000_000) {
+                            fields.push(NativeEditorField {ui:EditorField {key:"contract:wage".into(),label:"Płaca podstawowa · EUR rocznie".into(),value:format!("{:.2}",wage as f64*52.0*rate),kind:"number".into(),min:Some(0),max:Some(1_000_000_000)},address,bytes,encoding:EditEncoding::Wage {euro_per_gbp:rate}});
+                        }
+                    }
+                }
+                let address=contract+CONTRACT_EXPIRY;
+                if let Some(bytes)=process.read_exact(address,4) {
+                    if let Some(value)=read_u32(&bytes,0).and_then(format_fm_date) {
+                        fields.push(NativeEditorField {ui:EditorField {key:"contract:expiry".into(),label:"Koniec kontraktu".into(),value,kind:"date".into(),min:None,max:None},address,bytes,encoding:EditEncoding::ContractExpiry});
+                    }
+                }
+            }
+        }
         for (label,offset) in PLAYER_ATTRIBUTE_FIELDS.iter().chain(PLAYER_HIDDEN_FIELDS.iter()) {
             let address=candidate.player_address+PLAYER_ATTRIBUTES+offset;
             let raw=process.read_u8(address).ok_or("Nie można odczytać atrybutów.")?;
@@ -646,22 +675,28 @@ mod windows_reader {
         state.drafts.insert(token.clone(),EditorDraft {identity,fields,opened:Instant::now()});
         Ok(PlayerEditSnapshot {token,session_id,uid,name:row.get("Nazwisko").cloned().unwrap_or_else(||uid.to_string()),fields:ui_fields})
     }
-    fn encode_birth_date(value:&str,previous:u32,game_date:Option<u32>)->Result<Vec<u8>,String> {
-        if value.len()!=10 || !value.is_ascii() || &value[4..5]!="-" || &value[7..8]!="-" {return Err("Podaj datę urodzenia w formacie RRRR-MM-DD.".into());}
+    fn encode_editor_date(value:&str,previous:u32)->Result<Vec<u8>,String> {
+        if value.len()!=10 || !value.is_ascii() || &value[4..5]!="-" || &value[7..8]!="-" {return Err("Podaj datę w formacie RRRR-MM-DD.".into());}
         let year=value[..4].parse::<i32>().map_err(|_|"Nieprawidłowy rok.")?;
         let month=value[5..7].parse::<u32>().map_err(|_|"Nieprawidłowy miesiąc.")?;
         let day=value[8..10].parse::<u32>().map_err(|_|"Nieprawidłowy dzień.")?;
-        if !(1900..=2200).contains(&year)||!(1..=12).contains(&month) {return Err("Nieprawidłowa data urodzenia.".into());}
+        if !(1900..=2200).contains(&year)||!(1..=12).contains(&month) {return Err("Nieprawidłowa data.".into());}
         let months=[31,if is_leap_year(year) {29} else {28},31,30,31,30,31,31,30,31,30,31];
         if day==0||day>months[month as usize-1] {return Err("Nieprawidłowy dzień miesiąca.".into());}
         let ordinal=months[..month as usize-1].iter().sum::<u32>()+day;
         let raw=((year as u32)<<16)|ordinal;
-        let now=game_date.ok_or("Zmiana daty urodzenia wymaga potwierdzonej daty gry.")?;
-        if normalize_fm_date(raw)>normalize_fm_date(now) {return Err("Data urodzenia nie może być późniejsza niż data gry.".into());}
         Ok((raw|(previous&0xFE00)).to_le_bytes().to_vec())
     }
     fn invalidate_editor_index() {
         if let Ok(mut slot)=scouting_slot().lock() {if let Some(source)=slot.as_mut() {source.index=None;}}
+    }
+    fn editor_record_matches(process:&RemoteProcess,identity:&EditorIdentity)->bool {
+        if process.read_u32(identity.person+OBJ_UID)!=Some(identity.uid)||process.read_ptr(identity.person)!=Some(identity.vtable) {return false;}
+        let current=process.read_ptr(identity.person+PERSON_CONTRACT).filter(|address|*address>=0x10_000);
+        match identity.contract {
+            Some((address,vtable,team))=>current==Some(address)&&process.read_ptr(address)==Some(vtable)&&process.read_ptr(address+8)==Some(identity.person)&&process.read_ptr(address+CONTRACT_TEAM)==Some(team),
+            None=>current.is_none(),
+        }
     }
     fn apply_editor_patches(process:&RemoteProcess,identity:&EditorIdentity,patches:&[EditorPatch])->Result<(),String> {
         // Compare every original value before the first write, then again just
@@ -670,12 +705,12 @@ mod windows_reader {
             if process.read_exact(patch.address,patch.before.len()).as_ref()!=Some(&patch.before) {return Err(format!("Pole „{}” zmieniło się w FM. Wczytaj dane edytora ponownie.",patch.change.label));}
         }
         for (index,patch) in patches.iter().enumerate() {
-            let same_record=process.read_u32(identity.person+OBJ_UID)==Some(identity.uid) && process.read_ptr(identity.person)==Some(identity.vtable);
+            let same_record=editor_record_matches(process,identity);
             let result=if !same_record {Err("Tożsamość rekordu zmieniła się podczas zapisu.".into())} else if process.read_exact(patch.address,patch.before.len()).as_ref()!=Some(&patch.before) {Err("Gra zmieniła pole podczas zapisu.".into())} else {process.write_exact(patch.address,&patch.after)};
             if let Err(error)=result {
                 let mut unreverted=Vec::new();
                 for done in patches[..=index].iter().rev() {
-                    if process.read_u32(identity.person+OBJ_UID)!=Some(identity.uid) || process.read_ptr(identity.person)!=Some(identity.vtable) {unreverted.push(done.change.label.clone());continue;}
+                    if !editor_record_matches(process,identity) {unreverted.push(done.change.label.clone());continue;}
                     let current=process.read_exact(done.address,done.before.len());
                     if current.as_ref()==Some(&done.before) {continue;}
                     if current.as_ref()!=Some(&done.after)||process.write_exact(done.address,&done.before).is_err() {unreverted.push(done.change.label.clone());}
@@ -685,7 +720,7 @@ mod windows_reader {
             }
         }
         invalidate_editor_index();
-        if process.read_u32(identity.person+OBJ_UID)!=Some(identity.uid) || process.read_ptr(identity.person)!=Some(identity.vtable) {return Err("Pola zapisano, ale gra zmieniła rekord podczas odczytu końcowego. Nie potwierdzono wyniku. Sprawdź zawodnika w grze.".into());}
+        if !editor_record_matches(process,identity) {return Err("Pola zapisano, ale gra zmieniła rekord podczas odczytu końcowego. Nie potwierdzono wyniku. Sprawdź zawodnika w grze.".into());}
         Ok(())
     }
     fn finish_player_edit(process:&RemoteProcess,cache:&RefreshSession,source:&ScoutingSession,candidate:&PlayerCandidate,patches:Vec<EditorPatch>,undo_token:Option<String>)->Result<PlayerEditResult,String> {
@@ -696,7 +731,7 @@ mod windows_reader {
 
     pub(super) fn apply_player_edit(request:PlayerEditRequest)->Result<PlayerEditResult,String> {
         let _guard=SCOUTING_QUERY_LOCK.lock().map_err(|_|"Czytnik FM jest zajęty.")?;
-        if request.changes.is_empty()||request.changes.len()>64 {return Err("Wybierz od 1 do 64 zmienionych pól.".into());}
+        if request.changes.is_empty()||request.changes.len()>96 {return Err("Wybierz od 1 do 96 zmienionych pól.".into());}
         let draft=editor_state().lock().map_err(|_|"Edytor jest zajęty.")?.drafts.remove(&request.token).ok_or("Podgląd edycji wygasł. Wczytaj dane ponownie.")?;
         if draft.opened.elapsed().as_secs()>300 {return Err("Podgląd edycji wygasł. Wczytaj dane ponownie.".into());}
         let (process,cache,source,candidate)=editor_context(draft.identity.session_id,draft.identity.uid,true)?;
@@ -706,15 +741,39 @@ mod windows_reader {
             if !keys.insert(change.key.clone()) {return Err("Powtórzone pole edycji.".into());}
             let field=draft.fields.iter().find(|field|field.ui.key==change.key).ok_or("Nieznane pole edycji.")?;
             if change.value==field.ui.value {continue;}
+            let mut actual_value=change.value.clone();
             let after=match field.encoding {
-                EditEncoding::BirthDate=>encode_birth_date(&change.value,read_u32(&field.bytes,0).ok_or("Nieprawidłowy zapis daty.")?,source.game_date)?,
+                EditEncoding::BirthDate|EditEncoding::ContractExpiry=>{
+                    let encoded=encode_editor_date(&change.value,read_u32(&field.bytes,0).ok_or("Nieprawidłowy zapis daty.")?)?;
+                    let date=normalize_fm_date(read_u32(&encoded,0).ok_or("Nieprawidłowy zapis daty.")?);
+                    let now=normalize_fm_date(source.game_date.ok_or("Zmiana daty wymaga potwierdzonej daty gry.")?);
+                    match field.encoding {
+                        EditEncoding::BirthDate if date>now=>return Err("Data urodzenia nie może być późniejsza niż data gry.".into()),
+                        EditEncoding::ContractExpiry=>{
+                            let (contract,_,_)=draft.identity.contract.ok_or("Kontrakt nie jest już dostępny.")?;
+                            let start=process.read_u32(contract+0x44).filter(|raw|decode_fm_date(*raw).is_some()).ok_or("Nie potwierdzono daty rozpoczęcia kontraktu.")?;
+                            if date<now||date<normalize_fm_date(start) {return Err("Koniec kontraktu nie może poprzedzać daty gry ani początku umowy.".into());}
+                        },
+                        _=>{},
+                    }
+                    encoded
+                },
+                EditEncoding::Wage {euro_per_gbp}=>{
+                    if read_fm27_euro_rate(&process,cache.plugin_base)!=Some(euro_per_gbp) {return Err("Kurs w grze zmienił się. Otwórz edytor ponownie.".into());}
+                    let annual=change.value.parse::<f64>().map_err(|_|"Podaj płacę w euro rocznie.")?;
+                    let weekly=(annual/(52.0*euro_per_gbp)).round();
+                    if !annual.is_finite()||annual<0.0||annual>1_000_000_000.0||weekly>10_000_000.0 {return Err("Nieprawidłowa płaca podstawowa.".into());}
+                    actual_value=format!("{:.2}",weekly*52.0*euro_per_gbp);
+                    (weekly as u32).to_le_bytes().to_vec()
+                },
                 _=>{
-                    let value=change.value.parse::<u16>().map_err(|_|"Wpisz liczbę całkowitą.")?;
+                    let value=change.value.parse::<u32>().map_err(|_|"Wpisz liczbę całkowitą.")?;
                     if value<field.ui.min.unwrap_or(1)||value>field.ui.max.unwrap_or(20) {return Err(format!("Nieprawidłowa wartość pola „{}”.",field.ui.label));}
-                    match field.encoding {EditEncoding::Ability=>{if change.key=="ca" {ca=value;}else{pa=value;} value.to_le_bytes().to_vec()},EditEncoding::ScaledAttribute=>vec![(value*5) as u8],_=>vec![value as u8]}
+                    match field.encoding {EditEncoding::Ability=>{if change.key=="ca" {ca=value as u16;}else{pa=value as u16;} (value as u16).to_le_bytes().to_vec()},EditEncoding::Height=>(value as u16).to_le_bytes().to_vec(),EditEncoding::ScaledAttribute=>vec![(value*5) as u8],_=>vec![value as u8]}
                 },
             };
-            patches.push(EditorPatch {address:field.address,before:field.bytes.clone(),after,change:AppliedChange {label:field.ui.label.clone(),before:field.ui.value.clone(),after:change.value}});
+            if after==field.bytes {continue;}
+            patches.push(EditorPatch {address:field.address,before:field.bytes.clone(),after,change:AppliedChange {label:field.ui.label.clone(),before:field.ui.value.clone(),after:actual_value}});
         }
         if patches.is_empty() {return Err("Nie wybrano żadnej zmiany.".into());}
         if pa<ca {return Err("Potencjał PA nie może być mniejszy niż obecne umiejętności CA. Zmień oba pola w jednym zapisie.".into());}

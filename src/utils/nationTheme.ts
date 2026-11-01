@@ -79,6 +79,14 @@ export function getNationTheme(nation: string | null | undefined): NationTheme {
       names.some((name) => normalizeNation(name) === normalized),
     )?.[1] ?? DEFAULT_THEME;
 
+  return paletteTheme(palette);
+}
+
+export function getClubTheme(primary="#64748b",accent="#cbd5e1"):NationTheme {
+  return paletteTheme(createPalette(primary,accent,"⚽",accent));
+}
+
+function paletteTheme(palette:ThemePalette):NationTheme {
   return {
     flag: palette.flag,
     style: {
