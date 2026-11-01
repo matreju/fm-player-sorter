@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.17",
-  "source_sha": "d381b9249744ab31792df12af3e4865cd2396b33",
-  "run_id": 41319049882,
+  "version": "0.7.0-beta.18",
+  "source_sha": "18c7a1ee3715200d08dc97d8d6a6b61e5dd17522",
+  "run_id": 41320392906,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Uzupełniono komunikat blokady właściciela zasad U22: pokazuje odczytany i oczekiwany identyfikator rozgrywek, główną lub podrzędną listę zasad, indeks fazy i parametry odczytanej reguły. Skopiuj cały komunikat przyciskiem Kopiuj komunikat, aby ustalić przyczynę blokady. To wydanie zbiera brakujące dane z odczytu; nie usuwa kontroli właściciela i nie naprawia jeszcze niepotwierdzonego powiązania. Gdy odczyt jest zablokowany, niczego w grze nie zmieniono. Nie zmienia wieku zawodników, zasad innych lig ani mechanizmu zapisu i cofania. Testy pominięto na życzenie użytkownika; publikacja po kompilacji Windows.",
+  "notes": "Obsługa domyślnych zasad U22 z właścicielem -1, potwierdzonych w odczycie Ekstraklasy: faza używa domyślnego indeksu zasad sezonu. Edytor akceptuje tę konkretną ścieżkę FM zamiast wymagać bezpośredniego identyfikatora ligi. Pozostają kontrole procesu, fazy, indeksu, typu minimum U22, limitu 3, parametrów oraz jednoznacznego dopasowania aktywnych i źródłowych reguł. Domyślne zasady mogą być współdzielone: podgląd wyraźnie informuje, że zmiana może objąć inne rozgrywki używające tej samej listy lub definicji. Zapis wymaga zaznaczenia tego zakresu w edytorze, a backend niezależnie odrzuca zapis bez tej zgody. Zmieniany jest wyłącznie limit 3 → 0; wiek zawodników i data kwalifikacji pozostają bez zmian. Dostępne cofnięcie w tej sesji. Naprawiono konkretną blokadę właściciela -1; skuteczność wyboru ławki i pozostałe kontrole wymagają jeszcze potwierdzenia w grze. Testy pominięto na życzenie użytkownika; publikacja po kompilacji Windows.",
   "ui_revision": 1
 }
