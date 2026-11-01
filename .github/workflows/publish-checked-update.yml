@@ -1,0 +1,59 @@
+name: Publish checked desktop update
+on:
+  push:
+    branches: [agent/fm26-native-reader]
+    paths: [.github/checked-update.json]
+concurrency:
+  group: desktop-update-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure requested build mode
+        shell: bash
+        run: |
+          node -e "const fs=require('fs'); const mode=fs.existsSync('.github/build-mode.json')?require('./.github/build-mode.json'):{}; fs.appendFileSync(process.env.GITHUB_ENV, 'SKIP_TESTS='+(mode.skip_tests_for_version===require('./package.json').version)+String.fromCharCode(10))"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Smoke test club controls and transfer search
+        if: env.SKIP_TESTS != 'true'
+        run: |
+          npm install --no-save --package-lock=false playwright
+          npx playwright install --with-deps chromium --only-shell
+          npm run dev -- --host 127.0.0.1 --port 4173 > /tmp/vite.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4173 > /dev/null; then break; fi
+            sleep 1
+          done
+          node .github/club-ui-smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: club-ui-preview
+          path: update-output/*.png
+          if-no-files-found: ignore
+      - name: Verify successful Windows build and unchanged application source
+        run: |
+          node .github/publish-checked-update.cjs prepare
+      - name: Sign checked installer with existing application key
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          installer=$(node -p "require('./update-output/build.json').installer")
+          npx tauri signer sign "update-output/$installer"
+      - name: Verify signature and publish manifest last
+        run: node .github/publish-checked-update.cjs publish

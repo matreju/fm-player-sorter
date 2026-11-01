@@ -57,7 +57,7 @@ function formatComputedValue(value: number | null): string {
 }
 
 function getSavesPer90(row: TableRow): number | null {
-  const saves = getNumberFromColumns(row, ["Obs"]);
+  const saves = getNumberFromColumns(row, ["Obrony", "Obs"]);
   const minutes = getNumberFromColumns(row, ["Minuty", "Min"]);
 
   if (saves === null || minutes === null || minutes <= 0) {
@@ -152,10 +152,10 @@ function getReliabilityBadgeStyle(level: string): CSSProperties {
 }
 
 function getGoalkeeperTableSummary(row: TableRow): string {
-  const savePercent = getRawFromColumns(row, ["OS %"]);
+  const savePercent = getRawFromColumns(row, ["Obrony (%)", "OS %"]);
   const expectedSavePercent = getRawFromColumns(row, ["xOS %"]);
-  const preventedGoals = getRawFromColumns(row, ["xGUn"]);
-  const preventedPer90 = getRawFromColumns(row, ["ZxG/90"]);
+  const preventedGoals = getRawFromColumns(row, ["xG uniknięte", "xGUn"]);
+  const preventedPer90 = getRawFromColumns(row, ["xG uniknięte/90", "ZxG/90"]);
 
   return [
     savePercent !== "-" ? `OS ${savePercent}` : null,
@@ -171,31 +171,31 @@ const GOALKEEPER_METRIC_GROUPS: CompareMetricGroup[] = [
   {
     title: "Bronienie strzałów",
     metrics: [
-      { label: "OS %", columns: ["OS %"] },
+      { label: "OS %", columns: ["Obrony (%)", "OS %"] },
       { label: "xOS %", columns: ["xOS %"] },
-      { label: "Obronione", columns: ["Obs"] },
+      { label: "Obronione", columns: ["Obrony", "Obs"] },
       { label: "Obronione/90", getValue: getSavesPer90 },
     ],
   },
   {
     title: "Oczekiwane gole",
     metrics: [
-      { label: "xG uniknięte", columns: ["xGUn"] },
-      { label: "ZxG/90", columns: ["ZxG/90"] },
+      { label: "xG uniknięte", columns: ["xG uniknięte", "xGUn"] },
+      { label: "ZxG/90", columns: ["xG uniknięte/90", "ZxG/90"] },
     ],
   },
   {
     title: "Zachowanie przy strzałach",
     metrics: [
       { label: "Złapane", columns: ["Złapane strzały", "Złapane", "ZłS"] },
-      { label: "Sparowane", columns: ["Sps"] },
-      { label: "Sparowane na róg", columns: ["Ssr"], higherBetter: false },
+      { label: "Sparowane", columns: ["Sparowane strzały", "Sps"] },
+      { label: "Przeniesione", columns: ["Strzały przeniesione", "Ssr"], higherBetter: false },
     ],
   },
   {
     title: "Dystrybucja",
     metrics: [
-      { label: "Podania %", columns: ["Pod %"] },
+      { label: "Podania %", columns: ["Podania (%)", "Pod %"] },
       { label: "Podania/90", columns: ["Pod/90"] },
       { label: "Straty/90", columns: ["Str Płk/90"], higherBetter: false },
     ],

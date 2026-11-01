@@ -26,6 +26,9 @@ import {
 import { MoneyballProfile } from "../moneyball";
 import { AppButton, AppSelectField } from "../ui";
 import { buildPlayerNationalReport } from "../../utils/playerNationalReport";
+import { PlayerEditor } from "../player-editor/PlayerEditor";
+import type { PlayerEditResult } from "../../services/fmEditor";
+import { PlayerFmOverview } from "./PlayerFmOverview";
 
 const ROLE_SCORE_COLUMN = "Dopasowanie";
 const CLUB_FORM_COLUMN = "Forma klubu";
@@ -52,6 +55,8 @@ type PlayerRoleInsights = {
 };
 
 type PlayerDetailsPanelProps = {
+  sessionId: number;
+  onPlayerEdited: (result: PlayerEditResult) => void;
   player: TableRow;
   rows: TableRow[];
   roleMatch: RoleScoreResult | null;
@@ -89,7 +94,7 @@ const detailStyles: Record<string, CSSProperties> = {
   },
 
 modal: {
-  width: "min(1360px, calc(100vw - 28px))",
+  width: "min(1580px, calc(100vw - 20px))",
   maxHeight: "calc(100vh - 28px)",
   overflow: "auto",
   border: "1px solid #334155",
@@ -568,9 +573,12 @@ export function PlayerDetailsPanel({
   getPlayerMark,
   getPlayerSelectionPosition,
   onClose,
+  sessionId,
+  onPlayerEdited,
 }: PlayerDetailsPanelProps) {
   const modalRef = useRef<HTMLElement | null>(null);
   const [showMoneyball, setShowMoneyball] = useState(false);
+  const [editorOpen,setEditorOpen]=useState(false);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -660,6 +668,10 @@ export function PlayerDetailsPanel({
         </header>
 
         <div style={detailStyles.body}>
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}><AppButton disabled={!sessionId} onClick={()=>setEditorOpen(true)}>Edytuj w grze</AppButton></div>
+          {editorOpen&&<PlayerEditor key={`${sessionId}:${player.UID}`} sessionId={sessionId} uid={Number(player.UID)} onClose={()=>setEditorOpen(false)} onApplied={onPlayerEdited}/>}
+          <PlayerFmOverview player={player} />
+
           <div style={detailStyles.topGrid}>
             <section style={detailStyles.heroCard}>
               <div style={detailStyles.sectionEyebrow}>Raport zawodnika</div>
@@ -670,8 +682,8 @@ export function PlayerDetailsPanel({
 
               <div style={detailStyles.sectionText}>
                 Raport pokazuje statystyki meczowe/Moneyball na tle aktualnie
-                wczytanej listy. Skróty z importu są rozwijane do pełnych nazw,
-                a niejednoznaczne kolumny są pomijane.
+                wczytanej kadry. Pola z bezpośredniego odczytu FM są porównywane
+                z zawodnikami uprawnionymi do gry dla tej reprezentacji.
               </div>
             </section>
 

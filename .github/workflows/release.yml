@@ -1,0 +1,90 @@
+name: Publish Windows release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/fm26-native-reader
+    paths:
+      - ".github/release-trigger"
+
+concurrency:
+  group: fm-player-sorter-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build FM26 statistics reader
+        shell: pwsh
+        run: |
+          python -m pip install fmsave==0.5.10 pyinstaller==6.16.0
+          python -m PyInstaller --onefile --noconfirm --clean --collect-all fmsave --name fmstats tools/fmstats_sidecar.py
+          New-Item -ItemType Directory -Force src-tauri/binaries | Out-Null
+          Copy-Item dist/fmstats.exe src-tauri/binaries/fmstats-x86_64-pc-windows-msvc.exe
+
+      - name: Verify edition isolation
+        run: python -m unittest discover -s tests -p "test_*.py"
+
+      - name: Check Windows backend
+        run: cargo check --manifest-path src-tauri/Cargo.toml --locked
+
+      - name: Test build selection
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked --lib fm_version::tests
+
+      - name: Verify updater signing key
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw "Brakuje sekretu Actions TAURI_SIGNING_PRIVATE_KEY. Dodaj prywatny klucz aktualizatora w Settings > Secrets and variables > Actions."
+          }
+
+      - name: Build, sign and publish installer
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: app-v__VERSION__
+          releaseName: FM Player Sorter v__VERSION__
+          releaseBody: |
+            Aktualizacja obecnej aplikacji przez wbudowany aktualizator.
+            Zachowano obsługę FM26 i dodano testowy profil FM27 z rozpoznawaniem aktywnej reprezentacji.
+            Odczyt FM27 wymaga sprawdzenia w działającej grze; statystyki sezonowe FM27 mogą być niedostępne.
+          releaseDraft: false
+          prerelease: ${{ github.ref_name == 'agent/fm27-compatibility' }}
+          updaterJsonPreferNsis: true
+          args: --bundles nsis --config src-tauri/tauri.release.conf.json
+
+      - name: Publish to existing application update channel
+        if: github.ref_name == 'agent/fm26-native-reader'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $appVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          gh release edit "app-v$appVersion" --prerelease=false --latest --repo "${{ github.repository }}"
+          if ($LASTEXITCODE -ne 0) { throw "Nie udało się opublikować kanału aktualizacji." }

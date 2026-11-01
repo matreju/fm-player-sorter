@@ -1,0 +1,8 @@
+{
+  "version": "0.7.0-beta.20",
+  "source_sha": "8f2687fbced295ab42db90c8426ae6a5605abdcc",
+  "run_id": 41326111469,
+  "release_tag": "app-v0.6.0-beta.2",
+  "notes": "Usunięto techniczne dopiski Zasady główne / Wariant meczu z nazw reguł. Identyczne typy, tryby, limity i warunki z różnych odczytów są łączone w jeden wiersz; jeden zapis obejmuje wszystkie potwierdzone kopie, z odczytem po zapisie, wycofaniem po błędzie i cofnięciem całej zmiany. Różne warunki lub wartości pozostają oddzielne. Gdy choć jedna definicja źródłowa jest niejednoznaczna, wspólna edycja obejmuje wyłącznie aktywne kopie i jest oznaczona jako tymczasowa. Dodano polskie nazwy i edycję liczbowych limitów dla typów 38/39: wychowankowie klubu i kraju szkoleni między 15. a 21. rokiem życia. Wyjaśniono, że minimum 0 pozostawia istniejący wpis, a maksimum 0 to limit zero. Rzeczywiste tworzenie i usuwanie wpisów reguł nie zostało wdrożone: wymaga osobnego, potwierdzonego mechanizmu zarządzania obiektami i listami FM. Nie ma fikcyjnych przycisków Dodaj/Usuń. Warunki, wiek zawodników i wskaźniki list nie są modyfikowane. Testy pominięto na życzenie użytkownika; publikacja po kompilacji Windows. Skutki w działającej karierze wymagają potwierdzenia w FM.",
+  "ui_revision": 1
+}

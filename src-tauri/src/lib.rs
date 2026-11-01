@@ -1,13 +1,29 @@
+mod fm_league;
+mod fm_editor;
 mod fm_build;
+mod fm_club;
+mod fm_human;
+mod fm_scout;
 mod fm_database;
+mod fm_graphics;
 mod fm_memory;
 mod fm_modules;
 mod fm_process;
 mod fm_profile;
+mod fm_reader;
+mod fm_stats;
+mod fm_version;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
+        .setup(|app| {
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             fm_process::detect_football_manager,
             fm_memory::probe_fm_memory,
@@ -15,6 +31,19 @@ pub fn run() {
             fm_modules::inspect_fm_modules,
             fm_profile::inspect_fm_reader_profile,
             fm_database::load_fm_database,
+            fm_database::refresh_fm_database,
+            fm_database::search_fm_players,
+            fm_database::load_fm_season_stats,
+            fm_database::load_fm_team_logo,
+            fm_database::get_fm_date_status,
+            fm_league::inspect_fm_league_rules,
+            fm_league::get_fm_league_competitions,
+            fm_league::get_fm_league_u22_editor,
+            fm_league::disable_fm_league_u22,
+            fm_league::undo_fm_league_u22,
+            fm_editor::get_fm_player_editor,
+            fm_editor::apply_fm_player_edit,
+            fm_editor::undo_fm_player_edit,
         ])
         .run(tauri::generate_context!())
         .expect("error while running FM Player Sorter");

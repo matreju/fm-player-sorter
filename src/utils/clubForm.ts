@@ -22,6 +22,14 @@ function parseNumber(value: string): number | null {
   return number;
 }
 
+function parseFirstNumber(row: TableRow, columns: string[]): number | null {
+  for (const column of columns) {
+    const value = parseNumber(row[column] ?? "");
+    if (value !== null) return value;
+  }
+  return null;
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(value, max));
 }
@@ -58,8 +66,13 @@ function getClubFormRawBonus(combinedRating: number): number {
 }
 
 export function calculateClubFormImpact(row: TableRow): ClubFormImpact {
-  const rating = parseNumber(row["Średnia ocena w klubie"] ?? "");
-  const recentRating = parseNumber(row["Ostatnie 5 występów klubowych"] ?? "");
+  const rating = parseFirstNumber(row, [
+    "Średnia ocena w klubie",
+    "Śr. ocena",
+  ]);
+  const recentRating = parseFirstNumber(row, [
+    "Ostatnie 5 występów klubowych",
+  ]);
   const minutes = parseNumber(row["Minuty"] ?? "");
 
   let combinedRating: number | null = null;
