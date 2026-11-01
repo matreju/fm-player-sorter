@@ -141,3 +141,10 @@ Old-club asynchronous palette results cannot apply to a new club. National-team
 palettes retain their existing behaviour. No crest or palette is downloaded from
 an unrelated club by a guessed name. Built-in FM .fmf archive graphics remain
 unsupported by the existing graphics loader; local overrides cover that case.
+
+
+## U22 follow-up — beta.15
+
+The earlier rule-editing limitation is superseded only for the narrow, guarded
+Ekstraklasa 3 -> 0 operation in [league-u22-editor.md](league-u22-editor.md).
+Other league-rule editing and individual age exemptions remain unsupported.

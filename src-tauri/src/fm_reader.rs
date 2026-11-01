@@ -809,6 +809,8 @@ mod windows_reader {
         let text=process.read_c_string(name,128)?;
         (text.starts_with(".?AV")&&text.is_ascii()).then_some(text)
     }
+    include!("fm_league_live.rs");
+
     pub(super) fn inspect_league_rules(session_id:u64)->Result<crate::fm_league::LeagueRuleReport,String> {
         use crate::fm_league::{LeagueRoot,LeagueLink,AgeRuleSample,LeagueRuleReport};
         let _guard=SCOUTING_QUERY_LOCK.lock().map_err(|_|"Czytnik FM jest zajęty.")?;
@@ -5313,3 +5315,16 @@ pub(crate) fn undo_player_edit(_token:String)->Result<crate::fm_editor::PlayerEd
 pub(crate) fn inspect_league_rules(session_id:u64)->Result<crate::fm_league::LeagueRuleReport,String> {windows_reader::inspect_league_rules(session_id)}
 #[cfg(not(target_os="windows"))]
 pub(crate) fn inspect_league_rules(_session_id:u64)->Result<crate::fm_league::LeagueRuleReport,String> {Err("Diagnostyka ligi jest dostępna w aplikacji Windows.".into())}
+
+#[cfg(windows)]
+pub(crate) fn get_league_u22_editor(session_id:u64)->Result<crate::fm_league::LeagueU22Snapshot,String> {windows_reader::get_league_u22_editor(session_id)}
+#[cfg(not(windows))]
+pub(crate) fn get_league_u22_editor(_session_id:u64)->Result<crate::fm_league::LeagueU22Snapshot,String> {Err("Edycja zasad ligi jest dostępna w aplikacji Windows.".into())}
+#[cfg(windows)]
+pub(crate) fn disable_league_u22(token:String)->Result<crate::fm_league::LeagueU22Result,String> {windows_reader::disable_league_u22(token)}
+#[cfg(not(windows))]
+pub(crate) fn disable_league_u22(_token:String)->Result<crate::fm_league::LeagueU22Result,String> {Err("Edycja zasad ligi jest dostępna w aplikacji Windows.".into())}
+#[cfg(windows)]
+pub(crate) fn undo_league_u22(token:String)->Result<crate::fm_league::LeagueU22Result,String> {windows_reader::undo_league_u22(token)}
+#[cfg(not(windows))]
+pub(crate) fn undo_league_u22(_token:String)->Result<crate::fm_league::LeagueU22Result,String> {Err("Edycja zasad ligi jest dostępna w aplikacji Windows.".into())}
