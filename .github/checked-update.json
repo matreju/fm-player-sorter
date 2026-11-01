@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.13",
-  "source_sha": "97c60a1d72103058ce9708dc8bbb2c210a14ee27",
-  "run_id": 41293396433,
+  "version": "0.7.0-beta.14",
+  "source_sha": "ec02ccc96d98a6ff53f83ad99aff6fe791d33783",
+  "run_id": 41295204554,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Diagnostyka zasad ligi dostępna przy nazwie prowadzonego klubu. Odczyt tylko na żądanie, bez zmieniania reguł: kontekst klubu i rozgrywek, kandydaci powiązań oraz próbki parametrów reguł wieku. Raport można skopiować i przekazać do dalszej analizy wymogu co najmniej 3 U22 w kadrze meczowej. Odczyt ma limity i oznacza niepełne wyniki; znalezienie próbki nie potwierdza aktywnej reguły ligi. Edycja zasad U22/ławki/rejestracji nie jest jeszcze dostępna. Edytor zawodnika z beta.12 pozostaje eksperymentalny. Testy pominięto na życzenie użytkownika; wydanie po kompilacji Windows.",
+  "notes": "Rozszerzenie edytora: wzrost, podstawowa płaca roczna w euro według kursu z gry oraz koniec rozpoznanego pełnego kontraktu. Zapis i cofnięcie sprawdzają również właściciela i tożsamość kontraktu. Płaca jest zaokrąglana do jednostki przechowywanej przez FM; premie i klauzule nie są przeliczane. Klub otrzymuje herb i kolory na podstawie grafiki; własny herb można zapamiętać dla konkretnego klubu. Usunięto diagnostykę ligi z głównego widoku. Rola, premie/klauzule, imię/nazwisko, waga oraz zmiana zasad U22 pozostają niedostępne do czasu potwierdzenia ich struktur. Edytor eksperymentalny, bez potwierdzenia w uruchomionej grze. Testy pominięto na życzenie użytkownika; wydanie po kompilacji Windows.",
   "ui_revision": 1
 }
