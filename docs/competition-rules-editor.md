@@ -95,3 +95,54 @@ The user must check the actual rules/bench in FM after an edit.
 No tests are written or run at the user's explicit request. Frontend compilation
 and the Windows installer build are the release gates; they cannot prove live
 membership completeness, every competition layout or game behaviour.
+
+## beta.20 — combine identical native reads, name registration quotas
+
+The user's screenshot shows duplicate root/child rows and U22 quota0 in both.
+That is evidence of two read values, not proof that FM's bench restriction has
+been removed or that any rule was structurally deleted. Root and +68 child are
+native traversal paths, not meaningful player-facing rule categories. beta.20
+removes those suffixes from row names.
+
+Rows are grouped only if all 31 semantic bytes agree: the first24 condition bytes,
+quota4, kind2 and mode1. Only the final +1F padding byte is excluded from identity:
+serializer0x49C4590 reads +1C(2), +1E(1), condition data and +18(4), not +1F.
+Every copy's actual original padding byte is still retained as an immutable guard.
+Different conditions, modes, types or values remain separate; same labels or
+numbers alone never trigger grouping.
+
+Each group gets a fresh single-use draft with all verified active quota addresses
+(and all source copies only if every member has a unique corresponding source).
+If any source is unresolved, the whole group is active-only, rather than silently
+writing just a subset of its source definitions. The merged guarded context covers
+all captured current variants and any used source data. Only the group's quota
+addresses are removed from immutable scalar guards, then revalidated by the write
+transaction's before/after checks. Duplicate addresses are deduplicated only when
+their original bytes agree. At most8 quota fields can be patched per group. The
+existing exact readback, rollback and inverse undo act on the whole group.
+
+Native enum0x4EFEF50 identifies decimal38/39 (0x26/0x27) as
+homegrown_players_15_21_from_club / homegrown_players_15_21_from_nation.
+They now have Polish labels and the same bounded cardinal-min/max edit support.
+No player homegrown status or eligibility data is changed.
+
+### Explicit remaining request: create/delete rules
+
+This release does NOT implement structural addition or deletion. A minimum0
+removes the required shortage while leaving the record. A maximum0 is a real
+zero cap, not a disabled maximum; the UI now explicitly explains this distinction.
+There is no fake Delete or Add button.
+
+The current native editor opens read/write handles and changes existing scalar
+fields. Native allocation0x602A10 uses the game's allocator0x1621F0 and per-thread
+TLS initialization (GS58); native copy0x602770 allocates independent32-byte owned
+records, and destruction uses the game's release path0x2ECB40. A foreign allocation
+or duplicated existing pointer is not a verified substitute. Proper create/delete
+requires a validated container/object lifetime mechanism, which is not implemented
+and cannot be live-verified in this Linux environment. No remote allocation,
+remote game-function calls, leaked orphan-record removal, vector length/pointer
+rewrites, or executable injection are shipped. This is a known unfulfilled part
+of the user's request, not a capability claimed by this release.
+
+No tests run per user instruction. Frontend and Windows compilation gate release;
+live synchronized edits still need confirmation in FM.

@@ -32,7 +32,7 @@ pub struct LeagueCompetitionView {pub uid:u32,pub name:String,pub phases:Vec<Lea
 pub struct LeagueCompetitionList {pub session_id:u64,pub club:String,pub competitions:Vec<LeagueCompetitionView>,pub warnings:Vec<String>}
 #[derive(Serialize)]
 #[serde(rename_all="camelCase")]
-pub struct LeagueRuleView {pub id:String,pub label:String,pub value:u32,pub mode:String,pub token:Option<String>,pub persistent:bool,pub note:Option<String>}
+pub struct LeagueRuleView {pub id:String,pub label:String,pub copies:usize,pub value:u32,pub mode:String,pub token:Option<String>,pub persistent:bool,pub note:Option<String>}
 #[derive(Serialize)]
 #[serde(rename_all="camelCase")]
 pub struct LeagueU22Snapshot {

@@ -190,6 +190,7 @@ fn league_rule_label(kind:u16)->Option<&'static str> {
         0x20=>"Zawodnicy U18 w kadrze meczowej",0x61=>"Zawodnicy U19 w kadrze meczowej",0x44=>"Zawodnicy U20 w kadrze meczowej",
         0x11=>"Zawodnicy powyżej 21 lat w kadrze meczowej",0x93=>"Zawodnicy powyżej 22 lat w kadrze meczowej",
         0x58=>"Wychowankowie klubu (0–21 lat) w kadrze meczowej",0x59=>"Wychowankowie kraju (0–21 lat) w kadrze meczowej",
+        0x26=>"Wychowankowie klubu szkoleni między 15. a 21. rokiem życia",0x27=>"Wychowankowie kraju szkoleni między 15. a 21. rokiem życia",
         0xD6=>"Wychowankowie klubu (15–21 lat) w kadrze meczowej",0xD7=>"Wychowankowie kraju (15–21 lat) w kadrze meczowej",
         0x4=>"Obcokrajowcy w kadrze meczowej",0x3=>"Obcokrajowcy na ławce",0x2=>"Obcokrajowcy w jedenastce",0x15=>"Obcokrajowcy w kadrze",
         0x7=>"Zawodnicy spoza UE w kadrze meczowej",0x5A=>"Bramkarze w kadrze meczowej",0x3E=>"Wypożyczeni w kadrze meczowej",
@@ -236,7 +237,7 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
         if child<0x10_000||child%8!=0||child==root||read_u64(&league_capture(&process,&mut guards,child+0x68,8)?,0)!=Some(0) {return Err("Nie potwierdzono wariantu zasad meczu.".into());}
         candidates.push((child,"Wariant meczu"));
     }
-    let date=league_live_date(&process,base)?;let mut rules=Vec::new();let mut drafts=Vec::new();let mut shared_default=false;
+    let date=league_live_date(&process,base)?;let mut rules=Vec::new();let mut rule_keys=Vec::new();let mut drafts=Vec::new();let mut shared_default=false;
     for (fixture,variant) in candidates {
         let uid=read_u32(&league_capture(&process,&mut guards,fixture+0x108,4)?,0).ok_or("Nie odczytano właściciela zasad.")?;
         if uid!=competition_uid&&uid!=u32::MAX {warnings.push(format!("{variant}: właściciel {} nie odpowiada wybranym rozgrywkom. Ten wariant pominięto.",uid as i32));continue;}
@@ -274,8 +275,53 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
                 league_verify_quota(&process,&cache,&draft,date)?;
                 let token=editor_token();drafts.push((token.clone(),draft));Some(token)
             }else{None};
-            rules.push(LeagueRuleView{id,label:format!("{label} · {variant}"),value,mode:match mode {1|2=>"Minimum",255=>"Maksimum",_=>"Inny wariant"}.into(),token,persistent,note});
+            rule_keys.push(bytes[..0x1F].to_vec());
+            rules.push(LeagueRuleView{id,label,copies:1,value,mode:match mode {1|2=>"Minimum",255=>"Maksimum",_=>"Inny wariant"}.into(),token,persistent,note});
         }
+    }
+    // Root/child are native read paths, not user-facing rule categories.
+    // Match quota, mode, type and all qualifiers. Serializer 0x49C4590
+    // omits padding +1F; each original padding byte remains an immutable guard.
+    let mut old_drafts=drafts.into_iter().collect::<HashMap<_,_>>();
+    let mut group_index=HashMap::<Vec<u8>,usize>::new();
+    let mut groups=Vec::<(LeagueRuleView,Vec<LeagueQuotaDraft>)>::new();
+    for (mut row,key) in rules.into_iter().zip(rule_keys) {
+        let draft=row.token.take().and_then(|token|old_drafts.remove(&token));
+        if let Some(index)=group_index.get(&key).copied() {
+            let (view,parts)=&mut groups[index];view.copies+=1;
+            if let Some(note)=row.note {
+                if let Some(existing)=&mut view.note {if !existing.contains(&note){existing.push('\n');existing.push_str(&note);}}else{view.note=Some(note);}
+            }
+            if let Some(draft)=draft {parts.push(draft);}
+        }else{
+            group_index.insert(key,groups.len());
+            groups.push((row,draft.into_iter().collect()));
+        }
+    }
+    let mut rules=Vec::new();let mut drafts=Vec::new();
+    for (mut view,parts) in groups {
+        if !parts.is_empty()&&parts.len()==view.copies {
+            let persistent=parts.iter().all(|part|part.persistent);
+            let mut merged=parts[0].clone();merged.shared_default=parts.iter().any(|part|part.shared_default);merged.persistent=persistent;
+            // If any source is unresolved, edit all active copies only. Do not
+            // silently persist half of a displayed rule's source definitions.
+            merged.patches.clear();merged.guards=guards.clone();
+            for part in &parts {
+                if persistent {merged.guards.extend(part.guards.clone());}
+                for patch in part.patches.iter().take(if persistent {usize::MAX}else{1}) {
+                    if let Some(existing)=merged.patches.iter().find(|existing|existing.address==patch.address) {
+                        if existing.before!=patch.before {return Err("Kopie reguły zmieniły się podczas odczytu. Odczytaj zasady ponownie.".into());}
+                    }else{merged.patches.push(patch.clone());}
+                }
+            }
+            merged.guards.retain(|guard|!merged.patches.iter().any(|patch|guard.address==patch.address&&guard.bytes.len()==4));
+            view.persistent=persistent;
+            if merged.patches.len()<=8 {
+                league_verify_quota(&process,&cache,&merged,date)?;
+                let token=editor_token();view.token=Some(token.clone());drafts.push((token,merged));
+            }else{view.note=Some("Odczytano więcej kopii niż obsługuje pojedynczy zapis. Zmiana zablokowana.".into());}
+        }
+        rules.push(view);
     }
     if rules.is_empty(){warnings.push("FM nie udostępnił reguł wyboru kadry dla tej fazy. Pozostałe przepisy, np. punkty lub dogrywka, nie mają jeszcze obsługi w edytorze.".into());}
     let mut state=league_quota_state().lock().map_err(|_|"Edytor zasad jest zajęty.")?;
