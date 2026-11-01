@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.12",
-  "source_sha": "fc0987d6a4400d4598f816301fadff88c0923d29",
-  "run_id": 41291589328,
+  "version": "0.7.0-beta.13",
+  "source_sha": "97c60a1d72103058ce9708dc8bbb2c210a14ee27",
+  "run_id": 41293396433,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Eksperymentalny edytor zawodnika dla rozpoznanego FM27: CA, PA, data urodzenia, atrybuty widoczne i ukryte oraz osobowość. Otwieranie ze szczegółów zawodnika lub po kliknięciu nazwiska w Transferach. Podgląd przed/po, jawny zapis do aktywnej sesji FM, porównanie oryginalnych wartości i odczyt zapisanych bajtów; warunkowe cofnięcie ostatniego zapisu. Dane po edycji aktualizują się w aplikacji, indeks transferowy jest przebudowywany. Wstrzymaj FM i zachowaj osobny zapis kariery przed pierwszą edycją. Zapis nie został potwierdzony w działającej karierze; kompilacja nie dowodzi poprawnego utrwalenia zmian po zapisaniu/wczytaniu gry. FM26 i nierozpoznane wydania nie mają zapisu. Edycja zasad ligi/U21 nie jest jeszcze dostępna. Testy pominięto na życzenie użytkownika; wydanie po kompilacji Windows.",
+  "notes": "Diagnostyka zasad ligi dostępna przy nazwie prowadzonego klubu. Odczyt tylko na żądanie, bez zmieniania reguł: kontekst klubu i rozgrywek, kandydaci powiązań oraz próbki parametrów reguł wieku. Raport można skopiować i przekazać do dalszej analizy wymogu co najmniej 3 U22 w kadrze meczowej. Odczyt ma limity i oznacza niepełne wyniki; znalezienie próbki nie potwierdza aktywnej reguły ligi. Edycja zasad U22/ławki/rejestracji nie jest jeszcze dostępna. Edytor zawodnika z beta.12 pozostaje eksperymentalny. Testy pominięto na życzenie użytkownika; wydanie po kompilacji Windows.",
   "ui_revision": 1
 }
