@@ -66,13 +66,13 @@ mod windows_reader {
     use windows::Win32::{
         Foundation::{CloseHandle, HANDLE, FILETIME},
         System::{
-            Diagnostics::Debug::ReadProcessMemory,
+            Diagnostics::Debug::{ReadProcessMemory, WriteProcessMemory},
             Memory::{
                 VirtualQueryEx, MEMORY_BASIC_INFORMATION, MEM_COMMIT, MEM_PRIVATE,
                 PAGE_EXECUTE_READWRITE, PAGE_EXECUTE_WRITECOPY, PAGE_GUARD, PAGE_NOACCESS,
                 PAGE_READWRITE, PAGE_WRITECOPY,
             },
-            Threading::{GetProcessTimes, OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
+            Threading::{GetProcessTimes, OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ, PROCESS_VM_WRITE, PROCESS_VM_OPERATION},
         },
     };
 
@@ -563,6 +563,180 @@ mod windows_reader {
             shortlists:shortlists.into_iter().map(|list|list.info).collect(),shortlist_error})
     }
 
+    use crate::fm_editor::{EditorField,PlayerEditSnapshot,PlayerEditRequest,PlayerEditResult,AppliedChange};
+    #[derive(Clone, Copy)]
+    enum EditEncoding {Ability,ScaledAttribute,PlainAttribute,BirthDate}
+    #[derive(Clone)]
+    struct NativeEditorField {ui:EditorField,address:usize,bytes:Vec<u8>,encoding:EditEncoding}
+    #[derive(Clone)]
+    struct EditorIdentity {session_id:u64,uid:u32,pid:u32,created:u64,person:usize,player:usize,vtable:usize}
+    struct EditorDraft {identity:EditorIdentity,fields:Vec<NativeEditorField>,opened:Instant}
+    #[derive(Clone)]
+    struct EditorPatch {address:usize,before:Vec<u8>,after:Vec<u8>,change:AppliedChange}
+    struct EditorUndo {identity:EditorIdentity,patches:Vec<EditorPatch>}
+    #[derive(Default)]
+    struct EditorState {drafts:HashMap<String,EditorDraft>,undos:HashMap<String,EditorUndo>}
+    static EDITOR_STATE:OnceLock<Mutex<EditorState>>=OnceLock::new();
+    static EDITOR_SEQUENCE:AtomicU64=AtomicU64::new(1);
+    fn editor_state()->&'static Mutex<EditorState> {EDITOR_STATE.get_or_init(||Mutex::new(EditorState::default()))}
+    fn editor_token()->String {format!("edit-{}",EDITOR_SEQUENCE.fetch_add(1,Ordering::Relaxed))}
+
+    fn editor_context(session_id:u64,uid:u32,write:bool)->Result<(RemoteProcess,RefreshSession,ScoutingSession,PlayerCandidate),String> {
+        let source=scouting_slot().lock().map_err(|_|"Czytnik FM jest zajęty.")?.as_ref().cloned().ok_or("Połącz aplikację z grą.")?;
+        let cache=refresh_slot().lock().map_err(|_|"Czytnik FM jest zajęty.")?.as_ref().cloned().ok_or("Połącz aplikację z grą.")?;
+        if source.session_id!=session_id || cache.database.session_id!=session_id {return Err("Dane gry zostały odświeżone. Otwórz edytor ponownie.".into());}
+        if detect_football_manager().pid!=Some(source.pid) {return Err("Zmienił się proces gry. Połącz aplikację ponownie.".into());}
+        let mut process=if write {RemoteProcess::open_editor(source.pid)?} else {RemoteProcess::open(source.pid)?};
+        process.layout=source.layout;process.native_plugin_hash=cache.native_plugin_hash.clone();
+        if !verified_fm27(&process) {return Err("Zapis jest dostępny wyłącznie dla rozpoznanego wydania FM27. Ten odczyt nie potwierdza zgodności edytora.".into());}
+        refresh_identity_check(&process,&cache)?;
+        let cached=source.candidates.iter().find(|candidate|candidate.uid==uid).ok_or("Nie znaleziono zawodnika w bieżącej bazie.")?;
+        let candidate=live_candidate(&process,cached).ok_or("Rekord zawodnika zmienił się. Odśwież dane i otwórz edytor ponownie.")?;
+        let offset=candidate.person_address.checked_sub(candidate.player_address).ok_or("Nieprawidłowy rekord zawodnika.")?;
+        if !cache.player_classes.iter().any(|(known,vtable)|*known==offset && process.read_ptr(candidate.person_address)==Some(*vtable)) {return Err("Nie potwierdzono typu rekordu zawodnika. Zapis zablokowany.".into());}
+        Ok((process,cache,source,candidate))
+    }
+    fn editor_identity(process:&RemoteProcess,source:&ScoutingSession,candidate:&PlayerCandidate)->Result<EditorIdentity,String> {
+        Ok(EditorIdentity {session_id:source.session_id,uid:candidate.uid,pid:source.pid,created:process.creation_time().ok_or("Nie można potwierdzić procesu gry.")?,person:candidate.person_address,player:candidate.player_address,vtable:process.read_ptr(candidate.person_address).ok_or("Nie można potwierdzić rekordu zawodnika.")?})
+    }
+    fn verify_editor_identity(expected:&EditorIdentity,actual:&EditorIdentity)->Result<(),String> {
+        if expected.session_id!=actual.session_id || expected.uid!=actual.uid || expected.pid!=actual.pid || expected.created!=actual.created || expected.person!=actual.person || expected.player!=actual.player || expected.vtable!=actual.vtable {return Err("Zmieniła się gra lub adres zawodnika. Otwórz edytor ponownie.".into());} Ok(())
+    }
+    fn editor_row(process:&RemoteProcess,cache:&RefreshSession,source:&ScoutingSession,candidate:&PlayerCandidate)->Result<FmTableRow,String> {
+        let mut reads=PlayerReadCache::default();
+        let player=read_player(process,candidate.uid,candidate.person_address,candidate.player_address,candidate.ca,candidate.pa,&mut reads).ok_or("Nie można teraz odczytać danych zawodnika.")?;
+        let mut row=player_to_row(player,source.game_date,source.derived_year);
+        attach_euro_rate(&mut row,read_fm27_euro_rate(process,cache.plugin_base).or(source.euro_per_gbp));
+        if let Some(group)=cache.database.rows.iter().find(|row|row.get("UID")==Some(&candidate.uid.to_string())).and_then(|row|row.get("Grupa klubowa")) {row.insert("Grupa klubowa".into(),group.clone());}
+        Ok(row)
+    }
+    pub(super) fn get_player_editor(session_id:u64,uid:u32)->Result<PlayerEditSnapshot,String> {
+        let _guard=SCOUTING_QUERY_LOCK.lock().map_err(|_|"Czytnik FM jest zajęty.")?;
+        let (process,cache,source,candidate)=editor_context(session_id,uid,false)?;
+        let identity=editor_identity(&process,&source,&candidate)?;
+        let row=editor_row(&process,&cache,&source,&candidate)?;
+        let mut fields=Vec::new();
+        for (key,label,offset) in [("ca","Obecne umiejętności · CA",PLAYER_CA),("pa","Potencjał · PA",PLAYER_PA)] {
+            let address=candidate.player_address+offset;
+            let bytes=process.read_exact(address,2).ok_or("Nie można odczytać umiejętności.")?;
+            let value=read_u16(&bytes,0).filter(|v|(1..=200).contains(v)).ok_or("Nieprawidłowy odczyt umiejętności.")?;
+            fields.push(NativeEditorField {ui:EditorField {key:key.into(),label:label.into(),value:value.to_string(),kind:"number".into(),min:Some(1),max:Some(200)},address,bytes,encoding:EditEncoding::Ability});
+        }
+        let address=candidate.person_address+PERSON_DOB;
+        let bytes=process.read_exact(address,4).ok_or("Nie można odczytać daty urodzenia.")?;
+        let value=read_u32(&bytes,0).and_then(format_fm_date).ok_or("Nie potwierdzono daty urodzenia.")?;
+        fields.push(NativeEditorField {ui:EditorField {key:"birthDate".into(),label:"Data urodzenia".into(),value,kind:"date".into(),min:None,max:None},address,bytes,encoding:EditEncoding::BirthDate});
+        for (label,offset) in PLAYER_ATTRIBUTE_FIELDS.iter().chain(PLAYER_HIDDEN_FIELDS.iter()) {
+            let address=candidate.player_address+PLAYER_ATTRIBUTES+offset;
+            let raw=process.read_u8(address).ok_or("Nie można odczytać atrybutów.")?;
+            if !(3..=100).contains(&raw) {continue;}
+            fields.push(NativeEditorField {ui:EditorField {key:format!("attribute:{label}"),label:(*label).into(),value:decode_attribute(raw).to_string(),kind:"number".into(),min:Some(1),max:Some(20)},address,bytes:vec![raw],encoding:EditEncoding::ScaledAttribute});
+        }
+        for (label,offset) in PERSONALITY_FIELDS {
+            let address=candidate.person_address+offset;
+            let raw=process.read_u8(address).ok_or("Nie można odczytać osobowości.")?;
+            if !(1..=20).contains(&raw) {continue;}
+            fields.push(NativeEditorField {ui:EditorField {key:format!("attribute:{label}"),label:label.into(),value:raw.to_string(),kind:"number".into(),min:Some(1),max:Some(20)},address,bytes:vec![raw],encoding:EditEncoding::PlainAttribute});
+        }
+        refresh_identity_check(&process,&cache)?;
+        let token=editor_token();let ui_fields=fields.iter().map(|field|field.ui.clone()).collect();
+        let mut state=editor_state().lock().map_err(|_|"Edytor jest zajęty.")?;
+        state.drafts.retain(|_,draft|draft.opened.elapsed().as_secs()<300);
+        if state.drafts.len()>=8 {state.drafts.clear();}
+        state.drafts.insert(token.clone(),EditorDraft {identity,fields,opened:Instant::now()});
+        Ok(PlayerEditSnapshot {token,session_id,uid,name:row.get("Nazwisko").cloned().unwrap_or_else(||uid.to_string()),fields:ui_fields})
+    }
+    fn encode_birth_date(value:&str,previous:u32,game_date:Option<u32>)->Result<Vec<u8>,String> {
+        if value.len()!=10 || !value.is_ascii() || &value[4..5]!="-" || &value[7..8]!="-" {return Err("Podaj datę urodzenia w formacie RRRR-MM-DD.".into());}
+        let year=value[..4].parse::<i32>().map_err(|_|"Nieprawidłowy rok.")?;
+        let month=value[5..7].parse::<u32>().map_err(|_|"Nieprawidłowy miesiąc.")?;
+        let day=value[8..10].parse::<u32>().map_err(|_|"Nieprawidłowy dzień.")?;
+        if !(1900..=2200).contains(&year)||!(1..=12).contains(&month) {return Err("Nieprawidłowa data urodzenia.".into());}
+        let months=[31,if is_leap_year(year) {29} else {28},31,30,31,30,31,31,30,31,30,31];
+        if day==0||day>months[month as usize-1] {return Err("Nieprawidłowy dzień miesiąca.".into());}
+        let ordinal=months[..month as usize-1].iter().sum::<u32>()+day;
+        let raw=((year as u32)<<16)|ordinal;
+        let now=game_date.ok_or("Zmiana daty urodzenia wymaga potwierdzonej daty gry.")?;
+        if normalize_fm_date(raw)>normalize_fm_date(now) {return Err("Data urodzenia nie może być późniejsza niż data gry.".into());}
+        Ok((raw|(previous&0xFE00)).to_le_bytes().to_vec())
+    }
+    fn invalidate_editor_index() {
+        if let Ok(mut slot)=scouting_slot().lock() {if let Some(source)=slot.as_mut() {source.index=None;}}
+    }
+    fn apply_editor_patches(process:&RemoteProcess,identity:&EditorIdentity,patches:&[EditorPatch])->Result<(),String> {
+        // Compare every original value before the first write, then again just
+        // before each field. Never replace unrelated player bytes or records.
+        for patch in patches {
+            if process.read_exact(patch.address,patch.before.len()).as_ref()!=Some(&patch.before) {return Err(format!("Pole „{}” zmieniło się w FM. Wczytaj dane edytora ponownie.",patch.change.label));}
+        }
+        for (index,patch) in patches.iter().enumerate() {
+            let same_record=process.read_u32(identity.person+OBJ_UID)==Some(identity.uid) && process.read_ptr(identity.person)==Some(identity.vtable);
+            let result=if !same_record {Err("Tożsamość rekordu zmieniła się podczas zapisu.".into())} else if process.read_exact(patch.address,patch.before.len()).as_ref()!=Some(&patch.before) {Err("Gra zmieniła pole podczas zapisu.".into())} else {process.write_exact(patch.address,&patch.after)};
+            if let Err(error)=result {
+                let mut unreverted=Vec::new();
+                for done in patches[..=index].iter().rev() {
+                    if process.read_u32(identity.person+OBJ_UID)!=Some(identity.uid) || process.read_ptr(identity.person)!=Some(identity.vtable) {unreverted.push(done.change.label.clone());continue;}
+                    let current=process.read_exact(done.address,done.before.len());
+                    if current.as_ref()==Some(&done.before) {continue;}
+                    if current.as_ref()!=Some(&done.after)||process.write_exact(done.address,&done.before).is_err() {unreverted.push(done.change.label.clone());}
+                }
+                invalidate_editor_index();
+                return Err(if unreverted.is_empty() {format!("Zapis nie powiódł się: {error} Przywrócono wcześniejsze wartości.")} else {format!("Niepełny zapis: {error} Nie potwierdzono przywrócenia pól: {}. Sprawdź je w grze przed zapisem kariery.",unreverted.join(", "))});
+            }
+        }
+        invalidate_editor_index();
+        if process.read_u32(identity.person+OBJ_UID)!=Some(identity.uid) || process.read_ptr(identity.person)!=Some(identity.vtable) {return Err("Pola zapisano, ale gra zmieniła rekord podczas odczytu końcowego. Nie potwierdzono wyniku. Sprawdź zawodnika w grze.".into());}
+        Ok(())
+    }
+    fn finish_player_edit(process:&RemoteProcess,cache:&RefreshSession,source:&ScoutingSession,candidate:&PlayerCandidate,patches:Vec<EditorPatch>,undo_token:Option<String>)->Result<PlayerEditResult,String> {
+        let row=live_candidate(process,candidate).and_then(|live|editor_row(process,cache,source,&live).ok());
+        let message=row.is_none().then(||"Pola zapisano i odczytano z pamięci. Pełne dane zawodnika są chwilowo niedostępne — użyj odświeżania danych.".to_string());
+        Ok(PlayerEditResult {session_id:source.session_id,uid:candidate.uid,row:row.unwrap_or_default(),message,changes:patches.into_iter().map(|patch|patch.change).collect(),undo_token})
+    }
+
+    pub(super) fn apply_player_edit(request:PlayerEditRequest)->Result<PlayerEditResult,String> {
+        let _guard=SCOUTING_QUERY_LOCK.lock().map_err(|_|"Czytnik FM jest zajęty.")?;
+        if request.changes.is_empty()||request.changes.len()>64 {return Err("Wybierz od 1 do 64 zmienionych pól.".into());}
+        let draft=editor_state().lock().map_err(|_|"Edytor jest zajęty.")?.drafts.remove(&request.token).ok_or("Podgląd edycji wygasł. Wczytaj dane ponownie.")?;
+        if draft.opened.elapsed().as_secs()>300 {return Err("Podgląd edycji wygasł. Wczytaj dane ponownie.".into());}
+        let (process,cache,source,candidate)=editor_context(draft.identity.session_id,draft.identity.uid,true)?;
+        verify_editor_identity(&draft.identity,&editor_identity(&process,&source,&candidate)?)?;
+        let mut keys=HashSet::new();let mut patches=Vec::new();let mut ca=candidate.ca;let mut pa=candidate.pa;
+        for change in request.changes {
+            if !keys.insert(change.key.clone()) {return Err("Powtórzone pole edycji.".into());}
+            let field=draft.fields.iter().find(|field|field.ui.key==change.key).ok_or("Nieznane pole edycji.")?;
+            if change.value==field.ui.value {continue;}
+            let after=match field.encoding {
+                EditEncoding::BirthDate=>encode_birth_date(&change.value,read_u32(&field.bytes,0).ok_or("Nieprawidłowy zapis daty.")?,source.game_date)?,
+                _=>{
+                    let value=change.value.parse::<u16>().map_err(|_|"Wpisz liczbę całkowitą.")?;
+                    if value<field.ui.min.unwrap_or(1)||value>field.ui.max.unwrap_or(20) {return Err(format!("Nieprawidłowa wartość pola „{}”.",field.ui.label));}
+                    match field.encoding {EditEncoding::Ability=>{if change.key=="ca" {ca=value;}else{pa=value;} value.to_le_bytes().to_vec()},EditEncoding::ScaledAttribute=>vec![(value*5) as u8],_=>vec![value as u8]}
+                },
+            };
+            patches.push(EditorPatch {address:field.address,before:field.bytes.clone(),after,change:AppliedChange {label:field.ui.label.clone(),before:field.ui.value.clone(),after:change.value}});
+        }
+        if patches.is_empty() {return Err("Nie wybrano żadnej zmiany.".into());}
+        if pa<ca {return Err("Potencjał PA nie może być mniejszy niż obecne umiejętności CA. Zmień oba pola w jednym zapisie.".into());}
+        refresh_identity_check(&process,&cache)?;
+        apply_editor_patches(&process,&draft.identity,&patches)?;
+        let token=editor_token();
+        let mut state=editor_state().lock().map_err(|_|"Zmiany zapisano, ale nie można przygotować cofnięcia.")?;
+        if state.undos.len()>=8 {state.undos.clear();}
+        state.undos.insert(token.clone(),EditorUndo {identity:draft.identity,patches:patches.clone()});drop(state);
+        finish_player_edit(&process,&cache,&source,&candidate,patches,Some(token))
+    }
+    pub(super) fn undo_player_edit(token:String)->Result<PlayerEditResult,String> {
+        let _guard=SCOUTING_QUERY_LOCK.lock().map_err(|_|"Czytnik FM jest zajęty.")?;
+        let saved=editor_state().lock().map_err(|_|"Edytor jest zajęty.")?.undos.remove(&token).ok_or("Nie ma już zapisu do cofnięcia.")?;
+        let (process,cache,source,candidate)=editor_context(saved.identity.session_id,saved.identity.uid,true)?;
+        verify_editor_identity(&saved.identity,&editor_identity(&process,&source,&candidate)?)?;
+        let patches=saved.patches.into_iter().map(|patch|EditorPatch {address:patch.address,before:patch.after,after:patch.before,change:AppliedChange {label:patch.change.label,before:patch.change.after,after:patch.change.before}}).collect::<Vec<_>>();
+        refresh_identity_check(&process,&cache)?;
+        apply_editor_patches(&process,&saved.identity,&patches)?;
+        finish_player_edit(&process,&cache,&source,&candidate,patches,None)
+    }
+
     struct HandleGuard(HANDLE);
 
     impl Drop for HandleGuard {
@@ -593,6 +767,18 @@ mod windows_reader {
             })
         }
 
+        fn open_editor(pid:u32)->Result<Self,String> {
+            let handle=unsafe {OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ|PROCESS_VM_WRITE|PROCESS_VM_OPERATION,false,pid)}
+                .map_err(|error|format!("Nie można otworzyć FM do zapisu: {error}"))?;
+            Ok(Self {handle:HandleGuard(handle),layout:fm_version::FM26,native_plugin_hash:None})
+        }
+        fn write_exact(&self,address:usize,bytes:&[u8])->Result<(),String> {
+            let mut written=0usize;
+            unsafe {WriteProcessMemory(self.handle.0,address as *const c_void,bytes.as_ptr() as *const c_void,bytes.len(),Some(&mut written))}
+                .map_err(|e|format!("Błąd zapisu pamięci: {e}"))?;
+            if written!=bytes.len() || self.read_exact(address,bytes.len()).as_deref()!=Some(bytes) {return Err("Gra nie potwierdziła zapisanej wartości.".into());}
+            Ok(())
+        }
         fn creation_time(&self) -> Option<u64> {
             let (mut created,mut exited,mut kernel,mut user)=(FILETIME::default(),FILETIME::default(),FILETIME::default(),FILETIME::default());
             unsafe { GetProcessTimes(self.handle.0,&mut created,&mut exited,&mut kernel,&mut user).ok()?; }
@@ -4941,3 +5127,16 @@ pub(crate) fn search_fm_players(_query: crate::fm_scout::ScoutingQuery) -> Resul
 pub(crate) fn refresh_fm_native_database() -> Result<FmNativeDatabase,String> { windows_reader::refresh_database() }
 #[cfg(not(target_os = "windows"))]
 pub(crate) fn refresh_fm_native_database() -> Result<FmNativeDatabase,String> { Err("Szybkie odświeżanie jest dostępne w aplikacji Windows.".into()) }
+
+#[cfg(target_os="windows")]
+pub(crate) fn get_player_editor(session_id:u64,uid:u32)->Result<crate::fm_editor::PlayerEditSnapshot,String> {windows_reader::get_player_editor(session_id,uid)}
+#[cfg(not(target_os="windows"))]
+pub(crate) fn get_player_editor(_session_id:u64,_uid:u32)->Result<crate::fm_editor::PlayerEditSnapshot,String> {Err("Edytor jest dostępny w aplikacji Windows.".into())}
+#[cfg(target_os="windows")]
+pub(crate) fn apply_player_edit(request:crate::fm_editor::PlayerEditRequest)->Result<crate::fm_editor::PlayerEditResult,String> {windows_reader::apply_player_edit(request)}
+#[cfg(not(target_os="windows"))]
+pub(crate) fn apply_player_edit(_request:crate::fm_editor::PlayerEditRequest)->Result<crate::fm_editor::PlayerEditResult,String> {Err("Edytor jest dostępny w aplikacji Windows.".into())}
+#[cfg(target_os="windows")]
+pub(crate) fn undo_player_edit(token:String)->Result<crate::fm_editor::PlayerEditResult,String> {windows_reader::undo_player_edit(token)}
+#[cfg(not(target_os="windows"))]
+pub(crate) fn undo_player_edit(_token:String)->Result<crate::fm_editor::PlayerEditResult,String> {Err("Edytor jest dostępny w aplikacji Windows.".into())}

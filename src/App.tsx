@@ -1,4 +1,5 @@
 import { getGameEuroRate } from "./utils/playerFinance";
+import type { PlayerEditResult } from "./services/fmEditor";
 import { closeAppModule } from "./utils/moduleDock";
 import {
   lazy,
@@ -318,6 +319,13 @@ export default function App() {
     // Close drawers when the managed context changes or FM disconnects.
     closeAppModule();
   }, [managedMode, snapshot?.managedTeamUid, snapshot?.managedClubUid, snapshot?.managedNationUid]);
+  const editorSession=useRef(0);
+  editorSession.current=snapshot?.sessionId??0;
+  const handlePlayerEdited=useCallback((result:PlayerEditResult)=>{
+    if(editorSession.current!==result.sessionId)return;
+    setRows(current=>current.map(row=>row.UID===String(result.uid)?{...row,...result.row}:row));
+    setSnapshot(current=>current?.sessionId===result.sessionId?{...current,rows:current.rows.map(row=>row.UID===String(result.uid)?{...row,...result.row}:row)}:current);
+  },[]);
   const [error, setError] = useState("");
   const [supplementaryDataLoading, setSupplementaryDataLoading] =
     useState(false);
@@ -1109,12 +1117,12 @@ export default function App() {
         <span>
           {snapshot?.savedAt
             ? `Snapshot ${new Date(snapshot.savedAt).toLocaleString("pl-PL")}`
-            : "Odczyt tylko do odczytu"}
+            : "Oczekiwanie na połączenie"}
         </span>
       </footer>
 
       <Suspense fallback={null}>
-        {managedMode === "club" && <TransferSearch euroPerGbp={getGameEuroRate(rows[0])} sessionId={snapshot?.sessionId ?? 0} clubName={snapshot?.managedTeam ?? null} />}
+        {managedMode === "club" && <TransferSearch euroPerGbp={getGameEuroRate(rows[0])} sessionId={snapshot?.sessionId ?? 0} clubName={snapshot?.managedTeam ?? null} onPlayerEdited={handlePlayerEdited} />}
         {rows.length > 1 && (
           <PlayerCompare
             rows={rows}
@@ -1135,6 +1143,8 @@ export default function App() {
         )}
         {selectedPlayer && (
           <PlayerDetailsPanel
+            sessionId={snapshot?.sessionId??0}
+            onPlayerEdited={handlePlayerEdited}
             player={selectedPlayer}
             rows={rows}
             roleMatch={selectedPlayerCurrentRoleMatch}

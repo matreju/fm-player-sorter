@@ -1,3 +1,4 @@
+mod fm_editor;
 mod fm_build;
 mod fm_club;
 mod fm_human;
@@ -34,6 +35,9 @@ pub fn run() {
             fm_database::load_fm_season_stats,
             fm_database::load_fm_team_logo,
             fm_database::get_fm_date_status,
+            fm_editor::get_fm_player_editor,
+            fm_editor::apply_fm_player_edit,
+            fm_editor::undo_fm_player_edit,
         ])
         .run(tauri::generate_context!())
         .expect("error while running FM Player Sorter");

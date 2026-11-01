@@ -6,6 +6,8 @@ import { AppModuleDrawer } from "../app-shell";
 import { AppTextField, AppSelectField, AppButton } from "../ui";
 import { contractDuration } from "../../utils/contractDuration";
 import { TransferColumnPicker, TRANSFER_DEFAULT_COLUMNS, loadTransferColumns, saveTransferColumns } from "./TransferColumnPicker";
+import { PlayerEditor } from "../player-editor/PlayerEditor";
+import type { PlayerEditResult } from "../../services/fmEditor";
 import { PositionPitch } from "./PositionPitch";
 import "./TransferSearch.css";
 
@@ -30,7 +32,8 @@ function cell(column:string,value:string|undefined, rate:number|undefined) {
   }
   return value;
 }
-export function TransferSearch({sessionId,clubName,euroPerGbp}:{sessionId:number;clubName:string|null;euroPerGbp:number|undefined}) {
+export function TransferSearch({sessionId,clubName,euroPerGbp,onPlayerEdited}:{sessionId:number;clubName:string|null;euroPerGbp:number|undefined;onPlayerEdited:(result:PlayerEditResult)=>void}) {
+  const [editingUid,setEditingUid]=useState<number|null>(null);
   const {isOpen,close}=useModuleDrawer("transfers");
   const [filtersOpen,setFiltersOpen]=useState(false);
   const [filterTab,setFilterTab]=useState<string>("general");
@@ -53,6 +56,8 @@ export function TransferSearch({sessionId,clubName,euroPerGbp}:{sessionId:number
     }).catch(reason=>{if(!cancelled){setError(String(reason));setResult(null);}}).finally(()=>{if(!cancelled)setLoading(false);});
     return ()=>{cancelled=true;};
   },[isOpen,sessionId,query,revision]);
+  useEffect(()=>{setEditingUid(null);},[sessionId,isOpen]);
+  const editApplied=(next:PlayerEditResult)=>{onPlayerEdited(next);setRevision(value=>value+1);};
   const set=(key:keyof Filters)=>(value:string)=>setDraft(current=>({...current,[key]:value}));
   function submit(event:FormEvent) {event.preventDefault();try {setQuery(request(draft,sessionId,effectiveRate,attributeDraft,0,positions,positionMatch));} catch(reason) {setError(String(reason));}}
   function sortBy(column:string) {
@@ -84,6 +89,7 @@ export function TransferSearch({sessionId,clubName,euroPerGbp}:{sessionId:number
   const go=(page:number)=>setQuery(current=>({...current,page}));
   return <AppModuleDrawer isOpen={isOpen} onClose={close} title="Transfery · pełna baza piłkarzy"
     subtitle={clubName ? `Wszystkie kluby, w tym ${clubName}, oraz wolni zawodnicy` : "Wszyscy piłkarze z wczytanej bazy gry"} labelledById="transfers-title">
+    {editingUid!==null&&<PlayerEditor key={`${sessionId}:${editingUid}`} sessionId={sessionId} uid={editingUid} onClose={()=>setEditingUid(null)} onApplied={editApplied}/>}
     {!sessionId ? <p>Najpierw połącz aplikację z grą i wczytaj prowadzony zespół.</p> : <div className="transfer-search">
       <div className="transfer-search__toolbar">
         <AppSelectField label="Lista życzeń z FM" value={query.shortlistId??""} onChange={chooseShortlist} disabled={loading||!shown} options={[{value:"",label:"Cała baza — bez ograniczenia do listy"},...(shown?.shortlists??[]).map(list=>({value:list.id,label:`${list.name} (${list.playerCount}${list.unresolvedCount?"+":""})`}))]} />
@@ -142,7 +148,7 @@ export function TransferSearch({sessionId,clubName,euroPerGbp}:{sessionId:number
       {shown && <>
         <div className="transfer-search__summary" role="status"><strong>Znaleziono {shown.total.toLocaleString("pl-PL")} z {(shown.databaseTotal??shown.total).toLocaleString("pl-PL")} piłkarzy w bazie</strong><span>{shown.total?shown.page*shown.pageSize+1:0}–{Math.min((shown.page+1)*shown.pageSize,shown.total)} · strona {shown.page+1} z {pageCount}</span></div>
         <div aria-busy={loading} className={`transfer-search__table${filtersOpen?"":" transfer-search__table--expanded"}`}><table><thead><tr>{visibleColumns.map(column=><th key={column} aria-sort={sortKey(column)===query.sort?(query.sortDirection==="asc"?"ascending":"descending"):undefined}>{sortKey(column)?<button type="button" onClick={()=>sortBy(column)} disabled={loading}>{columnLabel(column)} <span>{sortKey(column)===query.sort?(query.sortDirection==="asc"?"↑":"↓"):"↕"}</span></button>:columnLabel(column)}</th>)}</tr></thead>
-          <tbody>{shown.rows.map(row=><tr key={row.UID}>{visibleColumns.map(column=><td key={column} data-numeric={(["OU","PA","Wiek","Wzrost","Kondycja","Wartość","Cena wywoławcza","Pensja","Zapas potencjału"].includes(column)||shown?.attributeColumns?.includes(column))||undefined} title={["Pensja","Wartość","Cena wywoławcza"].includes(column) ? (getGameEuroRate(row) ? FINANCE_NOTE : FINANCE_UNAVAILABLE) : row[column] || undefined}>{column==="Pozostały kontrakt" ? contractDuration(row["Koniec kontraktu"],shown.gameDate) : cell(column,row[column],getGameEuroRate(row))}</td>)}</tr>)}</tbody></table>
+          <tbody>{shown.rows.map(row=><tr key={row.UID}>{visibleColumns.map(column=><td key={column} data-numeric={(["OU","PA","Wiek","Wzrost","Kondycja","Wartość","Cena wywoławcza","Pensja","Zapas potencjału"].includes(column)||shown?.attributeColumns?.includes(column))||undefined} title={["Pensja","Wartość","Cena wywoławcza"].includes(column) ? (getGameEuroRate(row) ? FINANCE_NOTE : FINANCE_UNAVAILABLE) : row[column] || undefined}>{column==="Nazwisko" ? <button type="button" className="transfer-search__player-editor" title="Otwórz edytor zawodnika w grze" onClick={()=>setEditingUid(Number(row.UID))}>{row[column]}</button> : column==="Pozostały kontrakt" ? contractDuration(row["Koniec kontraktu"],shown.gameDate) : cell(column,row[column],getGameEuroRate(row))}</td>)}</tr>)}</tbody></table>
           {!shown.rows.length && <p className="transfer-search__empty">Brak zawodników spełniających te filtry.</p>}</div>
         <div className="transfer-search__pagination"><AppButton disabled={loading||shown.page===0} onClick={()=>go(0)}>Pierwsza</AppButton><AppButton disabled={loading||shown.page===0} onClick={()=>go(shown.page-1)}>← Poprzednia</AppButton>
           <AppButton disabled={loading||shown.page+1>=pageCount} onClick={()=>go(shown.page+1)}>Następna →</AppButton><AppButton disabled={loading||shown.page+1>=pageCount} onClick={()=>go(pageCount-1)}>Ostatnia</AppButton></div>

@@ -26,6 +26,8 @@ import {
 import { MoneyballProfile } from "../moneyball";
 import { AppButton, AppSelectField } from "../ui";
 import { buildPlayerNationalReport } from "../../utils/playerNationalReport";
+import { PlayerEditor } from "../player-editor/PlayerEditor";
+import type { PlayerEditResult } from "../../services/fmEditor";
 import { PlayerFmOverview } from "./PlayerFmOverview";
 
 const ROLE_SCORE_COLUMN = "Dopasowanie";
@@ -53,6 +55,8 @@ type PlayerRoleInsights = {
 };
 
 type PlayerDetailsPanelProps = {
+  sessionId: number;
+  onPlayerEdited: (result: PlayerEditResult) => void;
   player: TableRow;
   rows: TableRow[];
   roleMatch: RoleScoreResult | null;
@@ -569,9 +573,12 @@ export function PlayerDetailsPanel({
   getPlayerMark,
   getPlayerSelectionPosition,
   onClose,
+  sessionId,
+  onPlayerEdited,
 }: PlayerDetailsPanelProps) {
   const modalRef = useRef<HTMLElement | null>(null);
   const [showMoneyball, setShowMoneyball] = useState(false);
+  const [editorOpen,setEditorOpen]=useState(false);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -661,6 +668,8 @@ export function PlayerDetailsPanel({
         </header>
 
         <div style={detailStyles.body}>
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}><AppButton disabled={!sessionId} onClick={()=>setEditorOpen(true)}>Edytuj w grze</AppButton></div>
+          {editorOpen&&<PlayerEditor key={`${sessionId}:${player.UID}`} sessionId={sessionId} uid={Number(player.UID)} onClose={()=>setEditorOpen(false)} onApplied={onPlayerEdited}/>}
           <PlayerFmOverview player={player} />
 
           <div style={detailStyles.topGrid}>
