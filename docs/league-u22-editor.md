@@ -130,3 +130,28 @@ The fix addresses one definite predicate bug. Until a new live preview succeeds,
 the screenshot also leaves open an unsupported native mode or a different
 match-specific fixture-rule index. Do not relax either of those protections based
 only on the text visible in FM. Live behaviour remains unverified here.
+
+
+## beta.17: ownership refusal evidence, not a relaxed write gate
+
+The user's beta.16 reports the fixture-owner refusal. The rejection occurs after
+finding type0x16 with a supported minimum mode, and before staging any write.
+It does not prove whether the mismatch is on the phase root or +0x68 child,
+or whether the actual owner is a different competition or an unowned sentinel.
+
+Native 0x1263D5E compares FIXTURE_RULES +0x108 to COMP +0x0C. It also has a
+parent-competition path and 0x12641BC permits a -1 owner in one selector. These
+are evidence that simply deleting the competition check could alter shared rules;
+they are not evidence that this user's target is exclusive to Ekstraklasa.
+
+beta.17 preserves the exact ownership requirement and all write/undo behaviour.
+The refusal now includes signed/hex actual owner, expected league UID, root vs
+child route, stage/default/resolved index, phase-root owner and existing bounded
+U22 type/mode/quota observations. No process addresses or raw expressions are
+exposed. The existing Copy message button copies this user-visible text only;
+there is no upload, heap scan or separate diagnostics workflow.
+
+This release gathers the missing evidence in the already-blocked preview; it
+does not claim to fix the ownership mismatch or disable U22 in the user's save.
+Live readback of that evidence is still required to choose a correct ownership
+resolution without touching another competition or a shared default.

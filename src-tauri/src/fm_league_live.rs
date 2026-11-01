@@ -90,7 +90,7 @@ fn league_add_quota_patch(patches:&mut Vec<LeagueQuotaPatch>,pointer:usize,bytes
     if patches.iter().any(|patch|patch.address==pointer+0x18) {return Ok(());}
     patches.push(LeagueQuotaPatch {address:pointer+0x18,before:bytes[0x18..0x1C].to_vec(),after:0u32.to_le_bytes().to_vec()});Ok(())
 }
-fn league_collect_fixture_quota(process:&RemoteProcess,guards:&mut Vec<LeagueGuard>,patches:&mut Vec<LeagueQuotaPatch>,fixture:usize,observations:&mut Vec<String>)->Result<Option<u32>,String> {
+fn league_collect_fixture_quota(process:&RemoteProcess,guards:&mut Vec<LeagueGuard>,patches:&mut Vec<LeagueQuotaPatch>,fixture:usize,route:&str,observations:&mut Vec<String>)->Result<Option<u32>,String> {
     // 0x12639E0 confirms +0x108 is the competition UID. Refuse country/shared rules.
     let header=league_capture(process,guards,fixture+0x108,0x28)?;
     let current_bytes=league_capture(process,guards,fixture+0x70,8)?;
@@ -109,7 +109,10 @@ fn league_collect_fixture_quota(process:&RemoteProcess,guards:&mut Vec<LeagueGua
     }
     let targets=current_records.iter().filter(|(_,bytes)|league_u22_entry(bytes)).collect::<Vec<_>>();
     if targets.is_empty() {return Ok(None);}
-    if read_u32(&header,0)!=Some(129558) {return Err("Zasady nie mają potwierdzonego właściciela Ekstraklasy. Niczego nie zmieniono.".into());}
+    if read_u32(&header,0)!=Some(129558) {
+        let owner=read_u32(&header,0).ok_or("Nie udało się odczytać właściciela zasad.")?;
+        return Err(format!("Znaleziono minimum U22, ale nie potwierdzono właściciela jego zasad. Niczego nie zmieniono.\nOczekiwany identyfikator ligi: 129558; odczytany właściciel: {} (0x{owner:08X}).\n{route}\n{}\nSkopiuj cały komunikat. Sam niezgodny identyfikator nie potwierdza, że reguła należy do innej ligi; może też oznaczać współdzielone lub pośrednie powiązanie, którego edytor jeszcze nie obsługuje.",owner as i32,observations.join("\n")));
+    }
     if targets.len()!=1 {return Err("Znaleziono więcej niż jeden wymóg U22. Nie można bezpiecznie wybrać reguły.".into());}
     let minimum=read_u32(&targets[0].1,0x18).ok_or("Nieprawidłowy limit U22.")?;
     if minimum!=3&&minimum!=0 {return Err(format!("Odczytano minimum {minimum} U22. Ta operacja obsługuje wyłącznie potwierdzony wymóg trzech zawodników."));}
@@ -168,17 +171,19 @@ fn league_resolve_quota(process:&RemoteProcess,cache:&RefreshSession)->Result<(L
     let mut patches=Vec::new();let mut minimum=None;let mut observations=Vec::new();
     // Prefer neither cached UI rules nor a heap sample. Cover the exact root
     // and its optional native match-rules child (+0x68, used by 0xDFBAC0).
-    let mut candidates=vec![fixture];
+    let mut candidates=vec![(fixture,"główna lista fazy")];
     let child_bytes=league_capture(process,&mut guards,fixture+0x68,8)?;
     let child=read_u64(&child_bytes,0).unwrap_or(0) as usize;
     if child!=0 {
         if child<0x10_000||child%8!=0||child==fixture {return Err("Nie potwierdzono podrzędnych zasad meczu.".into());}
         let nested=league_capture(process,&mut guards,child+0x68,8)?;
         if read_u64(&nested,0)!=Some(0) {return Err("Zasady meczu mają dodatkowe warianty. Zapis zablokowany.".into());}
-        candidates.push(child);
+        candidates.push((child,"podrzędna lista meczu (+0x68)"));
     }
-    for fixture in candidates {
-        if let Some(value)=league_collect_fixture_quota(process,&mut guards,&mut patches,fixture,&mut observations)? {
+    let root_owner=process.read_u32(fixture+0x108).map(|uid|format!("{} (0x{uid:08X})",uid as i32)).unwrap_or_else(||"brak odczytu".into());
+    for (fixture,path) in candidates {
+        let route=format!("Odczyt beta.17: {path}; indeks fazy: {setting_index}; indeks domyślny: {default_index}; wybrany indeks: {index}; właściciel głównej listy: {root_owner}.");
+        if let Some(value)=league_collect_fixture_quota(process,&mut guards,&mut patches,fixture,&route,&mut observations)? {
             if minimum.is_some_and(|previous|previous!=value) {return Err("Reguły ligi i meczu mają różne wymagania U22. Zapis zablokowany.".into());}
             minimum=Some(value);
         }
