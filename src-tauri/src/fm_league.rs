@@ -24,20 +24,20 @@ pub async fn inspect_fm_league_rules(session_id:u64)->Result<LeagueRuleReport,St
 #[serde(rename_all="camelCase")]
 pub struct LeagueU22Snapshot {
     pub session_id:u64,pub club:String,pub competition:String,pub game_date:String,
-    pub minimum:u32,pub record_count:usize,pub token:Option<String>,pub undo_token:Option<String>,
+    pub minimum:u32,pub shared_default:bool,pub record_count:usize,pub token:Option<String>,pub undo_token:Option<String>,
 }
 #[derive(Serialize)]
 #[serde(rename_all="camelCase")]
 pub struct LeagueU22Result {
-    pub session_id:u64,pub before:u32,pub after:u32,pub record_count:usize,pub undo_token:Option<String>,
+    pub session_id:u64,pub shared_default:bool,pub before:u32,pub after:u32,pub record_count:usize,pub undo_token:Option<String>,
 }
 #[tauri::command]
 pub async fn get_fm_league_u22_editor(session_id:u64)->Result<LeagueU22Snapshot,String> {
     tauri::async_runtime::spawn_blocking(move||crate::fm_reader::get_league_u22_editor(session_id)).await.map_err(|e|e.to_string())?
 }
 #[tauri::command]
-pub async fn disable_fm_league_u22(token:String)->Result<LeagueU22Result,String> {
-    tauri::async_runtime::spawn_blocking(move||crate::fm_reader::disable_league_u22(token)).await.map_err(|e|e.to_string())?
+pub async fn disable_fm_league_u22(token:String,accept_shared_default:Option<bool>)->Result<LeagueU22Result,String> {
+    tauri::async_runtime::spawn_blocking(move||crate::fm_reader::disable_league_u22(token,accept_shared_default.unwrap_or(false))).await.map_err(|e|e.to_string())?
 }
 #[tauri::command]
 pub async fn undo_fm_league_u22(token:String)->Result<LeagueU22Result,String> {

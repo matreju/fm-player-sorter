@@ -155,3 +155,41 @@ This release gathers the missing evidence in the already-blocked preview; it
 does not claim to fix the ownership mismatch or disable U22 in the user's save.
 Live readback of that evidence is still required to choose a correct ownership
 resolution without touching another competition or a shared default.
+
+
+## beta.18: the native default-route sentinel
+
+The user's beta.17 live preview reports stage indexFF, actual default index1,
+root ownerFFFFFFFF (-1), exact match-squad U22 type0x16, minimum mode1, quota3
+and nonzero qualifiers. This confirms the immediate ownership rejection; it
+does not establish that the collection or its dated source is league-exclusive.
+
+Native 0x1263A1D substitutes ACTUAL_COMP +0x31 for an FF input index. At
+0x1263ADA the index selects the exact FIXTURE_RULES pointer from the validated
+container vector without demanding a nonnegative owner. Native 0x12641BC also
+recognizes ownerFFFFFFFF in an alternate selector. An unowned/default fixture
+is a valid rules source, not a missing competition or a corrupt UID.
+
+beta.18 accepts ownerFFFFFFFF only when the verified single Ekstraklasa stage
+has indexFF and its exact selected root fixture also has ownerFFFFFFFF. It does
+not scan sibling fixtures or accept a different positive competition UID. The
+root/child pointers, stage/default index and owner sentinel are immutable guards.
+The optional direct native child can use the same default scope, without allowing
+deeper variants. Exact plugin/session/date checks, unique complete source/current
+matching, minimum modes1/2, quota3 and all expression guards remain unchanged.
+
+Because neither the sentinel nor a successful traversal proves exclusivity,
+sharedDefault is retained in the backend draft, snapshot and write/undo receipts.
+The preview plainly states that the change may affect other competitions using
+the same list or source definition. The apply button stays disabled until the user
+selects that scope. The backend independently requires acceptSharedDefault for
+a shared draft, defaulting omitted command arguments to false and retaining the
+preview on rejection. It checks this before opening the write handle. Undo of an
+already-authorized write restores exactly the stored values with existing guards.
+The app never writes merely on preview/open. No player-age/eligibility edits,
+remote allocation, background freezing or executable patches are introduced.
+
+This fixes the specific owner-1 rejection from the supplied live readout, but a
+subsequent source-match or consistency refusal remains possible and must not be
+bypassed. Compilation is not proof of the resulting bench behaviour in FM.
+No tests are run per the user's explicit preference.

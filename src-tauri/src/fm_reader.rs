@@ -5321,9 +5321,9 @@ pub(crate) fn get_league_u22_editor(session_id:u64)->Result<crate::fm_league::Le
 #[cfg(not(windows))]
 pub(crate) fn get_league_u22_editor(_session_id:u64)->Result<crate::fm_league::LeagueU22Snapshot,String> {Err("Edycja zasad ligi jest dostępna w aplikacji Windows.".into())}
 #[cfg(windows)]
-pub(crate) fn disable_league_u22(token:String)->Result<crate::fm_league::LeagueU22Result,String> {windows_reader::disable_league_u22(token)}
+pub(crate) fn disable_league_u22(token:String,accept_shared_default:bool)->Result<crate::fm_league::LeagueU22Result,String> {windows_reader::disable_league_u22(token,accept_shared_default)}
 #[cfg(not(windows))]
-pub(crate) fn disable_league_u22(_token:String)->Result<crate::fm_league::LeagueU22Result,String> {Err("Edycja zasad ligi jest dostępna w aplikacji Windows.".into())}
+pub(crate) fn disable_league_u22(_token:String,_accept_shared_default:bool)->Result<crate::fm_league::LeagueU22Result,String> {Err("Edycja zasad ligi jest dostępna w aplikacji Windows.".into())}
 #[cfg(windows)]
 pub(crate) fn undo_league_u22(token:String)->Result<crate::fm_league::LeagueU22Result,String> {windows_reader::undo_league_u22(token)}
 #[cfg(not(windows))]

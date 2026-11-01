@@ -4,13 +4,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { AppButton } from "../ui";
 import "./LeagueU22Editor.css";
 
-type Snapshot={sessionId:number;club:string;competition:string;gameDate:string;minimum:number;recordCount:number;token:string|null;undoToken:string|null};
-type Receipt={sessionId:number;before:number;after:number;recordCount:number;undoToken:string|null};
+type Snapshot={sessionId:number;club:string;competition:string;gameDate:string;minimum:number;sharedDefault:boolean;recordCount:number;token:string|null;undoToken:string|null};
+type Receipt={sessionId:number;before:number;after:number;sharedDefault:boolean;recordCount:number;undoToken:string|null};
 
 export function LeagueU22Editor({sessionId}:{sessionId:number}){
   const [open,setOpen]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
   const [snapshot,setSnapshot]=useState<Snapshot|null>(null),[receipt,setReceipt]=useState<Receipt|null>(null);
   const [revision,setRevision]=useState(0);
+  const [sharedAccepted,setSharedAccepted]=useState(false);
+  const sharedDefault=snapshot?.sharedDefault??receipt?.sharedDefault??false;
   const [copied,setCopied]=useState(false),[writeError,setWriteError]=useState(false);
   const generation=useRef(0),dialog=useRef<HTMLElement>(null),trigger=useRef<HTMLSpanElement>(null);
   useEffect(()=>{
@@ -21,17 +23,17 @@ export function LeagueU22Editor({sessionId}:{sessionId:number}){
   useEffect(()=>{
     const request=++generation.current;
     if(!open)return;
-    setBusy(true);setError("");setWriteError(false);setCopied(false);setSnapshot(null);
+    setBusy(true);setError("");setWriteError(false);setCopied(false);setSharedAccepted(false);setSnapshot(null);
     invoke<Snapshot>("get_fm_league_u22_editor",{sessionId}).then(next=>{if(generation.current===request&&next.sessionId===sessionId)setSnapshot(next);}).catch(reason=>{if(generation.current===request)setError(String(reason));}).finally(()=>{if(generation.current===request)setBusy(false);});
     return()=>{generation.current++;};
   },[open,sessionId,revision]);
   useEffect(()=>{setReceipt(null);},[sessionId]);
   async function apply(undo:boolean){
     const token=undo?(snapshot?.undoToken??receipt?.undoToken):snapshot?.token;
-    if(!token||busy)return;
+    if(!token||busy||(!undo&&sharedDefault&&!sharedAccepted))return;
     const request=generation.current;setBusy(true);setError("");setWriteError(true);
     try {
-      const result=await invoke<Receipt>(undo?"undo_fm_league_u22":"disable_fm_league_u22",{token});
+      const result=await invoke<Receipt>(undo?"undo_fm_league_u22":"disable_fm_league_u22",{token,acceptSharedDefault:!undo&&sharedAccepted});
       if(generation.current!==request||result.sessionId!==sessionId)return;
       setReceipt(result);setSnapshot(null);setRevision(value=>value+1);
     }catch(reason){if(generation.current===request){setError(String(reason));setSnapshot(null);}}
@@ -44,7 +46,8 @@ export function LeagueU22Editor({sessionId}:{sessionId:number}){
       if(event.key==="Tab"&&dialog.current){const controls=Array.from(dialog.current.querySelectorAll<HTMLElement>("button:not(:disabled)"));const first=controls[0],last=controls.at(-1);if(event.shiftKey&&(document.activeElement===first||document.activeElement===dialog.current)){event.preventDefault();last?.focus();}else if(!event.shiftKey&&(document.activeElement===last||document.activeElement===dialog.current)){event.preventDefault();first?.focus();}}
     }}><section ref={dialog} tabIndex={-1} className="league-u22" role="dialog" aria-modal="true" aria-labelledby="league-u22-title">
       <header><div><small>EDYCJA ZASAD W FM27</small><h2 id="league-u22-title">Wymóg zawodników U22</h2><p>{snapshot?.competition??"PKO Bank Polski Ekstraklasa"}</p></div><AppButton disabled={busy} onClick={()=>setOpen(false)} aria-label="Zamknij edytor zasad">×</AppButton></header>
-      <p>Wstrzymaj grę i użyj tej opcji poza rozgrywanym meczem. Zmiana dotyczy wszystkich klubów w rozpoznanej fazie ligowej. Nie zmienia wieku zawodników ani zasad dotyczących wychowanków i rejestracji U21.</p>
+      <p>Wstrzymaj grę i użyj tej opcji poza rozgrywanym meczem. Zmiana dotyczy wszystkich klubów korzystających z odczytanych zasad. Nie zmienia wieku zawodników ani zasad dotyczących wychowanków i rejestracji U21.</p>
+      {sharedDefault&&<div className="league-u22__scope" role="note"><strong>Domyślne zasady · mogą być współdzielone</strong><p>Ekstraklasa korzysta z tej domyślnej listy zasad FM. Zmiana limitu może objąć również inne rozgrywki korzystające z tej samej listy lub definicji. Nie potwierdzono, że dotyczy wyłącznie Ekstraklasy.</p>{snapshot?.token&&<label><input type="checkbox" checked={sharedAccepted} disabled={busy} onChange={event=>setSharedAccepted(event.target.checked)}/>Chcę zmienić te zasady także wtedy, gdy korzystają z nich inne rozgrywki.</label>}</div>}
       {error&&<div role="alert" className="league-u22__error"><strong>{writeError?"Zapis nie został potwierdzony":"Nie zmieniono zasad — nie udało się dopasować reguły"}</strong><p>{error}</p><AppButton onClick={()=>{void navigator.clipboard.writeText(error).then(()=>setCopied(true)).catch(()=>setCopied(false));}}>{copied?"Skopiowano komunikat":"Kopiuj komunikat"}</AppButton></div>}
       {busy&&<p role="status">{snapshot?"Zapisywanie limitu w FM…":"Odczytywanie powiązanych zasad ligi…"}</p>}
       {receipt&&<div className="league-u22__receipt" role="status"><strong>Odczyt po zapisie potwierdził zmianę: {receipt.before} → {receipt.after}</strong><span>Sprawdź zasady i wybór ławki po ponownym otwarciu ekranu w FM. Karierę zapisujesz w grze.</span></div>}
@@ -53,7 +56,7 @@ export function LeagueU22Editor({sessionId}:{sessionId:number}){
         <div className="league-u22__quota"><span>Minimum U22 w kadrze meczowej</span><strong>{snapshot.minimum}</strong><small>{snapshot.minimum===0?"W odczytanej regule minimum wynosi zero":"Zmiana do zapisania: 3 → 0"}</small></div>
         <p>Zapisywany jest limit w aktywnych zasadach oraz odpowiadającej im definicji. Wymóg z limitem zero nie tworzy niedoboru U22, od którego zależy ograniczenie opisane w zasadach FM. Skuteczność w Twojej karierze wymaga sprawdzenia w grze.</p>
       </>}
-      <footer><AppButton disabled={busy} onClick={()=>{setSnapshot(null);setRevision(value=>value+1);}}>Odczytaj ponownie</AppButton><div>{undoToken&&<AppButton disabled={busy} onClick={()=>void apply(true)}>Przywróć poprzedni limit</AppButton>}{snapshot?.token&&<AppButton variant="primary" disabled={busy} onClick={()=>void apply(false)}>Wyłącz wymóg U22 · 3 → 0</AppButton>}</div></footer>
+      <footer><AppButton disabled={busy} onClick={()=>{setSnapshot(null);setRevision(value=>value+1);}}>Odczytaj ponownie</AppButton><div>{undoToken&&<AppButton disabled={busy} onClick={()=>void apply(true)}>Przywróć poprzedni limit</AppButton>}{snapshot?.token&&<AppButton variant="primary" disabled={busy||(sharedDefault&&!sharedAccepted)} onClick={()=>void apply(false)}>{sharedDefault?"Wyłącz U22 w domyślnych zasadach · 3 → 0":"Wyłącz wymóg U22 · 3 → 0"}</AppButton>}</div></footer>
     </section></div>,document.body)}
   </>;
 }
