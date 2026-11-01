@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.14",
-  "source_sha": "ec02ccc96d98a6ff53f83ad99aff6fe791d33783",
-  "run_id": 41295204554,
+  "version": "0.7.0-beta.15",
+  "source_sha": "8dec8cae1b7fbf7cb2f3fef306b1a427698d1763",
+  "run_id": 41297411148,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Rozszerzenie edytora: wzrost, podstawowa płaca roczna w euro według kursu z gry oraz koniec rozpoznanego pełnego kontraktu. Zapis i cofnięcie sprawdzają również właściciela i tożsamość kontraktu. Płaca jest zaokrąglana do jednostki przechowywanej przez FM; premie i klauzule nie są przeliczane. Klub otrzymuje herb i kolory na podstawie grafiki; własny herb można zapamiętać dla konkretnego klubu. Usunięto diagnostykę ligi z głównego widoku. Rola, premie/klauzule, imię/nazwisko, waga oraz zmiana zasad U22 pozostają niedostępne do czasu potwierdzenia ich struktur. Edytor eksperymentalny, bez potwierdzenia w uruchomionej grze. Testy pominięto na życzenie użytkownika; wydanie po kompilacji Windows.",
+  "notes": "Eksperymentalna opcja Zasady ligi: wyłączenie minimum 3 U22 w kadrze meczowej Ekstraklasy przez zmianę 3 → 0, bez zmieniania wieku piłkarzy. Odczyt prowadzi bezpośrednio przez rozgrywki i pojedynczą fazę ligową do reguły typu U22; nie używa próbek ze skanowania pamięci. Zapis obejmuje potwierdzone aktywne kopie i jednoznaczną odpowiadającą im definicję. Niepotwierdzone, współdzielone lub niejednoznaczne warianty blokują zapis. Dostępne przywrócenie poprzedniego limitu w tej sesji aplikacji. Używaj przy wstrzymanym FM, poza rozgrywanym meczem; po zmianie ponownie otwórz ekran zasad i wyboru składu. Odczyt po zapisie potwierdza wartości pamięci; skuteczność ograniczenia ławki i trwałość w konkretnej karierze wymagają potwierdzenia w grze. Nowy sezon lub przebudowa reguł mogą wymagać ponownej operacji. Wydanie po kompilacji Windows; testy pominięto na życzenie użytkownika.",
   "ui_revision": 1
 }
