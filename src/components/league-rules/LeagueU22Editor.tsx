@@ -11,6 +11,7 @@ export function LeagueU22Editor({sessionId}:{sessionId:number}){
   const [open,setOpen]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
   const [snapshot,setSnapshot]=useState<Snapshot|null>(null),[receipt,setReceipt]=useState<Receipt|null>(null);
   const [revision,setRevision]=useState(0);
+  const [copied,setCopied]=useState(false),[writeError,setWriteError]=useState(false);
   const generation=useRef(0),dialog=useRef<HTMLElement>(null),trigger=useRef<HTMLSpanElement>(null);
   useEffect(()=>{
     if(!open)return;
@@ -20,7 +21,7 @@ export function LeagueU22Editor({sessionId}:{sessionId:number}){
   useEffect(()=>{
     const request=++generation.current;
     if(!open)return;
-    setBusy(true);setError("");setSnapshot(null);
+    setBusy(true);setError("");setWriteError(false);setCopied(false);setSnapshot(null);
     invoke<Snapshot>("get_fm_league_u22_editor",{sessionId}).then(next=>{if(generation.current===request&&next.sessionId===sessionId)setSnapshot(next);}).catch(reason=>{if(generation.current===request)setError(String(reason));}).finally(()=>{if(generation.current===request)setBusy(false);});
     return()=>{generation.current++;};
   },[open,sessionId,revision]);
@@ -28,7 +29,7 @@ export function LeagueU22Editor({sessionId}:{sessionId:number}){
   async function apply(undo:boolean){
     const token=undo?(snapshot?.undoToken??receipt?.undoToken):snapshot?.token;
     if(!token||busy)return;
-    const request=generation.current;setBusy(true);setError("");
+    const request=generation.current;setBusy(true);setError("");setWriteError(true);
     try {
       const result=await invoke<Receipt>(undo?"undo_fm_league_u22":"disable_fm_league_u22",{token});
       if(generation.current!==request||result.sessionId!==sessionId)return;
@@ -44,7 +45,7 @@ export function LeagueU22Editor({sessionId}:{sessionId:number}){
     }}><section ref={dialog} tabIndex={-1} className="league-u22" role="dialog" aria-modal="true" aria-labelledby="league-u22-title">
       <header><div><small>EDYCJA ZASAD W FM27</small><h2 id="league-u22-title">Wymóg zawodników U22</h2><p>{snapshot?.competition??"PKO Bank Polski Ekstraklasa"}</p></div><AppButton disabled={busy} onClick={()=>setOpen(false)} aria-label="Zamknij edytor zasad">×</AppButton></header>
       <p>Wstrzymaj grę i użyj tej opcji poza rozgrywanym meczem. Zmiana dotyczy wszystkich klubów w rozpoznanej fazie ligowej. Nie zmienia wieku zawodników ani zasad dotyczących wychowanków i rejestracji U21.</p>
-      {error&&<p role="alert" className="league-u22__error">{error}</p>}
+      {error&&<div role="alert" className="league-u22__error"><strong>{writeError?"Zapis nie został potwierdzony":"Nie zmieniono zasad — nie udało się dopasować reguły"}</strong><p>{error}</p><AppButton onClick={()=>{void navigator.clipboard.writeText(error).then(()=>setCopied(true)).catch(()=>setCopied(false));}}>{copied?"Skopiowano komunikat":"Kopiuj komunikat"}</AppButton></div>}
       {busy&&<p role="status">{snapshot?"Zapisywanie limitu w FM…":"Odczytywanie powiązanych zasad ligi…"}</p>}
       {receipt&&<div className="league-u22__receipt" role="status"><strong>Odczyt po zapisie potwierdził zmianę: {receipt.before} → {receipt.after}</strong><span>Sprawdź zasady i wybór ławki po ponownym otwarciu ekranu w FM. Karierę zapisujesz w grze.</span></div>}
       {snapshot&&<>

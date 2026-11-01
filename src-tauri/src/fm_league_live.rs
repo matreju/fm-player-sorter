@@ -81,20 +81,32 @@ fn league_record_signature(records:&[(usize,Vec<u8>)])->Vec<Vec<u8>> {
     let mut signature=records.iter().map(|(_,bytes)|bytes.clone()).collect::<Vec<_>>();signature.sort();signature
 }
 fn league_u22_entry(bytes:&[u8])->bool {
-    read_u16(bytes,0x1C)==Some(0x16)&&matches!(bytes.get(0x1E),Some(1)|Some(2))&&bytes[..0x18].iter().all(|byte|*byte==0)
+    // Qualifying expressions are not an absence of a minimum. Preserve them
+    // byte-for-byte; only the quota of the exact U22 match-squad type is editable.
+    read_u16(bytes,0x1C)==Some(0x16)&&matches!(bytes.get(0x1E),Some(1)|Some(2))
 }
 fn league_add_quota_patch(patches:&mut Vec<LeagueQuotaPatch>,pointer:usize,bytes:&[u8],minimum:u32)->Result<(),String> {
     if read_u32(bytes,0x18)!=Some(minimum) {return Err("Wymóg U22 różni się między aktywną regułą a jej definicją. Zapis zablokowany.".into());}
     if patches.iter().any(|patch|patch.address==pointer+0x18) {return Ok(());}
     patches.push(LeagueQuotaPatch {address:pointer+0x18,before:bytes[0x18..0x1C].to_vec(),after:0u32.to_le_bytes().to_vec()});Ok(())
 }
-fn league_collect_fixture_quota(process:&RemoteProcess,guards:&mut Vec<LeagueGuard>,patches:&mut Vec<LeagueQuotaPatch>,fixture:usize)->Result<Option<u32>,String> {
+fn league_collect_fixture_quota(process:&RemoteProcess,guards:&mut Vec<LeagueGuard>,patches:&mut Vec<LeagueQuotaPatch>,fixture:usize,observations:&mut Vec<String>)->Result<Option<u32>,String> {
     // 0x12639E0 confirms +0x108 is the competition UID. Refuse country/shared rules.
     let header=league_capture(process,guards,fixture+0x108,0x28)?;
     let current_bytes=league_capture(process,guards,fixture+0x70,8)?;
-    if read_u64(&current_bytes,0)==Some(0) {return Ok(None);}
+    if read_u64(&current_bytes,0)==Some(0) {observations.push("Lista aktywnych reguł nie została jeszcze udostępniona przez FM.".into());return Ok(None);}
     let current=league_pointer(process,guards,fixture+0x70)?;
     let current_records=league_rule_records(process,guards,current)?;
+    let u22=current_records.iter().filter(|(_,bytes)|read_u16(bytes,0x1C)==Some(0x16)).collect::<Vec<_>>();
+    if u22.is_empty() {
+        // Compact metadata from this exact owned path, not a heuristic heap scan.
+        let entries=current_records.iter().take(16).map(|(_,bytes)|format!("{}/{}/{}",read_u16(bytes,0x1C).unwrap_or(u16::MAX),bytes[0x1E],read_u32(bytes,0x18).unwrap_or(u32::MAX))).collect::<Vec<_>>().join(", ");
+        observations.push(format!("Lista zawiera {} reguł; nie ma w niej typu U22 w kadrze meczowej. Odczyt typu/trybu/limitu: {entries}.",current_records.len()));
+    } else {
+        for (_,bytes) in u22 {
+            observations.push(format!("Reguła U22: limit {}, tryb {}, dodatkowe parametry: {}.",read_u32(bytes,0x18).unwrap_or(u32::MAX),bytes[0x1E],if bytes[..0x18].iter().any(|byte|*byte!=0) {"tak"}else{"nie"}));
+        }
+    }
     let targets=current_records.iter().filter(|(_,bytes)|league_u22_entry(bytes)).collect::<Vec<_>>();
     if targets.is_empty() {return Ok(None);}
     if read_u32(&header,0)!=Some(129558) {return Err("Zasady nie mają potwierdzonego właściciela Ekstraklasy. Niczego nie zmieniono.".into());}
@@ -153,7 +165,7 @@ fn league_resolve_quota(process:&RemoteProcess,cache:&RefreshSession)->Result<(L
     let container=league_pointer(process,&mut guards,owner+0x1E0)?;
     let fixtures=league_vector(process,&mut guards,container+0x60,128)?;
     let fixture=*fixtures.get(index).ok_or("Lista zasad ligi nie zawiera ustawień tej fazy.")?;
-    let mut patches=Vec::new();let mut minimum=None;
+    let mut patches=Vec::new();let mut minimum=None;let mut observations=Vec::new();
     // Prefer neither cached UI rules nor a heap sample. Cover the exact root
     // and its optional native match-rules child (+0x68, used by 0xDFBAC0).
     let mut candidates=vec![fixture];
@@ -166,12 +178,12 @@ fn league_resolve_quota(process:&RemoteProcess,cache:&RefreshSession)->Result<(L
         candidates.push(child);
     }
     for fixture in candidates {
-        if let Some(value)=league_collect_fixture_quota(process,&mut guards,&mut patches,fixture)? {
+        if let Some(value)=league_collect_fixture_quota(process,&mut guards,&mut patches,fixture,&mut observations)? {
             if minimum.is_some_and(|previous|previous!=value) {return Err("Reguły ligi i meczu mają różne wymagania U22. Zapis zablokowany.".into());}
             minimum=Some(value);
         }
     }
-    let minimum=minimum.ok_or("W potwierdzonych zasadach nie znaleziono bezwarunkowego minimum U22 w kadrze meczowej.")?;
+    let minimum=minimum.ok_or_else(||format!("Nie udało się dopasować przepisu widocznego w FM. Zasady gry nie zostały zmienione.\n{}",observations.join("\n")))?;
     if patches.is_empty()||patches.len()>8 {return Err("Nie potwierdzono kompletnego zapisu wymogu U22.".into());}
     let draft=LeagueQuotaDraft {session_id:cache.database.session_id,pid:cache.database.pid,created:process.creation_time().ok_or("Nie potwierdzono procesu FM.")?,team:cache.team,club_uid:cache.database.managed_club_uid.ok_or("Nie potwierdzono klubu.")?,base,game_date:league_live_date(process,base)?,guards,patches,opened:Instant::now()};
     league_verify_quota(process,cache,&draft,draft.game_date)?;

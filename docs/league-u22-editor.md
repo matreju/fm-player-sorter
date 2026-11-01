@@ -99,3 +99,34 @@ verify behaviour, and save the career in FM. Rule rebuilds, XML overrides, a new
 season or loading a save may change the data again; no background auto-reapply
 or frozen enforcement is installed. If refused, the UI gives the actual reason
 and does not fall back to a heuristic heap scan or a birth-date change.
+
+
+## beta.16: do not discard minima with qualifying expressions
+
+The user's beta.15 screenshot reports the final no-unconditional-minimum error
+while FM still displays at least 3 U22 born after 2005-12-31 with a reduction
+in substitutions. This establishes that preview rejected the current rules and
+no write occurred. It does not reveal the actual record bytes, mode or index.
+Do not claim the screenshot proves a particular mode, expression or quota address.
+
+The beta.15 predicate incorrectly required the first 24 bytes of a minimum to be
+zero. Native quota evaluation uses +0x18 independently of these expression fields;
+nonzero qualifiers do not make an already-active minimum absent. beta.16 accepts
+the same exact type0x16 and verified minimum modes1/2 while retaining all qualifiers
+as immutable exact-byte guards. It still requires a unique full source/current
+match, competition UID, phase, initial quota3 and all other ownership checks.
+Only the four quota bytes change. No age, cutoff-date, condition or mode is patched.
+
+Unsupported modes (including4/5), missing type0x16, owner mismatches and unmatched
+source definitions still block writes. A no-match now explains that the app failed
+to resolve the displayed rule, rather than suggesting the game has no such rule.
+It includes a bounded summary of the exact-path rows (type/mode/quota, plus whether
+U22 has qualifiers) without addresses or raw expressions. Copying the error is an
+explicit user action; no report is sent anywhere and no heap scan is added.
+The UI labels failures as an unconfirmed operation, preserving explicit backend
+partial-write/rollback warnings rather than claiming every failure changed nothing.
+
+The fix addresses one definite predicate bug. Until a new live preview succeeds,
+the screenshot also leaves open an unsupported native mode or a different
+match-specific fixture-rule index. Do not relax either of those protections based
+only on the text visible in FM. Live behaviour remains unverified here.
