@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.11",
-  "source_sha": "2f3a94673a2578360abfcefbc9e4416d3420b5ad",
-  "run_id": 41244849555,
+  "version": "0.7.0-beta.12",
+  "source_sha": "fc0987d6a4400d4598f816301fadff88c0923d29",
+  "run_id": 41291589328,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Automatyczny podział aplikacji na tryb klubowy i reprezentacyjny według zespołu odczytanego z FM. W klubie dostępne Transfery, Porównanie i Skład; w reprezentacji Porównanie, Skład, Trzon i Zgrupowania. Moduły niedopasowane do trybu są ukryte i nie są uruchamiane. Zmiana prowadzonego zespołu lub rozłączenie zamyka otwarte zakładki. Nagłówek pokazuje aktywny tryb. Testy pominięto na życzenie użytkownika; wydanie po kompilacji Windows.",
+  "notes": "Eksperymentalny edytor zawodnika dla rozpoznanego FM27: CA, PA, data urodzenia, atrybuty widoczne i ukryte oraz osobowość. Otwieranie ze szczegółów zawodnika lub po kliknięciu nazwiska w Transferach. Podgląd przed/po, jawny zapis do aktywnej sesji FM, porównanie oryginalnych wartości i odczyt zapisanych bajtów; warunkowe cofnięcie ostatniego zapisu. Dane po edycji aktualizują się w aplikacji, indeks transferowy jest przebudowywany. Wstrzymaj FM i zachowaj osobny zapis kariery przed pierwszą edycją. Zapis nie został potwierdzony w działającej karierze; kompilacja nie dowodzi poprawnego utrwalenia zmian po zapisaniu/wczytaniu gry. FM26 i nierozpoznane wydania nie mają zapisu. Edycja zasad ligi/U21 nie jest jeszcze dostępna. Testy pominięto na życzenie użytkownika; wydanie po kompilacji Windows.",
   "ui_revision": 1
 }
