@@ -57,7 +57,7 @@ mod platform {
         // Relative ASCII filenames avoid nested escaping of Windows user paths.
         // $$>< condenses the script into one debugger command program.
         let init=format!(r#".expr /s masm
-.if (({guard}) and (qwo(0x{entry:x}) == 0x5441554156415741) and (qwo(0x{second:x}) == 0x48ec814853555756)) {{ bp0 0x{entry:x} "$$><entry.dbg"; .echo FMPRICE_READY_{token}; .echo Switch to FM and reopen this player's transfer/offer screen. Cancel: Ctrl+C then qd. ; g; }} .else {{ .echo FMPRICE_REJECT_{token}; qd; }}
+.if (({guard}) and (qwo(0x{entry:x}) == 0x5441554156415741) and (qwo(0x{second:x}) == 0x48ec814853555756)) {{ bp0 0x{entry:x} "$$><entry.dbg"; .echo FMPRICE_READY_{token}; .echo Switch to FM and reopen the selected player transfer/offer screen. Cancel: Ctrl+C then qd. ; g; }} .else {{ .echo FMPRICE_REJECT_{token}; qd; }}
 "#,second=entry+8);
         let body=format!(r#".if ((@rcx == 0x{player:x}) and ((@rdx == 0) or (@rdx == 0x{club:x})) and (qwo(@rsp + 0x28) == 0) and (qwo(@rsp + 0x30) == 0)) {{
 .if ({guard}) {{
