@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.20",
-  "source_sha": "8f2687fbced295ab42db90c8426ae6a5605abdcc",
-  "run_id": 41326111469,
+  "version": "0.7.0-beta.21",
+  "source_sha": "ef50507ba9c10a85ff8a66f663ee038a018ff7a6",
+  "run_id": 41449288707,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Usunięto techniczne dopiski Zasady główne / Wariant meczu z nazw reguł. Identyczne typy, tryby, limity i warunki z różnych odczytów są łączone w jeden wiersz; jeden zapis obejmuje wszystkie potwierdzone kopie, z odczytem po zapisie, wycofaniem po błędzie i cofnięciem całej zmiany. Różne warunki lub wartości pozostają oddzielne. Gdy choć jedna definicja źródłowa jest niejednoznaczna, wspólna edycja obejmuje wyłącznie aktywne kopie i jest oznaczona jako tymczasowa. Dodano polskie nazwy i edycję liczbowych limitów dla typów 38/39: wychowankowie klubu i kraju szkoleni między 15. a 21. rokiem życia. Wyjaśniono, że minimum 0 pozostawia istniejący wpis, a maksimum 0 to limit zero. Rzeczywiste tworzenie i usuwanie wpisów reguł nie zostało wdrożone: wymaga osobnego, potwierdzonego mechanizmu zarządzania obiektami i listami FM. Nie ma fikcyjnych przycisków Dodaj/Usuń. Warunki, wiek zawodników i wskaźniki list nie są modyfikowane. Testy pominięto na życzenie użytkownika; publikacja po kompilacji Windows. Skutki w działającej karierze wymagają potwierdzenia w FM.",
+  "notes": "Usunięto Pozostały kontrakt z transferów, wyboru kolumn i zapisanych układów; Koniec kontraktu oraz Status transferu pozostają. Dodano odczyt barw domowego stroju prowadzonego klubu z rozpoznanego pliku FM27, także przy braku herbu, przy pierwszym wczytaniu i szybkim odświeżeniu. Motyw obejmuje przyciski, nagłówki okien, filtry, tabelę transferów i okna nad aplikacją; zachowano zapasowy motyw z herbu oraz osobne barwy reprezentacji. Odczyt kolorów wymaga potwierdzenia w działającym zapisie. Wyjaśniono ograniczenie ceny: pole +0x238 przechowuje ręcznie ustawioną cenę, a nie obliczaną kwotę automatycznej akceptacji. Kolumna nosi nazwę Ustawiona cena wywoławcza, przy pustym polu pokazuje Nie ustawiono i sortuje wyłącznie po tej cenie. Nie wdrożono odczytu obliczanej ceny sprzedaży ani nie zastąpiono jej wartością zawodnika. Testy pominięto na życzenie użytkownika; publikacja wymaga udanej kompilacji Windows.",
   "ui_revision": 1
 }
