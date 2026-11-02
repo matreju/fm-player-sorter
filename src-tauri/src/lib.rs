@@ -1,5 +1,6 @@
 mod fm_league;
 mod fm_editor;
+mod fm_price;
 mod fm_build;
 mod fm_club;
 mod fm_human;
@@ -44,6 +45,11 @@ pub fn run() {
             fm_editor::get_fm_player_editor,
             fm_editor::apply_fm_player_edit,
             fm_editor::undo_fm_player_edit,
+            fm_price::prepare_fm_price_capture,
+            fm_price::start_fm_price_capture,
+            fm_price::read_fm_price_capture,
+            fm_price::open_fm_price_capture_folder,
+            fm_price::open_fm_price_tools,
         ])
         .run(tauri::generate_context!())
         .expect("error while running FM Player Sorter");

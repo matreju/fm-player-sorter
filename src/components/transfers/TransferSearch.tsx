@@ -89,7 +89,7 @@ export function TransferSearch({sessionId,clubName,euroPerGbp,onPlayerEdited}:{s
   const go=(page:number)=>setQuery(current=>({...current,page}));
   return <AppModuleDrawer isOpen={isOpen} onClose={close} title="Transfery · pełna baza piłkarzy"
     subtitle={clubName ? `Wszystkie kluby, w tym ${clubName}, oraz wolni zawodnicy` : "Wszyscy piłkarze z wczytanej bazy gry"} labelledById="transfers-title">
-    {editingUid!==null&&<PlayerEditor key={`${sessionId}:${editingUid}`} sessionId={sessionId} uid={editingUid} onClose={()=>setEditingUid(null)} onApplied={editApplied}/>}
+    {editingUid!==null&&<PlayerEditor priceCapture key={`${sessionId}:${editingUid}`} sessionId={sessionId} uid={editingUid} onClose={()=>setEditingUid(null)} onApplied={editApplied}/>}
     {!sessionId ? <p>Najpierw połącz aplikację z grą i wczytaj prowadzony zespół.</p> : <div className="transfer-search">
       <div className="transfer-search__toolbar">
         <AppSelectField label="Lista życzeń z FM" value={query.shortlistId??""} onChange={chooseShortlist} disabled={loading||!shown} options={[{value:"",label:"Cała baza — bez ograniczenia do listy"},...(shown?.shortlists??[]).map(list=>({value:list.id,label:`${list.name} (${list.playerCount}${list.unresolvedCount?"+":""})`}))]} />

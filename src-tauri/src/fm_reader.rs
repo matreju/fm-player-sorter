@@ -597,6 +597,27 @@ mod windows_reader {
         if !cache.player_classes.iter().any(|(known,vtable)|*known==offset && process.read_ptr(candidate.person_address)==Some(*vtable)) {return Err("Nie potwierdzono typu rekordu zawodnika. Zapis zablokowany.".into());}
         Ok((process,cache,source,candidate))
     }
+    pub(super) fn price_capture_context(session_id:u64,uid:u32)->Result<crate::fm_price::PriceContext,String> {
+        let (process,cache,source,candidate)=editor_context(session_id,uid,false)?;
+        let club=cache.club.ok_or("Odczyt ceny wymaga prowadzonego klubu.")?;
+        let club_uid=cache.database.managed_club_uid.ok_or("Brak identyfikatora prowadzonego klubu.")?;
+        if candidate.person_address.checked_sub(candidate.player_address)!=Some(PLAYER_OFFSET as usize) {return Err("Ta próba obsługuje wyłącznie potwierdzony układ ACTUAL_PLAYER FM27.".into());}
+        let prologue=[0x41,0x57,0x41,0x56,0x41,0x55,0x41,0x54,0x56,0x57,0x55,0x53,0x48,0x81,0xEC,0x48];
+        if process.read_exact(cache.plugin_base+0x15EF460,16).as_deref()!=Some(prologue.as_slice()) {return Err("Nie potwierdzono kodu funkcji ceny FM27. Próba zablokowana.".into());}
+        let game_raw=process.read_u32(cache.plugin_base+0x56AD378).ok_or("Brak daty gry.")?;
+        let game_date=format_fm_date(game_raw).ok_or("Nieprawidłowa data gry.")?;
+        if source.game_date.map(normalize_fm_date)!=Some(normalize_fm_date(game_raw)) {return Err("Odśwież dane z FM przed przygotowaniem próby ceny.".into());}
+        let euro_per_gbp=read_fm27_euro_rate(&process,cache.plugin_base).ok_or("Brak potwierdzonego kursu euro z FM.")?;
+        let pe=process.read_u32(cache.plugin_base+0x3C).filter(|offset|*offset<0x1000).ok_or("Nie potwierdzono nagłówka modułu FM.")? as usize;
+        let plugin_size=process.read_u32(cache.plugin_base+pe+0x50).filter(|size|(0x1000000..0x40000000).contains(size)).ok_or("Nie potwierdzono rozmiaru modułu FM.")? as usize;
+        let mut read_cache=PlayerReadCache::default();
+        let player=read_player(&process,uid,candidate.person_address,candidate.player_address,candidate.ca,candidate.pa,&mut read_cache).ok_or("Nie można odczytać zawodnika.")?;
+        Ok(crate::fm_price::PriceContext{pid:source.pid,created:process.creation_time().ok_or("Nie potwierdzono procesu FM.")?,session_id,uid,name:player.display_name,
+            club_uid,club_name:cache.database.managed_team.clone().unwrap_or_default(),club,player:candidate.player_address,person:candidate.person_address,
+            player_team:process.read_ptr(candidate.player_address+0x130).ok_or("Nie można odczytać zespołu zawodnika.")?,
+            contract:process.read_ptr(candidate.person_address+PERSON_CONTRACT).ok_or("Nie można odczytać kontraktu zawodnika.")?,contract_slot:candidate.person_address+PERSON_CONTRACT,
+            plugin_base:cache.plugin_base,plugin_size,game_raw,game_date,euro_per_gbp})
+    }
     fn editor_identity(process:&RemoteProcess,source:&ScoutingSession,candidate:&PlayerCandidate)->Result<EditorIdentity,String> {
         let contract=process.read_ptr(candidate.person_address+PERSON_CONTRACT).filter(|address|*address>=0x10_000).map(|address| {
             if process.read_ptr(address+8)!=Some(candidate.person_address) {return Err("Nie potwierdzono właściciela kontraktu.");}
@@ -939,6 +960,7 @@ mod windows_reader {
         }
 
         fn open_editor(pid:u32)->Result<Self,String> {
+            if crate::fm_price::capture_running() {return Err("Zakończ próbę ceny w CDB (Ctrl+C, potem qd) przed edycją danych gry.".into());}
             let handle=unsafe {OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ|PROCESS_VM_WRITE|PROCESS_VM_OPERATION,false,pid)}
                 .map_err(|error|format!("Nie można otworzyć FM do zapisu: {error}"))?;
             Ok(Self {handle:HandleGuard(handle),layout:fm_version::FM26,native_plugin_hash:None})
