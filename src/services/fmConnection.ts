@@ -239,6 +239,7 @@ export interface FmDatabaseLoadResult {
   managedSquadGender: string | null;
   managedMode: "club" | "nation" | "unknown";
   managedClubUid: number | null;
+  managedClubColors: [string, string] | null;
   sessionId: number;
   nationalFilterApplied: boolean;
   scanRegionCount: number;

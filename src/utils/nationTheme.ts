@@ -83,7 +83,17 @@ export function getNationTheme(nation: string | null | undefined): NationTheme {
 }
 
 export function getClubTheme(primary="#64748b",accent="#cbd5e1"):NationTheme {
-  return paletteTheme(createPalette(primary,accent,"⚽",accent));
+  const rgb=(hex:string)=>[1,3,5].map(at=>parseInt(hex.slice(at,at+2),16));
+  const chroma=(hex:string)=>Math.max(...rgb(hex))-Math.min(...rgb(hex));
+  // A black/white shirt inscription should not erase the club's coloured shirt.
+  const chosen=chroma(accent)<40&&chroma(primary)>=40?primary:accent;
+  let values=rgb(chosen);
+  const luminance=(channels:number[])=>channels.map(v=>{const s=v/255;return s<=0.04045?s/12.92:((s+0.055)/1.055)**2.4;}).reduce((sum,v,i)=>sum+v*[0.2126,0.7152,0.0722][i],0);
+  while((luminance(values)+0.05)/(luminance([20,28,43])+0.05)<4.5)values=values.map(v=>v+(255-v)*0.08);
+  const readable=`#${values.map(v=>Math.round(v).toString(16).padStart(2,"0")).join("")}`;
+  const palette=createPalette(primary,readable,"⚽",readable);
+  palette.headerGlow=hexToRgba(primary,0.28);
+  return paletteTheme(palette);
 }
 
 function paletteTheme(palette:ThemePalette):NationTheme {

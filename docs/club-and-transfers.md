@@ -276,3 +276,39 @@ background reads. Changing the managed mode/team identity or disconnecting
 closes open drawers and returns navigation to Players. A header label identifies
 the detected club/national mode. Existing shared comparison/squad tools remain.
 Compilation/package only; tests skipped at the user's request.
+
+
+## Transfer finances and club accents — 0.7.0-beta.21
+
+Removed Pozostały kontrakt from transfer defaults, the picker and previously
+saved layouts. Contract end and transfer status remain available.
+
+The asking-price field at native PLAYER + 0x238 is a manually specified price;
+0xFFFFFFFF is unspecified. The FM person asking-price filter invokes 0x1629F80
+(and then calculated function 0x15EF460 if negative). In the supplied plugin,
+0x1629F80 jumps to 0xE0AB6A0 and conditionally reads +0x238. The calculation is
+not a confirmed cached scalar and is not implemented or replaced by value.
+The UI now calls this Ustawiona cena wywoławcza, with Nie ustawiono for an empty
+field, and explains that the calculated offer-acceptance amount is unavailable.
+Sorting this column uses only its own field, while the separately labelled
+Cena / wartość budget filter retains its documented market-value fallback.
+
+Club colour reads are restricted to the exact FM27 plugin SHA256
+bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f.
+CLUB::get 1sbc (0x110A55F) and 1scl (0x110665C) call 0x114DFE0 and 0x114E3A0;
+0x114BC00 traverses CLUB + 0xB0 -> info + 0x78/0x80 pointer vector. Kit records
+have foreground/background AARRGGBB at +0/+4, competition scope at +0x18,
+season +0x20, home index +0x22, garment nibble +0x23, priority +0x24 and
+outfield flag +0x25. The kit season global at plugin +0x56C70F0 is clamped to
+2026 by these native getters. Only default-competition home outfield shirts,
+matching or unspecified season, with valid explicit colours are used. Equal
+priority conflicting palettes are rejected. No affiliation/inherited-kit
+resolution, native execution, game writes or arbitrary-season fallback occurs.
+This supplies stored home-shirt colours, not a promise to reproduce every FM
+skin's titlebar. Live-save confirmation remains outstanding.
+
+Native colours now travel through initial load, quick refresh and saved
+snapshots, taking precedence over crest extraction. Crest extraction remains
+the fallback if a palette cannot be read. CSS variables reach body portals;
+buttons, drawer headings, transfer headers, selected filters and row hover now
+use the team palette. Dark accents are lifted for readable controls.

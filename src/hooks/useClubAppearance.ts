@@ -33,7 +33,7 @@ function palette(image:HTMLImageElement):NationTheme {
   return getClubTheme(hex(main),hex(accent.map(x=>Math.min(255,x+lift))));
 }
 
-export function useClubAppearance(uid:number|null,gameCrest:string|null|undefined){
+export function useClubAppearance(uid:number|null,gameCrest:string|null|undefined,gameColors?:[string,string]|null){
   const [override,setOverride]=useState<{uid:number;source:string|null}|null>(null);
   const [appearance,setAppearance]=useState<{uid:number;source:string;theme:NationTheme}|null>(null);
   const [error,setError]=useState("");
@@ -60,5 +60,6 @@ export function useClubAppearance(uid:number|null,gameCrest:string|null|undefine
     }catch(reason){setError(reason instanceof Error?reason.message:String(reason));}
   }
   function reset(){if(!uid)return;try{localStorage.removeItem(storageKey(uid));setOverride({uid,source:null});setError("");}catch{setError("Nie można przywrócić herbu z FM.");}}
-  return {crest:source,theme:appearance?.uid===uid&&appearance.source===source?appearance.theme:getClubTheme(),upload,reset,error,custom:!!uid&&!!(override?.uid===uid?override.source:savedCrest(uid))};
+  const nativeTheme=uid&&gameColors?.length===2&&gameColors.every(color=>/^#[\da-f]{6}$/i.test(color))?getClubTheme(...gameColors):null;
+  return {crest:source,theme:nativeTheme??(appearance?.uid===uid&&appearance.source===source?appearance.theme:getClubTheme()),upload,reset,error,custom:!!uid&&!!(override?.uid===uid?override.source:savedCrest(uid))};
 }

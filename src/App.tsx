@@ -891,9 +891,17 @@ export default function App() {
     snapshot?.managedTeam ??
     (rows.length > 0 ? "Reprezentacja" : "Brak danych");
   const nationTheme = getNationTheme(snapshot?.managedNation);
-  const clubAppearance=useClubAppearance(managedMode==="club"?(snapshot?.managedClubUid??snapshot?.managedTeamUid??null):null,snapshot?.teamLogoDataUrl);
+  const clubAppearance=useClubAppearance(managedMode==="club"?(snapshot?.managedClubUid??snapshot?.managedTeamUid??null):null,snapshot?.teamLogoDataUrl,snapshot?.managedClubColors);
   const teamTheme=managedMode==="club"?clubAppearance.theme:nationTheme;
   const teamCrest=managedMode==="club"?clubAppearance.crest:snapshot?.teamLogoDataUrl;
+  const themeVariables=JSON.stringify(teamTheme.style);
+  useEffect(()=>{
+    // Body portals (column picker, editors) need the same palette as the shell.
+    const root=document.documentElement;
+    const previous=Object.keys(JSON.parse(themeVariables)).map(key=>[key,root.style.getPropertyValue(key),root.style.getPropertyPriority(key)]);
+    for(const [key,value] of Object.entries(JSON.parse(themeVariables) as Record<string,string>))root.style.setProperty(key,value);
+    return()=>{for(const [key,value,priority] of previous){if(value)root.style.setProperty(key,value,priority);else root.style.removeProperty(key);}};
+  },[themeVariables]);
 
   return (
     <main

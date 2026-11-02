@@ -139,7 +139,7 @@ pub(crate) fn matching_entries(entries: &[ScoutingEntry], query: &ScoutingQuery)
     if !["", "all", "listed", "free", "not_for_sale", "release"].contains(&query.status.as_str()) {
         return Err("Nieznany filtr dostępności.".into());
     }
-    if !["", "name", "position", "nation", "club", "age", "ca", "pa", "value", "fee", "wage", "expiry", "height", "condition", "growth"].contains(&query.sort.as_str())
+    if !["", "name", "position", "nation", "club", "age", "ca", "pa", "value", "fee", "askingPrice", "wage", "expiry", "height", "condition", "growth"].contains(&query.sort.as_str())
         && !query.sort.strip_prefix("rating:").is_some_and(|column|RATING_COLUMNS.contains(&column)) {
         return Err("Nieznany sposób sortowania.".into());
     }
@@ -232,6 +232,7 @@ pub(crate) fn matching_entries(entries: &[ScoutingEntry], query: &ScoutingQuery)
             "age" => optional(left.age.map(u64::from), right.age.map(u64::from)),
             "value" => optional(left.value.map(u64::from), right.value.map(u64::from)),
             "fee" => optional((if left.free {Some(0)} else {left.asking_price.or(left.value)}).map(u64::from), (if right.free {Some(0)} else {right.asking_price.or(right.value)}).map(u64::from)),
+            "askingPrice" => optional(left.asking_price.map(u64::from), right.asking_price.map(u64::from)),
             "wage" => optional(left.wage.map(u64::from), right.wage.map(u64::from)),
             "position" => optional((left.position_rank != 255).then(|| u64::from(left.position_rank)), (right.position_rank != 255).then(|| u64::from(right.position_rank))),
             "expiry" => match (&left.expiry, &right.expiry) {

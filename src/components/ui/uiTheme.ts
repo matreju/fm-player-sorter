@@ -14,7 +14,7 @@ export const uiColors = {
 
   accent: "var(--team-accent, #38bdf8)",
   accentSoft: "var(--team-accent-soft, rgba(56, 189, 248, 0.14))",
-  accentStrong: "#0ea5e9",
+  accentStrong: "var(--team-accent-border, #0ea5e9)",
 
   success: "#22c55e",
   successSoft: "rgba(34, 197, 94, 0.16)",

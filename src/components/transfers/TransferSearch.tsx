@@ -4,7 +4,6 @@ import { useModuleDrawer } from "../../hooks/useModuleDrawer";
 import { searchFootballManagerPlayers, type FmScoutingQuery, type FmScoutingResult } from "../../services/fmConnection";
 import { AppModuleDrawer } from "../app-shell";
 import { AppTextField, AppSelectField, AppButton } from "../ui";
-import { contractDuration } from "../../utils/contractDuration";
 import { TransferColumnPicker, TRANSFER_DEFAULT_COLUMNS, loadTransferColumns, saveTransferColumns } from "./TransferColumnPicker";
 import { PlayerEditor } from "../player-editor/PlayerEditor";
 import type { PlayerEditResult } from "../../services/fmEditor";
@@ -15,8 +14,9 @@ type Filters = {nationality:string;club:string;league:string;foot:string;gender:
 const EMPTY: Filters = {nationality:"",club:"",league:"",foot:"any",gender:"all",loan:"all",minHeight:"",maxHeight:"",minCondition:"",maxCondition:"",minGrowth:"",maxGrowth:"",shortlistId:"",text:"",position:"any",minCa:"",maxCa:"",minPa:"",maxPa:"",minAge:"",maxAge:"",minFee:"",maxFee:"",minWage:"",maxWage:"",contractAfter:"",contractBefore:"",status:"all",clubScope:"all",sort:"ca",sortDirection:"desc",pageSize:"100"};
 const FILTER_TABS=[{id:"general",label:"Ogólne"},{id:"ability",label:"Umiejętności"},{id:"contract",label:"Kontrakt"},{id:"attributes",label:"Atrybuty"}] as const;
 type AttributeDraft={column:string;min:string;max:string};
-const SORT_COLUMNS:Record<string,string>={Nazwisko:"name",Pozycja:"position",Narodowość:"nation",Wiek:"age",Klub:"club",OU:"ca",PA:"pa",Wartość:"value","Cena wywoławcza":"fee",Pensja:"wage",Wzrost:"height",Kondycja:"condition","Zapas potencjału":"growth","Koniec kontraktu":"expiry","Pozostały kontrakt":"expiry"};
-const columnLabel=(column:string)=>column==="Pensja"?"Obecna płaca (€/rok)":column==="OU"?"OU (CA)":column==="PA"?"Potencjał":column;
+const SORT_COLUMNS:Record<string,string>={Nazwisko:"name",Pozycja:"position",Narodowość:"nation",Wiek:"age",Klub:"club",OU:"ca",PA:"pa",Wartość:"value","Cena wywoławcza":"askingPrice",Pensja:"wage",Wzrost:"height",Kondycja:"condition","Zapas potencjału":"growth","Koniec kontraktu":"expiry"};
+const columnLabel=(column:string)=>column==="Pensja"?"Obecna płaca (€/rok)":column==="OU"?"OU (CA)":column==="PA"?"Potencjał":column==="Cena wywoławcza"?"Ustawiona cena wywoławcza":column;
+const ASKING_PRICE_NOTE="Cena wywoławcza ustawiona w FM. Brak wpisu nie oznacza wolnego transferu. Kwota automatycznej akceptacji oferty nie jest obecnie odczytywana.";
 const number = (text:string) => text.trim() ? Number(text) : undefined;
 function request(filters: Filters, sessionId: number, euroPerGbp: number|undefined, attributes:AttributeDraft[]=[], page=0, positions:string[]=[], positionMatch="any"): FmScoutingQuery {
   return {...filters,sessionId,page,positions,positionMatch,pageSize:Number(filters.pageSize),attributes:attributes.map(filter=>({column:filter.column,min:number(filter.min),max:number(filter.max)})),
@@ -26,7 +26,7 @@ function request(filters: Filters, sessionId: number, euroPerGbp: number|undefin
     minWage:financeFilterToNative(filters.minWage,true,"min",euroPerGbp),maxWage:financeFilterToNative(filters.maxWage,true,"max",euroPerGbp)};
 }
 function cell(column:string,value:string|undefined, rate:number|undefined) {
-  if (!value?.trim()) return "—";
+  if (!value?.trim()) return column==="Cena wywoławcza"?"Nie ustawiono":"—";
   if (["Wartość","Cena wywoławcza","Pensja"].includes(column)) {
     return formatPlayerFinance(column,value,rate);
   }
@@ -68,7 +68,7 @@ export function TransferSearch({sessionId,clubName,euroPerGbp,onPlayerEdited}:{s
   }
   const shown=result?.sessionId===sessionId ? result : null;
   const effectiveRate=shown?.euroPerGbp??getGameEuroRate(shown?.rows[0])??euroPerGbp;
-  const availableColumns=Array.from(new Set([...TRANSFER_DEFAULT_COLUMNS,...(shown?.headers??[])])).filter(column=>column!=="Numer w składzie"&&!column.startsWith("_"));
+  const availableColumns=Array.from(new Set([...TRANSFER_DEFAULT_COLUMNS,...(shown?.headers??[])])).filter(column=>column!=="Numer w składzie"&&column!=="Pozostały kontrakt"&&!column.startsWith("_"));
   const visibleColumns=["Nazwisko",...columns.filter(column=>column!=="Nazwisko"&&availableColumns.includes(column))];
   const sortKey=(column:string)=>SORT_COLUMNS[column]??(shown?.attributeColumns?.includes(column)?`rating:${column}`:undefined);
   const changeColumns=(next:string[])=>{setColumns(next);saveTransferColumns(next);};
@@ -135,20 +135,20 @@ export function TransferSearch({sessionId,clubName,euroPerGbp,onPlayerEdited}:{s
           <PositionPitch selected={positions} onChange={setPositions} match={positionMatch} onMatchChange={setPositionMatch}/>
         </div>
         <div className="transfer-search__actions">
-          <AppSelectField label="Sortuj według" value={draft.sort} onChange={set("sort")} options={[{value:"position",label:"Pozycja"},{value:"name",label:"Nazwisko"},{value:"age",label:"Wiek"},{value:"ca",label:"OU"},{value:"pa",label:"Potencjał"},{value:"fee",label:"Cena / wartość"},{value:"wage",label:"Płaca"},{value:"expiry",label:"Koniec kontraktu"},{value:"growth",label:"Zapas potencjału"},{value:"condition",label:"Kondycja"},{value:"height",label:"Wzrost"}]} />
+          <AppSelectField label="Sortuj według" value={draft.sort} onChange={set("sort")} options={[{value:"position",label:"Pozycja"},{value:"name",label:"Nazwisko"},{value:"age",label:"Wiek"},{value:"ca",label:"OU"},{value:"pa",label:"Potencjał"},{value:"fee",label:"Cena / wartość"},{value:"askingPrice",label:"Ustawiona cena wywoławcza"},{value:"wage",label:"Płaca"},{value:"expiry",label:"Koniec kontraktu"},{value:"growth",label:"Zapas potencjału"},{value:"condition",label:"Kondycja"},{value:"height",label:"Wzrost"}]} />
           <AppSelectField label="Kierunek" value={draft.sortDirection} onChange={set("sortDirection")} options={[{value:"asc",label:"Rosnąco"},{value:"desc",label:"Malejąco"}]} />
           <AppSelectField label="Wyników na stronę" value={draft.pageSize} onChange={set("pageSize")} options={["50","100","250"].map(value=>({value,label:value}))} />
           <AppButton type="submit" disabled={loading}>{loading ? "Wyszukiwanie…" : "Szukaj piłkarzy"}</AppButton>
           <AppButton disabled={loading} onClick={()=>{setDraft(EMPTY);setAttributeDraft([]);setPositions([]);setPositionMatch("any");setQuery(request(EMPTY,sessionId,effectiveRate));}}>Wyczyść filtry</AppButton>
         </div>
       </form>
-      <p className="transfer-search__note">Bez filtrów pokazujemy całą odczytaną bazę, również własny klub. Strony dzielą wyniki wyłącznie dla sprawnego wyświetlania. Cena wywoławcza i wartość są osobnymi danymi; przy braku ceny filtr korzysta z wartości. Płaca: obecny kontrakt, EUR / rok. {effectiveRate ? FINANCE_NOTE : FINANCE_UNAVAILABLE} Brakujące dane oznaczamy „—”.</p>
+      <p className="transfer-search__note">{ASKING_PRICE_NOTE} Filtr „Cena / wartość” korzysta z wartości, gdy cena nie jest ustawiona. Płaca: obecny kontrakt, EUR / rok. {effectiveRate ? FINANCE_NOTE : FINANCE_UNAVAILABLE} Pozostałe brakujące dane oznaczamy „—”.</p>
       {loading && <div className="transfer-search__notice" role="status">Wczytywanie wyników z całej bazy gry. Przy pierwszym otwarciu przygotowujemy pełny indeks piłkarzy.</div>}
       {error && <div className="transfer-search__notice" role="alert">{error} <AppButton onClick={()=>setRevision(value=>value+1)}>Ponów</AppButton>{query.shortlistId&&<AppButton onClick={()=>chooseShortlist("")}>Wyczyść wybór listy</AppButton>}</div>}
       {shown && <>
         <div className="transfer-search__summary" role="status"><strong>Znaleziono {shown.total.toLocaleString("pl-PL")} z {(shown.databaseTotal??shown.total).toLocaleString("pl-PL")} piłkarzy w bazie</strong><span>{shown.total?shown.page*shown.pageSize+1:0}–{Math.min((shown.page+1)*shown.pageSize,shown.total)} · strona {shown.page+1} z {pageCount}</span></div>
         <div aria-busy={loading} className={`transfer-search__table${filtersOpen?"":" transfer-search__table--expanded"}`}><table><thead><tr>{visibleColumns.map(column=><th key={column} aria-sort={sortKey(column)===query.sort?(query.sortDirection==="asc"?"ascending":"descending"):undefined}>{sortKey(column)?<button type="button" onClick={()=>sortBy(column)} disabled={loading}>{columnLabel(column)} <span>{sortKey(column)===query.sort?(query.sortDirection==="asc"?"↑":"↓"):"↕"}</span></button>:columnLabel(column)}</th>)}</tr></thead>
-          <tbody>{shown.rows.map(row=><tr key={row.UID}>{visibleColumns.map(column=><td key={column} data-numeric={(["OU","PA","Wiek","Wzrost","Kondycja","Wartość","Cena wywoławcza","Pensja","Zapas potencjału"].includes(column)||shown?.attributeColumns?.includes(column))||undefined} title={["Pensja","Wartość","Cena wywoławcza"].includes(column) ? (getGameEuroRate(row) ? FINANCE_NOTE : FINANCE_UNAVAILABLE) : row[column] || undefined}>{column==="Nazwisko" ? <button type="button" className="transfer-search__player-editor" title="Otwórz edytor zawodnika w grze" onClick={()=>setEditingUid(Number(row.UID))}>{row[column]}</button> : column==="Pozostały kontrakt" ? contractDuration(row["Koniec kontraktu"],shown.gameDate) : cell(column,row[column],getGameEuroRate(row))}</td>)}</tr>)}</tbody></table>
+          <tbody>{shown.rows.map(row=><tr key={row.UID}>{visibleColumns.map(column=><td key={column} data-numeric={(["OU","PA","Wiek","Wzrost","Kondycja","Wartość","Cena wywoławcza","Pensja","Zapas potencjału"].includes(column)||shown?.attributeColumns?.includes(column))||undefined} title={column==="Cena wywoławcza" ? ASKING_PRICE_NOTE : ["Pensja","Wartość"].includes(column) ? (getGameEuroRate(row) ? FINANCE_NOTE : FINANCE_UNAVAILABLE) : row[column] || undefined}>{column==="Nazwisko" ? <button type="button" className="transfer-search__player-editor" title="Otwórz edytor zawodnika w grze" onClick={()=>setEditingUid(Number(row.UID))}>{row[column]}</button> : cell(column,row[column],getGameEuroRate(row))}</td>)}</tr>)}</tbody></table>
           {!shown.rows.length && <p className="transfer-search__empty">Brak zawodników spełniających te filtry.</p>}</div>
         <div className="transfer-search__pagination"><AppButton disabled={loading||shown.page===0} onClick={()=>go(0)}>Pierwsza</AppButton><AppButton disabled={loading||shown.page===0} onClick={()=>go(shown.page-1)}>← Poprzednia</AppButton>
           <AppButton disabled={loading||shown.page+1>=pageCount} onClick={()=>go(shown.page+1)}>Następna →</AppButton><AppButton disabled={loading||shown.page+1>=pageCount} onClick={()=>go(pageCount-1)}>Ostatnia</AppButton></div>

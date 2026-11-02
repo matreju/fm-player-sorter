@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { AppButton } from "../ui";
 
-export const TRANSFER_DEFAULT_COLUMNS=["Nazwisko","Pozycja","Narodowość","Wiek","Klub","OU","PA","Wartość","Cena wywoławcza","Pensja","Koniec kontraktu","Pozostały kontrakt","Status transferu"];
+export const TRANSFER_DEFAULT_COLUMNS=["Nazwisko","Pozycja","Narodowość","Wiek","Klub","OU","PA","Wartość","Cena wywoławcza","Pensja","Koniec kontraktu","Status transferu"];
 const KEY="fm-player-sorter.transfer-columns.v1";
 export function loadTransferColumns():string[] {
-  try {const value=JSON.parse(localStorage.getItem(KEY)??"null");if(Array.isArray(value)&&value.every(column=>typeof column==="string"))return ["Nazwisko",...value.filter(column=>column!=="Nazwisko"&&column!=="Numer w składzie")];}catch{/* defaults */}
+  try {const value=JSON.parse(localStorage.getItem(KEY)??"null");if(Array.isArray(value)&&value.every(column=>typeof column==="string"))return ["Nazwisko",...value.filter(column=>column!=="Nazwisko"&&column!=="Numer w składzie"&&column!=="Pozostały kontrakt")];}catch{/* defaults */}
   return [...TRANSFER_DEFAULT_COLUMNS];
 }
 export function saveTransferColumns(columns:string[]) {try{localStorage.setItem(KEY,JSON.stringify(columns));}catch{/* session preference remains usable */}}
 export function TransferColumnPicker({available,selected,onChange,label}:{available:string[];selected:string[];onChange:(columns:string[])=>void;label:(column:string)=>string}) {
   const [open,setOpen]=useState(false),[search,setSearch]=useState("");
-  const allowed=available.filter(column=>!column.startsWith("_")&&column!=="Numer w składzie");
+  const allowed=available.filter(column=>!column.startsWith("_")&&column!=="Numer w składzie"&&column!=="Pozostały kontrakt");
   function toggle(column:string){if(column==="Nazwisko")return;onChange(selected.includes(column)?selected.filter(item=>item!==column):[...selected,column]);}
   function move(index:number,step:number){const target=index+step;if(target<1||target>=selected.length)return;const next=[...selected];[next[index],next[target]]=[next[target],next[index]];onChange(next);}
   return <div className="transfer-columns">

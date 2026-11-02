@@ -14,6 +14,7 @@ export type StoredFmSnapshot = {
   gameDate: string | null;
   managedMode: "club" | "nation" | "unknown";
   managedClubUid: number | null;
+  managedClubColors?: [string, string] | null;
   sessionId: number;
   managedTeam: string | null;
   managedNation: string | null;
@@ -56,6 +57,7 @@ export function createFmSnapshot(
     gameDate: result.gameDate,
     managedMode: result.managedMode,
     managedClubUid: result.managedClubUid,
+    managedClubColors: result.managedClubColors,
     sessionId: result.sessionId,
     managedTeam: result.managedTeam,
     managedNation: result.managedNation,

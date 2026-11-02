@@ -18,6 +18,7 @@ pub struct FmNativeDatabase {
     pub profile: String,
     pub managed_mode: String,
     pub managed_club_uid: Option<u32>,
+    pub managed_club_colors: Option<[String; 2]>,
     pub session_id: u64,
     pub database_player_count: usize,
     pub player_count: usize,
@@ -1481,6 +1482,38 @@ mod windows_reader {
     fn verified_fm27(process: &RemoteProcess) -> bool {
         process.layout.edition==27 && process.native_plugin_hash.as_deref()==Some(FM27_PLUGIN_SHA256)
     }
+    // FM27 native home-shirt palette: CLUB + B0 -> info + 78 pointer vector.
+    // Verified against 1sbc/1scl in CLUB::get (110A55F/110665C), 114BC00,
+    // and 114DFE0/114E3A0 in FM27_PLUGIN_SHA256. Read only, no native calls.
+    fn read_club_colors(process: &RemoteProcess, club: usize, plugin_base: usize) -> Option<[String; 2]> {
+        if !verified_fm27(process) { return None; }
+        // The native getters clamp the kit season global to this build's 2026 season.
+        let year=process.read_u16(plugin_base+0x56C70F0)?.min(2026);
+        if year<1900 { return None; }
+        let info=process.read_ptr(club+0xB0)?;
+        let kits=pointer_vector(process,info+0x78,256).ok()?;
+        let mut candidates=Vec::new();
+        for address in kits {
+            let Some(kit)=process.read_exact(address,0x26) else { continue; };
+            let season=read_u16(&kit,0x20)?;
+            // Home, outfield shirt, default competition, explicit shirt colours.
+            if kit[0x22]!=0 || kit[0x25]!=1 || kit[0x23]&0x0F!=1
+                || (read_u32(&kit,0x18)? as i32)>0 { continue; }
+            if season!=0 && season!=u16::MAX && season!=year { continue; }
+            let foreground=read_u32(&kit,0)?;
+            let background=read_u32(&kit,4)?;
+            // Native colours are AARRGGBB; zero is an unspecified colour.
+            if foreground>>24!=255 || background>>24!=255 { continue; }
+            let season_rank=if season==year { 1 } else { 0 };
+            candidates.push(((season_rank, -(kit[0x24] as i8 as i16)),
+                [format!("#{:06x}",background&0xFFFFFF),format!("#{:06x}",foreground&0xFFFFFF)]));
+        }
+        candidates.sort_by(|a,b| b.0.cmp(&a.0));
+        let (rank,colors)=candidates.first()?;
+        // Ambiguous equal-priority definitions must not choose arbitrary colours.
+        if candidates.iter().any(|(other_rank,other)| other_rank==rank && other!=colors) {return None;}
+        Some(colors.clone())
+    }
     fn native_player_vector(process: &RemoteProcess, base: usize) -> Option<(usize,usize)> {
         if !verified_fm27(process) { return None; }
         let begin=process.read_ptr(base+0x57037D0)?;
@@ -1687,6 +1720,7 @@ mod windows_reader {
         rows.sort_by(|a,b|a.get("Nazwisko").cmp(&b.get("Nazwisko")).then_with(||a.get("UID").cmp(&b.get("UID"))));
         let session_id=SCOUTING_SEQUENCE.fetch_add(1,Ordering::Relaxed)+1;
         let mut database=cache.database.clone();
+        database.managed_club_colors=cache.club.and_then(|club|read_club_colors(&process,club,cache.plugin_base));
         database.rows=rows;database.player_count=database.rows.len();database.session_id=session_id;
         database.game_date=world_date.and_then(format_fm_date);
         database.database_player_count=source.candidates.len();
@@ -2155,6 +2189,7 @@ mod windows_reader {
             pid,
             managed_mode: if club_mode { "club".into() } else { "nation".into() },
             managed_club_uid,
+            managed_club_colors: managed_club.and_then(|club|read_club_colors(&process,club,resolver.game_plugin.base)),
             session_id,
             profile: process.layout.name.to_string(),
             database_player_count,
