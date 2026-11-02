@@ -5357,6 +5357,8 @@ pub(crate) fn refresh_fm_native_database() -> Result<FmNativeDatabase,String> { 
 
 #[cfg(target_os="windows")]
 pub(crate) fn get_player_editor(session_id:u64,uid:u32)->Result<crate::fm_editor::PlayerEditSnapshot,String> {windows_reader::get_player_editor(session_id,uid)}
+#[cfg(target_os="windows")]
+pub(crate) fn price_capture_context(session_id:u64,uid:u32)->Result<crate::fm_price::PriceContext,String> {windows_reader::price_capture_context(session_id,uid)}
 #[cfg(not(target_os="windows"))]
 pub(crate) fn get_player_editor(_session_id:u64,_uid:u32)->Result<crate::fm_editor::PlayerEditSnapshot,String> {Err("Edytor jest dostępny w aplikacji Windows.".into())}
 #[cfg(target_os="windows")]
