@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.21",
-  "source_sha": "ef50507ba9c10a85ff8a66f663ee038a018ff7a6",
-  "run_id": 41449288707,
+  "version": "0.7.0-beta.22",
+  "source_sha": "e538cba509a9e2c8b2481a4e6af673454b5a119f",
+  "run_id": 41463570003,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Usunięto Pozostały kontrakt z transferów, wyboru kolumn i zapisanych układów; Koniec kontraktu oraz Status transferu pozostają. Dodano odczyt barw domowego stroju prowadzonego klubu z rozpoznanego pliku FM27, także przy braku herbu, przy pierwszym wczytaniu i szybkim odświeżeniu. Motyw obejmuje przyciski, nagłówki okien, filtry, tabelę transferów i okna nad aplikacją; zachowano zapasowy motyw z herbu oraz osobne barwy reprezentacji. Odczyt kolorów wymaga potwierdzenia w działającym zapisie. Wyjaśniono ograniczenie ceny: pole +0x238 przechowuje ręcznie ustawioną cenę, a nie obliczaną kwotę automatycznej akceptacji. Kolumna nosi nazwę Ustawiona cena wywoławcza, przy pustym polu pokazuje Nie ustawiono i sortuje wyłącznie po tej cenie. Nie wdrożono odczytu obliczanej ceny sprzedaży ani nie zastąpiono jej wartością zawodnika. Testy pominięto na życzenie użytkownika; publikacja wymaga udanej kompilacji Windows.",
+  "notes": "Dodano opcjonalne przygotowanie nadzorowanej próby odczytu ceny: Transfery → nazwisko → Próbny odczyt ceny z FM. Wymaga Microsoft CDB x64 ze składnika Debugging Tools for Windows (Windows SDK); aplikacja wykrywa standardową instalację i udostępnia oficjalną instrukcję. Generuje skrypty dla bieżącego procesu, zawodnika, klubu i daty. CDB obserwuje wykonanie funkcji przez sam FM; nie uruchamia jej samodzielnie ani nie wylicza zastępczej ceny. To inwazyjna sesja debugowania z tymczasowymi punktami zatrzymania: użyj kopii zapisu i wstrzymaj czas. Przy braku wyniku po około 30 sekundach należy w konsoli nacisnąć Ctrl+C, wpisać qd i Enter. Osobną konsolę trzeba zakończyć także po zamknięciu aplikacji. -pd ustawia odłączanie debuggera przy wyjściu. Na czas działającej próby zablokowano zapisy edytora. Dodano raport z kontekstem wywołania i kursem euro oraz pole na kwotę z FM. Zgodność wyniku z ceną akceptacji oferty jest NIEPOTWIERDZONA; próbka nie uzupełnia tabeli transferów. Skrypty i działanie w FM wymagają nadzorowanego sprawdzenia u użytkownika. Testy pominięto na życzenie użytkownika; publikacja po udanej kompilacji Windows.",
   "ui_revision": 1
 }
