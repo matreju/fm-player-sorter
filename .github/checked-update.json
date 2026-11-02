@@ -1,7 +1,7 @@
 {
   "version": "0.7.0-beta.22",
-  "source_sha": "e538cba509a9e2c8b2481a4e6af673454b5a119f",
-  "run_id": 41463570003,
+  "source_sha": "02ff8244527f8a13db4ab818335c7c31c39cf8e4",
+  "run_id": 41465485192,
   "release_tag": "app-v0.6.0-beta.2",
   "notes": "Dodano opcjonalne przygotowanie nadzorowanej próby odczytu ceny: Transfery → nazwisko → Próbny odczyt ceny z FM. Wymaga Microsoft CDB x64 ze składnika Debugging Tools for Windows (Windows SDK); aplikacja wykrywa standardową instalację i udostępnia oficjalną instrukcję. Generuje skrypty dla bieżącego procesu, zawodnika, klubu i daty. CDB obserwuje wykonanie funkcji przez sam FM; nie uruchamia jej samodzielnie ani nie wylicza zastępczej ceny. To inwazyjna sesja debugowania z tymczasowymi punktami zatrzymania: użyj kopii zapisu i wstrzymaj czas. Przy braku wyniku po około 30 sekundach należy w konsoli nacisnąć Ctrl+C, wpisać qd i Enter. Osobną konsolę trzeba zakończyć także po zamknięciu aplikacji. -pd ustawia odłączanie debuggera przy wyjściu. Na czas działającej próby zablokowano zapisy edytora. Dodano raport z kontekstem wywołania i kursem euro oraz pole na kwotę z FM. Zgodność wyniku z ceną akceptacji oferty jest NIEPOTWIERDZONA; próbka nie uzupełnia tabeli transferów. Skrypty i działanie w FM wymagają nadzorowanego sprawdzenia u użytkownika. Testy pominięto na życzenie użytkownika; publikacja po udanej kompilacji Windows.",
   "ui_revision": 1
