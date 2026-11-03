@@ -449,7 +449,7 @@ mod windows_reader {
         let cache=refresh_slot().lock().map_err(|_|"Brak dostępu do menedżera list życzeń.".to_string())?
             .as_ref().cloned().ok_or("Połącz aplikację z grą, aby odczytać listy życzeń.")?;
         if cache.database.session_id!=source.session_id { return Err("Sesja gry zmieniła się. Odśwież połączenie.".into()); }
-        if source.layout.edition!=27 || cache.native_plugin_hash.as_deref()!=Some(FM27_PLUGIN_SHA256) {
+        if source.layout.edition!=27 || cache.native_plugin_profile_id.as_deref()!=Some(FM27_PLUGIN_SHA256) {
             return Err("Odczyt list życzeń nie jest jeszcze rozpoznany dla tego wydania gry.".into());
         }
         refresh_identity_check(process,&cache)?;
@@ -512,7 +512,7 @@ mod windows_reader {
         }
         let mut process=RemoteProcess::open(source.pid)?; process.layout=source.layout;
         let finance_cache=refresh_slot().lock().ok().and_then(|slot|slot.as_ref().filter(|cache|cache.database.session_id==source.session_id).cloned());
-        if let Some(cache)=&finance_cache {process.native_plugin_hash=cache.native_plugin_hash.clone();}
+        if let Some(cache)=&finance_cache {process.native_plugin_profile_id=cache.native_plugin_profile_id.clone();}
         let euro_per_gbp=finance_cache.as_ref().and_then(|cache|read_fm27_euro_rate(&process,cache.plugin_base)).or(source.euro_per_gbp);
         let index=if let Some(index)=source.index.clone() { index } else {
             let mut entries=Vec::new(); let mut cache=PlayerReadCache::default();
@@ -588,7 +588,7 @@ mod windows_reader {
         if source.session_id!=session_id || cache.database.session_id!=session_id {return Err("Dane gry zostały odświeżone. Otwórz edytor ponownie.".into());}
         if detect_football_manager().pid!=Some(source.pid) {return Err("Zmienił się proces gry. Połącz aplikację ponownie.".into());}
         let mut process=if write {RemoteProcess::open_editor(source.pid)?} else {RemoteProcess::open(source.pid)?};
-        process.layout=source.layout;process.native_plugin_hash=cache.native_plugin_hash.clone();
+        process.layout=source.layout;process.native_plugin_profile_id=cache.native_plugin_profile_id.clone();
         if !verified_fm27(&process) {return Err("Zapis jest dostępny wyłącznie dla rozpoznanego wydania FM27. Ten odczyt nie potwierdza zgodności edytora.".into());}
         refresh_identity_check(&process,&cache)?;
         let cached=source.candidates.iter().find(|candidate|candidate.uid==uid).ok_or("Nie znaleziono zawodnika w bieżącej bazie.")?;
@@ -841,7 +841,7 @@ mod windows_reader {
         if source.session_id!=session_id||cache.database.session_id!=session_id {return Err("Dane gry odświeżono. Otwórz diagnostykę ponownie.".into());}
         if cache.club.is_none() {return Err("Diagnostyka reguł ligi wymaga prowadzonego klubu.".into());}
         if detect_football_manager().pid!=Some(source.pid) {return Err("Zmienił się proces FM. Połącz aplikację ponownie.".into());}
-        let mut process=RemoteProcess::open(source.pid)?;process.layout=source.layout;process.native_plugin_hash=cache.native_plugin_hash.clone();
+        let mut process=RemoteProcess::open(source.pid)?;process.layout=source.layout;process.native_plugin_profile_id=cache.native_plugin_profile_id.clone();
         if !verified_fm27(&process) {return Err("Diagnostyka reguł jest dostępna tylko dla rozpoznanego wydania FM27.".into());}
         refresh_identity_check(&process,&cache)?;
         let started=Instant::now();let regions=process.private_rw_regions();
@@ -942,7 +942,7 @@ mod windows_reader {
     struct RemoteProcess {
         handle: HandleGuard,
         layout: FmLayout,
-        native_plugin_hash: Option<String>,
+        native_plugin_profile_id: Option<String>,
     }
 
     impl RemoteProcess {
@@ -955,7 +955,7 @@ mod windows_reader {
             Ok(Self {
                 handle: HandleGuard(handle),
                 layout: fm_version::FM26,
-                native_plugin_hash: None,
+                native_plugin_profile_id: None,
             })
         }
 
@@ -963,7 +963,7 @@ mod windows_reader {
             if crate::fm_price::capture_running() {return Err("Zakończ próbę ceny w CDB (Ctrl+C, potem qd) przed edycją danych gry.".into());}
             let handle=unsafe {OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ|PROCESS_VM_WRITE|PROCESS_VM_OPERATION,false,pid)}
                 .map_err(|error|format!("Nie można otworzyć FM do zapisu: {error}"))?;
-            Ok(Self {handle:HandleGuard(handle),layout:fm_version::FM26,native_plugin_hash:None})
+            Ok(Self {handle:HandleGuard(handle),layout:fm_version::FM26,native_plugin_profile_id:None})
         }
         fn write_exact(&self,address:usize,bytes:&[u8])->Result<(),String> {
             let mut written=0usize;
@@ -1266,7 +1266,7 @@ mod windows_reader {
         const VERIFIED_PLUGIN: &str = "bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f";
         const HUMAN_VTABLE_RVA: usize = 0x4CC086C;
         if process.layout.edition != 27
-            || !process.native_plugin_hash.as_deref()
+            || !process.native_plugin_profile_id.as_deref()
                 .map(|hash| hash.eq_ignore_ascii_case(VERIFIED_PLUGIN)).unwrap_or(false) {
             return None;
         }
@@ -1487,7 +1487,7 @@ mod windows_reader {
         database: FmNativeDatabase,
         created: u64,
         manager_person: Option<(usize,u32)>,
-        native_plugin_hash: Option<String>,
+        native_plugin_profile_id: Option<String>,
         player_classes: Vec<(usize,usize)>,
         team: usize,
         nation: usize,
@@ -1502,7 +1502,7 @@ mod windows_reader {
         REFRESH_CACHE.get_or_init(||Mutex::new(None))
     }
     fn verified_fm27(process: &RemoteProcess) -> bool {
-        process.layout.edition==27 && process.native_plugin_hash.as_deref()==Some(FM27_PLUGIN_SHA256)
+        process.layout.edition==27 && process.native_plugin_profile_id.as_deref()==Some(FM27_PLUGIN_SHA256)
     }
     // FM27 native home-shirt palette: CLUB + B0 -> info + 78 pointer vector.
     // Verified against 1sbc/1scl in CLUB::get (110A55F/110665C), 114BC00,
@@ -1693,7 +1693,7 @@ mod windows_reader {
         if !detected.detected || detected.pid!=Some(source.pid) { return Err(refresh_error("R02","Nie jest uruchomiony proces FM użyty do połączenia. Użyj „Połącz ponownie”.")); }
         let mut process=RemoteProcess::open(source.pid)?;
         process.layout=source.layout;
-        process.native_plugin_hash=cache.native_plugin_hash.clone();
+        process.native_plugin_profile_id=cache.native_plugin_profile_id.clone();
         refresh_identity_check(&process,&cache)?;
         let current_registry=if verified_fm27(&process) {
             Some(native_player_vector(&process,cache.plugin_base).ok_or_else(||refresh_error("R10","Rejestr zawodników jest aktualizowany przez grę. Ponów odświeżanie."))?)
@@ -1793,7 +1793,9 @@ mod windows_reader {
             .ok_or_else(|| "Nie udało się odczytać adresu GameAssembly.dll.".to_string())?;
         let mut process = RemoteProcess::open(pid)?;
         process.layout = fm_version::runtime_layout(std::path::Path::new(&game_assembly_module.path))?;
-        process.native_plugin_hash = game_plugin_module.sha256.clone();
+        process.native_plugin_profile_id = if process.layout.edition==27 {
+            fm_version::native_profile_id(std::path::Path::new(&game_plugin_module.path),game_plugin_module.sha256.as_deref())?
+        } else {game_plugin_module.sha256.clone()};
         let regions = process.private_rw_regions();
         if regions.is_empty() {
             return Err("Nie znaleziono czytelnych regionów pamięci bazy FM.".to_string());
@@ -1829,7 +1831,7 @@ mod windows_reader {
         let mut class_offset_histogram = HashMap::<i32, u64>::new();
         let mut scanned_bytes = 0u64;
         let currency_vtable = (process.layout.edition == 27
-            && process.native_plugin_hash.as_deref() == Some(FM27_PLUGIN_SHA256))
+            && process.native_plugin_profile_id.as_deref() == Some(FM27_PLUGIN_SHA256))
             .then_some(resolver.game_plugin.base + FM27_CURRENCY_VTABLE)
             .filter(|vtable| resolver.native_type_name(*vtable).as_deref() == Some(".?AVCURRENCY_RECORD@db@@"));
         let mut currency_rates = GameCurrencyRates::default();
@@ -2111,7 +2113,7 @@ mod windows_reader {
 
         let database_player_count = player_candidates.len();
         // Documented FM27 Steam world clock; never use a fixture date as today's date.
-        let world_date = if process.layout.edition == 27 && process.native_plugin_hash.as_deref()
+        let world_date = if process.layout.edition == 27 && process.native_plugin_profile_id.as_deref()
             .map(|hash| hash.eq_ignore_ascii_case("bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f")).unwrap_or(false) {
             process.read_u32(resolver.game_plugin.base + 0x56AD378)
                 .filter(|raw| decode_fm_date(*raw).is_some()).map(normalize_fm_date)
@@ -2252,7 +2254,7 @@ mod windows_reader {
                 Some((*uid,record,table,currency_rates.euro.contains_key(uid)))
             }).collect();
             *refresh_slot().lock().map_err(|_| "Nie można zapamiętać połączenia FM.".to_string())?=Some(RefreshSession {
-                database:database.clone(), created, manager_person, native_plugin_hash:process.native_plugin_hash.clone(), player_classes, team:managed.team_address,
+                database:database.clone(), created, manager_person, native_plugin_profile_id:process.native_plugin_profile_id.clone(), player_classes, team:managed.team_address,
                 nation:managed_nation_address, club:managed_club, plugin_base:resolver.game_plugin.base,
                 registry_signature, registry_pointer_hash, currency_sources:sources,
             });
@@ -3876,7 +3878,7 @@ mod windows_reader {
         process: &RemoteProcess, root: usize, first_team: usize, candidates: &HashMap<u32,PlayerCandidate>, prior_own: Option<&HashSet<u32>>,
     ) -> Result<(HashMap<u32,String>,HashSet<usize>),String> {
         let mut own_clubs = HashSet::new();
-        let linked_reserves = process.layout.edition==27 && process.native_plugin_hash.as_deref()
+        let linked_reserves = process.layout.edition==27 && process.native_plugin_profile_id.as_deref()
             .map(|hash| hash.eq_ignore_ascii_case("bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f")).unwrap_or(false);
         let mut teams = fm_club::club_teams(root, |club| {
             own_clubs.insert(club);

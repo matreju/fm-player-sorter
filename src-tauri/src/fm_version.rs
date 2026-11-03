@@ -3,6 +3,38 @@
 //! Native game_plugin fields remain a trial layout until tested in a live FM27.
 use std::path::Path;
 
+// These identities retain every byte except explicitly parsed PE timestamps,
+// checksum and the CodeView RSDS PDB GUID/age. No code/data section is omitted.
+const FM27_ASSEMBLY_LAYOUT_SHA256:&str="01e6803b280359dc3300cc1599c7211463243fafce229671dc045232b8a67837";
+const FM27_NATIVE_LAYOUT_SHA256:&str="499016330f23753163aab6c220cb76ac413a2038fa86b37954b5833720eddd61";
+const FM27_NATIVE_PROFILE_ID:&str="bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f";
+
+fn pe_layout_matches(path:&Path,raw_hash:&str,expected:&str)->Result<bool,String> {
+    use std::{collections::BTreeMap,sync::{Mutex,OnceLock}};
+    static CACHE:OnceLock<Mutex<BTreeMap<String,String>>>=OnceLock::new();
+    let cache=CACHE.get_or_init(||Mutex::new(BTreeMap::new()));
+    if let Ok(values)=cache.lock(){if let Some(layout)=values.get(raw_hash){return Ok(layout==expected);}}
+    let fingerprint=crate::fm_pe::fingerprint(path)?;
+    if !fingerprint.raw.eq_ignore_ascii_case(raw_hash){return Err("Plik gry zmienił się podczas rozpoznawania. Ponów połączenie po zakończeniu aktualizacji.".into());}
+    if let Ok(mut values)=cache.lock(){if values.len()>=32{values.clear();}values.insert(raw_hash.to_owned(),fingerprint.layout.clone());}
+    Ok(fingerprint.layout==expected)
+}
+
+pub(crate) fn assembly_matches(path:&Path,raw_hash:&str,profile:FmLayout)->Result<bool,String> {
+    if profile.assembly_hash.eq_ignore_ascii_case(raw_hash){return Ok(true);}
+    if profile.edition!=27{return Ok(false);}
+    pe_layout_matches(path,raw_hash,FM27_ASSEMBLY_LAYOUT_SHA256)
+}
+
+// A compatibility identity is not the raw file hash: module diagnostics retain
+// and display the original SHA-256 separately. Unknown native code stays unknown.
+pub(crate) fn native_profile_id(path:&Path,raw_hash:Option<&str>)->Result<Option<String>,String> {
+    let Some(raw)=raw_hash else {return Ok(None);};
+    if raw.eq_ignore_ascii_case(FM27_NATIVE_PROFILE_ID)||pe_layout_matches(path,raw,FM27_NATIVE_LAYOUT_SHA256)? {
+        Ok(Some(FM27_NATIVE_PROFILE_ID.into()))
+    }else{Ok(Some(raw.into()))}
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct FmLayout {
     pub id: &'static str,
@@ -65,6 +97,12 @@ pub(crate) fn profile_for_hashes(assembly: &str, metadata: &str) -> Option<FmLay
     })
 }
 
+pub(crate) fn profile_for_files(path:&Path,assembly:&str,metadata:&str)->Result<Option<FmLayout>,String> {
+    if let Some(profile)=profile_for_hashes(assembly,metadata){return Ok(Some(profile));}
+    if metadata.eq_ignore_ascii_case(FM27.metadata_hash)&&assembly_matches(path,assembly,FM27)? {return Ok(Some(FM27));}
+    Ok(None)
+}
+
 pub(crate) fn metadata_path(directory: &Path) -> std::path::PathBuf {
     directory.join("fm_Data/il2cpp_data/Metadata/global-metadata.dat")
 }
@@ -87,8 +125,8 @@ pub(crate) fn runtime_layout(assembly_path: &Path) -> Result<FmLayout, String> {
     }
     let assembly_hash = crate::fm_build::calculate_sha256(&assembly_path.to_string_lossy())?;
     let metadata_hash = crate::fm_build::calculate_sha256(&metadata.to_string_lossy())?;
-    profile_for_hashes(&assembly_hash, &metadata_hash).ok_or_else(|| format!(
-        "Profil pamięci: nieznana wersja FM (metadane {version}, GameAssembly {assembly_hash})."
+    profile_for_files(assembly_path,&assembly_hash, &metadata_hash)?.ok_or_else(|| format!(
+        "Profil pamięci: nieobsługiwany kod lub układ metadanych FM (format {version}, GameAssembly {assembly_hash}, metadane SHA-256 {metadata_hash})."
     ))
 }
 

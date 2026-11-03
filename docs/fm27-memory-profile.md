@@ -76,3 +76,13 @@ Version 0.6.0 is distributed through the existing application updater as request
 The application identifier, updater public key, storage and stable updater URL
 are unchanged. FM27's reader remains experimental until confirmed live; normal
 release-channel distribution does not imply verified FM27 compatibility.
+
+## Debug-only rebuilds (beta.23)
+
+The November 3 supplied GameAssembly differs only in PE/debug timestamps and a
+PDB identifier, not executable code, field layouts or method pointers. Exact
+raw pairs are retained, with an additional strictly normalized PE identity
+for these informational changes. The original metadata hash is still required.
+See [fm27-build-compatibility.md](fm27-build-compatibility.md) for hashes, changed
+byte ranges, native-plugin identity handling and limits. This is shared Windows
+build compatibility, not a profile tied to one computer.

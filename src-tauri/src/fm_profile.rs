@@ -214,10 +214,11 @@ pub(crate) fn inspect_fm_reader_profile_blocking() -> Result<FmReaderProfileStat
     let game_assembly_sha256 = hash_optional(&game_assembly_path);
     let global_metadata_sha256 = hash_optional(&global_metadata_path);
 
-    let layout = fm_version::profile_for_hashes(
+    let layout = fm_version::profile_for_files(
+        &game_assembly_path,
         game_assembly_sha256.as_deref().unwrap_or(""),
         global_metadata_sha256.as_deref().unwrap_or(""),
-    ).unwrap_or_else(|| {
+    ).ok().flatten().unwrap_or_else(|| {
         if game_assembly_sha256.as_deref() == Some(fm_version::FM27.assembly_hash)
             || global_metadata_sha256.as_deref() == Some(fm_version::FM27.metadata_hash) {
             fm_version::FM27
@@ -226,7 +227,7 @@ pub(crate) fn inspect_fm_reader_profile_blocking() -> Result<FmReaderProfileStat
         }
     });
     let fm_exe_matches = hash_matches(&fm_exe_sha256, layout.exe_hash);
-    let game_assembly_matches = hash_matches(&game_assembly_sha256, layout.assembly_hash);
+    let game_assembly_matches = game_assembly_sha256.as_deref().map(|hash|fm_version::assembly_matches(&game_assembly_path,hash,layout).unwrap_or(false)).unwrap_or(false);
     let global_metadata_matches = hash_matches(&global_metadata_sha256, layout.metadata_hash);
 
     let metadata_header_valid = read_metadata_magic(&global_metadata_path)
