@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.23",
-  "source_sha": "0d1e20a8519467cc4170117981dfe987f8b32bf0",
-  "run_id": 41655289784,
+  "version": "0.7.0-beta.24",
+  "source_sha": "5fac6870ca4002892827a30f30c3d1fca7140624",
+  "run_id": 41660016042,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Naprawiono błąd rozpoznawania GameAssembly po aktualizacji FM27. Porównanie przesłanego pliku wykazało wyłącznie zmiany informacji o kompilacji; kod i układ danych są zgodne z dotychczasowym profilem. Aplikacja rozpoznaje teraz również takie warianty, zachowując kontrolę kodu, metadanych i danych używanych przez edytor. Ten sam profil obsługuje zgodne wydania gry na innych komputerach z Windowsem. Po instalacji wybierz Połącz ponownie. Zgodność GameAssembly potwierdzono porównaniem plików; połączenie w uruchomionym FM pozostaje do sprawdzenia u użytkownika. Testy pominięto na życzenie użytkownika; publikacja po kompilacji Windows.",
+  "notes": "Przyspieszono połączenie z FM27: poprawiono rozpoznawanie menedżera, odczytując go z rejestru pracowników przed pełnym skanem pamięci. Usunięto błędny adres klasy blokujący szybką ścieżkę dla klubu. Przy łączeniu sprawdzane są tylko biblioteki potrzebne czytnikowi, bez ponownego haszowania GameAssembly. Dodano widoczny etap odczytu i postęp w MB podczas skanu awaryjnego. Odśwież dane nadal korzysta z zapamiętanego połączenia. Kompilacja Windows jest warunkiem publikacji; rzeczywisty czas odczytu i działanie w zapisie wymagają sprawdzenia w uruchomionym FM. Testy pominięto na życzenie użytkownika.",
   "ui_revision": 1
 }
