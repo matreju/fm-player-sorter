@@ -1,11 +1,6 @@
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useState } from "react";
 import { getClubTheme, type NationTheme } from "../utils/nationTheme";
 
-const storageKey=(uid:number)=>`fm-player-sorter.club-crest.v1.${uid}`;
-function savedCrest(uid:number|null):string|null {
-  if(!uid)return null;
-  try {const value=localStorage.getItem(storageKey(uid));return value?.startsWith("data:image/png;base64,")&&value.length<1_500_000?value:null;}catch{return null;}
-}
 function loadImage(source:string):Promise<HTMLImageElement> {
   return new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(new Error("Nie można odczytać herbu."));image.src=source;});
 }
@@ -34,32 +29,13 @@ function palette(image:HTMLImageElement):NationTheme {
 }
 
 export function useClubAppearance(uid:number|null,gameCrest:string|null|undefined,gameColors?:[string,string]|null){
-  const [override,setOverride]=useState<{uid:number;source:string|null}|null>(null);
+  const source=uid?gameCrest??null:null;
   const [appearance,setAppearance]=useState<{uid:number;source:string;theme:NationTheme}|null>(null);
-  const [error,setError]=useState("");
-  const source=uid?(override?.uid===uid?override.source:savedCrest(uid))??gameCrest??null:null;
-  useEffect(()=>{setError("");},[uid]);
   useEffect(()=>{
     let active=true;
     if(uid&&source)void loadImage(source).then(image=>{if(active)setAppearance({uid,source,theme:palette(image)});}).catch(()=>{if(active)setAppearance(null);});
     return()=>{active=false;};
   },[uid,source]);
-  async function upload(event:ChangeEvent<HTMLInputElement>){
-    const file=event.target.files?.[0];event.target.value="";if(!uid||!file)return;
-    const targetUid=uid;setError("");
-    try {
-      if(!["image/png","image/jpeg","image/webp"].includes(file.type)||file.size>5_000_000)throw new Error("Wybierz PNG, JPG lub WebP do 5 MB.");
-      const url=URL.createObjectURL(file);
-      try {
-        const image=await loadImage(url);const scale=Math.min(1,384/Math.max(image.width,image.height));
-        const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(image.width*scale));canvas.height=Math.max(1,Math.round(image.height*scale));
-        const context=canvas.getContext("2d");if(!context)throw new Error("Nie można przygotować herbu.");
-        context.drawImage(image,0,0,canvas.width,canvas.height);const next=canvas.toDataURL("image/png");
-        localStorage.setItem(storageKey(targetUid),next);setOverride({uid:targetUid,source:next});
-      }finally{URL.revokeObjectURL(url);}
-    }catch(reason){setError(reason instanceof Error?reason.message:String(reason));}
-  }
-  function reset(){if(!uid)return;try{localStorage.removeItem(storageKey(uid));setOverride({uid,source:null});setError("");}catch{setError("Nie można przywrócić herbu z FM.");}}
   const nativeTheme=uid&&gameColors?.length===2&&gameColors.every(color=>/^#[\da-f]{6}$/i.test(color))?getClubTheme(...gameColors):null;
-  return {crest:source,theme:nativeTheme??(appearance?.uid===uid&&appearance.source===source?appearance.theme:getClubTheme()),upload,reset,error,custom:!!uid&&!!(override?.uid===uid?override.source:savedCrest(uid))};
+  return {crest:source,theme:nativeTheme??(appearance?.uid===uid&&appearance.source===source?appearance.theme:getClubTheme())};
 }

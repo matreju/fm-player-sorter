@@ -575,7 +575,7 @@ mod windows_reader {
 
     use crate::fm_editor::{EditorField,PlayerEditSnapshot,PlayerEditRequest,PlayerEditResult,AppliedChange};
     #[derive(Clone, Copy)]
-    enum EditEncoding {Ability,Height,ScaledAttribute,PlainAttribute,BirthDate,ContractExpiry,Wage {euro_per_gbp:f64}}
+    enum EditEncoding {Ability,Height,ScaledAttribute,PlainAttribute,Position,BirthDate,ContractExpiry,Wage {euro_per_gbp:f64}}
     #[derive(Clone)]
     struct NativeEditorField {ui:EditorField,address:usize,bytes:Vec<u8>,encoding:EditEncoding}
     #[derive(Clone)]
@@ -598,7 +598,7 @@ mod windows_reader {
         if detect_football_manager().pid!=Some(source.pid) {return Err("Zmienił się proces gry. Połącz aplikację ponownie.".into());}
         let mut process=if write {RemoteProcess::open_editor(source.pid)?} else {RemoteProcess::open(source.pid)?};
         process.layout=source.layout;process.native_plugin_profile_id=cache.native_plugin_profile_id.clone();
-        if !verified_fm27(&process) {return Err("Zapis jest dostępny wyłącznie dla rozpoznanego wydania FM27. Ten odczyt nie potwierdza zgodności edytora.".into());}
+        if !verified_fm27(&process) {return Err(native_compatibility_error(&process));}
         refresh_identity_check(&process,&cache)?;
         let cached=source.candidates.iter().find(|candidate|candidate.uid==uid).ok_or("Nie znaleziono zawodnika w bieżącej bazie.")?;
         let candidate=live_candidate(&process,cached).ok_or("Rekord zawodnika zmienił się. Odśwież dane i otwórz edytor ponownie.")?;
@@ -666,6 +666,20 @@ mod windows_reader {
             if let Some(height)=read_u16(&bytes,0).filter(|height|(130..=230).contains(height)) {
                 fields.push(NativeEditorField {ui:EditorField {key:"height".into(),label:"Wzrost · cm".into(),value:height.to_string(),kind:"number".into(),min:Some(130),max:Some(230)},address,bytes,encoding:EditEncoding::Height});
             }
+        }
+        let positions=process.read_exact(candidate.player_address+PLAYER_POSITIONS,POSITION_FIELDS.len())
+            .filter(|values|values.iter().all(|value|*value<=20)&&values.contains(&20))
+            .ok_or("Nie potwierdzono umiejętności gry na pozycjach.")?;
+        for (short,_,offset) in POSITION_FIELDS {
+            let raw=positions[offset];
+            fields.push(NativeEditorField {ui:EditorField {key:format!("position:{short}"),label:short.into(),value:raw.to_string(),kind:"number".into(),min:Some(0),max:Some(20)},
+                address:candidate.player_address+PLAYER_POSITIONS+offset,bytes:vec![raw],encoding:EditEncoding::Position});
+        }
+        for (key,label,offset) in [("left","Lewa noga",FOOT_LEFT),("right","Prawa noga",FOOT_RIGHT)] {
+            let address=candidate.player_address+PLAYER_ATTRIBUTES+offset;
+            let raw=process.read_u8(address).filter(|value|(3..=100).contains(value)).ok_or("Nie potwierdzono sprawności nóg zawodnika.")?;
+            fields.push(NativeEditorField {ui:EditorField {key:format!("foot:{key}"),label:label.into(),value:decode_attribute(raw).to_string(),kind:"number".into(),min:Some(1),max:Some(20)},
+                address,bytes:vec![raw],encoding:EditEncoding::ScaledAttribute});
         }
         // Only confirmed full contracts: no guessed layout for trials or loans.
         if let Some((contract,vtable,_))=identity.contract.filter(|(_,vtable,_)|*vtable==cache.plugin_base+0x4B00AE8) {
@@ -807,6 +821,15 @@ mod windows_reader {
             patches.push(EditorPatch {address:field.address,before:field.bytes.clone(),after,change:AppliedChange {label:field.ui.label.clone(),before:field.ui.value.clone(),after:actual_value}});
         }
         if patches.is_empty() {return Err("Nie wybrano żadnej zmiany.".into());}
+        if patches.iter().any(|patch|draft.fields.iter().any(|field|matches!(field.encoding,EditEncoding::Position)&&field.address==patch.address)) {
+            let mut positions=process.read_exact(candidate.player_address+PLAYER_POSITIONS,POSITION_FIELDS.len()).ok_or("Nie można odczytać pozycji zawodnika.")?;
+            for patch in &patches {
+                if let Some(offset)=patch.address.checked_sub(candidate.player_address+PLAYER_POSITIONS).filter(|offset|*offset<positions.len()) {
+                    positions[offset]=patch.after[0];
+                }
+            }
+            if positions.iter().any(|value|*value>20)||!positions.contains(&20) {return Err("Ustaw co najmniej jedną pozycję na 20 — naturalną pozycję zawodnika.".into());}
+        }
         if pa<ca {return Err("Potencjał PA nie może być mniejszy niż obecne umiejętności CA. Zmień oba pola w jednym zapisie.".into());}
         refresh_identity_check(&process,&cache)?;
         apply_editor_patches(&process,&draft.identity,&patches)?;
@@ -1542,6 +1565,10 @@ mod windows_reader {
     fn refresh_slot() -> &'static Mutex<Option<RefreshSession>> {
         REFRESH_CACHE.get_or_init(||Mutex::new(None))
     }
+    fn native_compatibility_error(process:&RemoteProcess)->String {
+        if process.layout.edition!=27 {return "Edytor obsługuje FM27. To połączenie dotyczy innej edycji gry.".into();}
+        format!("Rozpoznano FM27, ale biblioteka game_plugin.dll nie ma potwierdzonej zgodności po aktualizacji gry. To blokuje edytor i zasady rozgrywek oraz szybki odczyt rejestru i barw. Potrzebny jest aktualny plik game_plugin.dll z folderu gry. Identyfikator biblioteki: {}.",process.native_plugin_profile_id.as_deref().unwrap_or("nie udało się odczytać pliku"))
+    }
     fn verified_fm27(process: &RemoteProcess) -> bool {
         process.layout.edition==27 && process.native_plugin_profile_id.as_deref()==Some(FM27_PLUGIN_SHA256)
     }
@@ -1980,8 +2007,13 @@ mod windows_reader {
                             continue;
                         }
                         let player_address = person_address - offset;
-                        let ca = process.read_u16(player_address + PLAYER_CA).unwrap_or(0);
-                        let pa = process.read_u16(player_address + PLAYER_PA).unwrap_or(0);
+                        // Reuse the already-read chunk; only boundary-spanning
+                        // records need another ReadProcessMemory call.
+                        let player_local=local.checked_sub(offset);
+                        let ca = player_local.and_then(|at|read_u16(&buffer,at+PLAYER_CA))
+                            .or_else(||process.read_u16(player_address+PLAYER_CA)).unwrap_or(0);
+                        let pa = player_local.and_then(|at|read_u16(&buffer,at+PLAYER_PA))
+                            .or_else(||process.read_u16(player_address+PLAYER_PA)).unwrap_or(0);
                         if !(1..=200).contains(&ca) || !(1..=200).contains(&pa) {
                             local += 8;
                             continue;
@@ -4575,9 +4607,11 @@ mod windows_reader {
     }
 
     fn pointer_in_regions(pointer: usize, regions: &[(usize, usize)]) -> bool {
-        regions.iter().any(|(base, length)| {
-            pointer >= *base && pointer < base.saturating_add(*length)
-        })
+        // private_rw_regions returns disjoint regions in ascending address order.
+        // This check is called millions of times during the fallback heap scan.
+        let index=regions.partition_point(|(base,_)|*base<=pointer);
+        index.checked_sub(1).and_then(|index|regions.get(index))
+            .is_some_and(|(base,length)|pointer<base.saturating_add(*length))
     }
 
     fn score_manager_graph_target(
