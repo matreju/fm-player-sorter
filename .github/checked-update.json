@@ -1,8 +1,8 @@
 {
   "version": "0.7.0-beta.23",
-  "source_sha": "6db7350a05affcb7e2ced2489b2bbf6f07d373ef",
-  "run_id": 41653976899,
+  "source_sha": "0d1e20a8519467cc4170117981dfe987f8b32bf0",
+  "run_id": 41655289784,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Poprawiono rozpoznawanie FM27 po kosmetycznym przebudowaniu bibliotek. Przesłany GameAssembly o SHA256 3f20a3829a1194c200d82bdc95b717cdeaf1b7a348eecbe6520bce7af9c0c588 różni się od poprzedniego pliku dokładnie 28 bajtami znaczników czasu i identyfikatora PDB; kod wykonywalny oraz tabele danych są identyczne. Profil rozpoznaje teraz także ściśle równoważne pliki PE, pomijając tylko wskazane pola dat, sumy kontrolnej i GUID/wieku PDB. Wszystkie pozostałe bajty kodu i danych oraz pełny hash metadanych nadal podlegają kontroli. Takie samo rozpoznawanie zastosowano do tożsamości profilu natywnej biblioteki; rzeczywiste hashe plików pozostają widoczne w raporcie modułów. Nie dopuszczono dowolnych nowych układów pamięci ani nie wyłączono kontroli edytora. Profile są wspólne dla zgodnych wersji gry na Windows, nie przypisane do konkretnego komputera. Po instalacji wybierz Połącz ponownie. Porównanie dostarczonych plików potwierdza zgodność GameAssembly; działanie połączenia w uruchomionym FM wymaga sprawdzenia u użytkownika. Testy pominięto na życzenie użytkownika; publikacja po kompilacji Windows.",
+  "notes": "Naprawiono błąd rozpoznawania GameAssembly po aktualizacji FM27. Porównanie przesłanego pliku wykazało wyłącznie zmiany informacji o kompilacji; kod i układ danych są zgodne z dotychczasowym profilem. Aplikacja rozpoznaje teraz również takie warianty, zachowując kontrolę kodu, metadanych i danych używanych przez edytor. Ten sam profil obsługuje zgodne wydania gry na innych komputerach z Windowsem. Po instalacji wybierz Połącz ponownie. Zgodność GameAssembly potwierdzono porównaniem plików; połączenie w uruchomionym FM pozostaje do sprawdzenia u użytkownika. Testy pominięto na życzenie użytkownika; publikacja po kompilacji Windows.",
   "ui_revision": 1
 }
