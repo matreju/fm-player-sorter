@@ -23,7 +23,7 @@ fn league_quota_context(session_id:u64,write:bool)->Result<(RemoteProcess,Refres
     if source.session_id!=session_id||source.pid!=cache.database.pid {return Err("Dane gry zmieniły się. Otwórz zasady ponownie.".into());}
     if detect_football_manager().pid!=Some(cache.database.pid) {return Err("Zmienił się proces FM. Połącz aplikację ponownie.".into());}
     let mut process=if write {RemoteProcess::open_editor(cache.database.pid)?}else{RemoteProcess::open(cache.database.pid)?};
-    process.layout=source.layout;process.native_plugin_hash=cache.native_plugin_hash.clone();
+    process.layout=source.layout;process.native_plugin_profile_id=cache.native_plugin_profile_id.clone();
     if !verified_fm27(&process) {return Err("Edycja zasad rozgrywek wymaga rozpoznanego wydania FM27.".into());}
     refresh_identity_check(&process,&cache)?;
     Ok((process,cache))
