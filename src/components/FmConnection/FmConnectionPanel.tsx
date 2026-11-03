@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 import {
   getFootballManagerDateStatus,
@@ -42,9 +43,11 @@ export function FmConnectionPanel({
   const [isOpen, setIsOpen] = useState(false);
   const [isChecking, setIsChecking] = useState(desktopMode);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadProgress, setLoadProgress] = useState("");
   const [probeError, setProbeError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const loadingRef=useRef(false);
+  const quickReadRef=useRef(false);
   const processDetectedRef = useRef<boolean | null>(null);
 
   const refreshStatus = useCallback(async () => {
@@ -124,10 +127,29 @@ export function FmConnectionPanel({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isLoading || !desktopMode) return;
+    let cancelled=false;
+    let pending=false;
+    const poll=async()=>{
+      if(pending || quickReadRef.current)return;
+      pending=true;
+      try {
+        const stage=await invoke<string>("get_fm_load_progress");
+        if(!cancelled)setLoadProgress(stage);
+      } catch { /* Progress must never interrupt the actual read. */ }
+      finally {pending=false;}
+    };
+    const timer=window.setInterval(()=>void poll(),1000);
+    return ()=>{cancelled=true;window.clearInterval(timer);};
+  },[isLoading,desktopMode]);
+
   const connect = async (quick=false) => {
     if(loadingRef.current)return;
     loadingRef.current=true;
+    quickReadRef.current=quick;
     try {
+      setLoadProgress(quick?"Odświeżanie danych…":"Łączenie z grą…");
       setIsLoading(true);
       setLoadError(null);
       setDateStatus(null);
@@ -160,7 +182,7 @@ export function FmConnectionPanel({
   const dataStale = dateStatus?.dataStale ?? false;
   const displayedDate = dateStatus?.currentDate ?? result?.gameDate ?? null;
   const connectionLabel = isLoading
-    ? "Odświeżanie…"
+    ? (loadProgress || "Odczytywanie danych…")
     : processConnected
       ? loadedPlayerCount > 0
         ? "Odśwież dane"
@@ -268,7 +290,7 @@ export function FmConnectionPanel({
                 disabled={!processConnected || isLoading}
               >
                 {isLoading
-                  ? "Odczytywanie danych z gry…"
+                  ? (loadProgress || "Odczytywanie danych z gry…")
                   : loadedPlayerCount > 0
                     ? "Połącz ponownie — pełny odczyt"
                     : "Połącz i wczytaj zawodników"}

@@ -4,6 +4,15 @@ use serde::Serialize;
 
 pub type FmTableRow = BTreeMap<String, String>;
 
+static LOAD_PROGRESS: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+fn set_load_progress(message: &str) {
+    if let Ok(mut stage)=LOAD_PROGRESS.lock() { *stage=message.to_owned(); }
+}
+#[tauri::command]
+pub fn get_fm_load_progress() -> String {
+    LOAD_PROGRESS.lock().map(|stage|stage.clone()).unwrap_or_default()
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FmClassOffsetStat {
@@ -80,7 +89,7 @@ mod windows_reader {
     use crate::{
         fm_club::{self, ClubNode},
         fm_scout::{self, ScoutingQuery, ScoutingResult, ScoutingEntry},
-        fm_modules::inspect_fm_modules_blocking,
+        fm_modules::inspect_reader_modules,
         fm_process::detect_football_manager,
         fm_version::{self, FmLayout},
         fm_reader::{
@@ -1255,6 +1264,36 @@ mod windows_reader {
         resolution
     }
 
+    /// Read the bounded staff pointer vector, not the whole private heap.
+    /// The exact-build gate and secondary RTTI offset identify human objects;
+    /// DOB/contract/back-reference/uniqueness checks below identify a real job.
+    fn read_fm27_human_managers(process: &RemoteProcess, resolver: &MetaResolver) -> Option<HashSet<HumanManagerCandidate>> {
+        if !verified_fm27(process) { return None; }
+        let slot=resolver.game_plugin.base+0x5703818;
+        let begin=process.read_ptr(slot)?;
+        let end=process.read_ptr(slot+8)?;
+        let length=end.checked_sub(begin)?;
+        if begin<0x10_000 || length%8!=0 || !(1..=2_000_000).contains(&(length/8)) { return None; }
+        let vtable=resolver.game_plugin.base+0x4CC08D8;
+        if resolver.dynamic_offset(vtable)!=Some(process.layout.human_manager_person as i32) { return None; }
+        let pointers=process.read_exact(begin,length)?;
+        let mut managers=HashSet::new();
+        for pointer in pointers.chunks_exact(8) {
+            let staff=u64::from_le_bytes(pointer.try_into().ok()?) as usize;
+            if staff<0x10_000 { return None; }
+            let person=staff.checked_add(process.layout.human_manager_person)?;
+            if process.read_ptr(person)!=Some(vtable) { continue; }
+            let (year,_)=process.read_u32(person+PERSON_DOB).and_then(decode_fm_date)?;
+            if year<=1900 { continue; }
+            let uid=record_uid(process,person)?;
+            if uid==0 || uid==u32::MAX || !looks_like_named_person(process,person) { return None; }
+            managers.insert(HumanManagerCandidate {uid,person_address:person,staff_address:staff});
+        }
+        if process.read_ptr(slot)!=Some(begin) || process.read_ptr(slot+8)!=Some(end)
+            || process.read_exact(begin,length)?!=pointers { return None; }
+        Some(managers)
+    }
+
     // Read-only fallback for the independently documented FM27 Steam build.
     // https://github.com/barak14/fm-editor/blob/main/docs/fm27/memory-layout.md
     // Offset facts only; no third-party editor implementation is incorporated.
@@ -1264,7 +1303,9 @@ mod windows_reader {
         managers: &HashSet<HumanManagerCandidate>,
     ) -> Option<usize> {
         const VERIFIED_PLUGIN: &str = "bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f";
-        const HUMAN_VTABLE_RVA: usize = 0x4CC086C;
+        // Person secondary vtable: COL offset 0x440, HUMAN_NON_PLAYER@db.
+        // 0x4CC086C is RTTI hierarchy data, not a vtable.
+        const HUMAN_PERSON_VTABLE_RVA: usize = 0x4CC08D8;
         if process.layout.edition != 27
             || !process.native_plugin_profile_id.as_deref()
                 .map(|hash| hash.eq_ignore_ascii_case(VERIFIED_PLUGIN)).unwrap_or(false) {
@@ -1272,8 +1313,8 @@ mod windows_reader {
         }
         let mut active = Vec::new();
         for manager in managers {
-            if process.read_ptr(manager.staff_address)
-                != Some(resolver.game_plugin.base + HUMAN_VTABLE_RVA) { continue; }
+            if process.read_ptr(manager.person_address)
+                != Some(resolver.game_plugin.base + HUMAN_PERSON_VTABLE_RVA) { continue; }
             let Some((year, _)) = process.read_u32(manager.person_address + PERSON_DOB)
                 .and_then(decode_fm_date) else { continue; };
             // The platform account placeholder shares the class, but has an
@@ -1775,7 +1816,8 @@ mod windows_reader {
             .filter(|_| detected.detected)
             .ok_or_else(|| "Nie wykryto uruchomionego Football Managera.".to_string())?;
 
-        let modules = inspect_fm_modules_blocking()?;
+        super::set_load_progress("Sprawdzanie wersji gry…");
+        let modules = inspect_reader_modules()?;
         let game_plugin_module = modules
             .modules
             .iter()
@@ -1792,7 +1834,8 @@ mod windows_reader {
         let game_assembly_base = parse_hex_address(&game_assembly_module.base_address)
             .ok_or_else(|| "Nie udało się odczytać adresu GameAssembly.dll.".to_string())?;
         let mut process = RemoteProcess::open(pid)?;
-        process.layout = fm_version::runtime_layout(std::path::Path::new(&game_assembly_module.path))?;
+        process.layout = fm_version::runtime_layout(std::path::Path::new(&game_assembly_module.path),
+            game_assembly_module.sha256.as_deref().ok_or("Nie udało się sprawdzić GameAssembly.dll.")?)?;
         process.native_plugin_profile_id = if process.layout.edition==27 {
             fm_version::native_profile_id(std::path::Path::new(&game_plugin_module.path),game_plugin_module.sha256.as_deref())?
         } else {game_plugin_module.sha256.clone()};
@@ -1801,6 +1844,7 @@ mod windows_reader {
             return Err("Nie znaleziono czytelnych regionów pamięci bazy FM.".to_string());
         }
 
+        super::set_load_progress("Odczytywanie bibliotek z pamięci gry…");
         let game_plugin = ModuleImage::load(
             &process,
             game_plugin_base,
@@ -1818,13 +1862,22 @@ mod windows_reader {
             game_assembly,
         };
 
-        let early_active = resolve_active_human_team(&process, &resolver);
+        super::set_load_progress("Rozpoznawanie menedżera i klubu…");
+        let mut human_managers = read_fm27_human_managers(&process, &resolver).unwrap_or_default();
+        let mut early_active = resolve_active_human_team(&process, &resolver);
+        if early_active.team_address.is_none() {
+            if let Some(team) = resolve_fm27_manager_class(&process, &resolver, &human_managers) {
+                early_active.team_address = Some(team);
+                early_active.active_manager_count = 1;
+                early_active.active_team_count = 1;
+            }
+        }
         let early_club = resolve_active_contract_club(&process, &resolver, &early_active);
+        super::set_load_progress("Odczytywanie rejestru piłkarzy…");
         let native_players = if early_club.is_some() { read_native_player_registry(&process,&resolver) } else { None };
         let direct_registry = native_players.is_some();
         let mut player_candidates = native_players.unwrap_or_default();
         let mut club_candidates = HashSet::<usize>::new();
-        let mut human_managers = HashSet::<HumanManagerCandidate>::new();
         let mut uid_objects = Vec::<UidObjectCandidate>::new();
         let mut binding_candidates = HashSet::<usize>::new();
         let mut human_context_candidates = HashSet::<HumanContextCandidate>::new();
@@ -1837,6 +1890,8 @@ mod windows_reader {
         let mut currency_rates = GameCurrencyRates::default();
         if direct_registry { collect_registry_currencies(&process,&resolver,&mut currency_rates); }
 
+        let total_scan_bytes: u64=regions.iter().map(|(_,size)| *size as u64).sum();
+        let mut last_progress=Instant::now();
         for &(region_base, region_size) in regions.iter().filter(|_| !direct_registry) {
             let mut region_offset = 0usize;
             while region_offset < region_size {
@@ -1850,6 +1905,10 @@ mod windows_reader {
                 };
                 let scan_size = request_size.min(buffer.len());
                 scanned_bytes = scanned_bytes.saturating_add(scan_size as u64);
+                if last_progress.elapsed().as_secs()>=1 {
+                    super::set_load_progress(&format!("Pełny odczyt pamięci: {} / {} MB…",scanned_bytes/1_048_576,total_scan_bytes/1_048_576));
+                    last_progress=Instant::now();
+                }
 
                 collect_human_context_candidates(
                     &buffer,
@@ -1979,6 +2038,7 @@ mod windows_reader {
             }
         }
 
+        super::set_load_progress("Sprawdzanie bazy i składu…");
         let euro_per_gbp = read_fm27_euro_rate(&process,resolver.game_plugin.base).or_else(||currency_rates.euro_per_gbp());
         let class_offsets = top_class_offsets(&class_offset_histogram);
         if player_candidates.len() < 500 {

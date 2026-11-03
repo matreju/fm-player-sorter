@@ -109,7 +109,7 @@ pub(crate) fn metadata_path(directory: &Path) -> std::path::PathBuf {
 
 /// Selection for the native reader. Retain FM26's existing handling of patches,
 /// but never silently apply its managed layout to a new metadata generation.
-pub(crate) fn runtime_layout(assembly_path: &Path) -> Result<FmLayout, String> {
+pub(crate) fn runtime_layout(assembly_path: &Path, assembly_hash: &str) -> Result<FmLayout, String> {
     use std::io::Read;
     let directory = assembly_path.parent().ok_or("Brak folderu GameAssembly.dll.")?;
     let metadata = metadata_path(directory);
@@ -123,7 +123,6 @@ pub(crate) fn runtime_layout(assembly_path: &Path) -> Result<FmLayout, String> {
     if version == 31 {
         return Ok(FM26);
     }
-    let assembly_hash = crate::fm_build::calculate_sha256(&assembly_path.to_string_lossy())?;
     let metadata_hash = crate::fm_build::calculate_sha256(&metadata.to_string_lossy())?;
     profile_for_files(assembly_path,&assembly_hash, &metadata_hash)?.ok_or_else(|| format!(
         "Profil pamięci: nieobsługiwany kod lub układ metadanych FM (format {version}, GameAssembly {assembly_hash}, metadane SHA-256 {metadata_hash})."

@@ -50,6 +50,16 @@ pub async fn inspect_fm_modules() -> Result<FmModuleReport, String> {
 }
 
 pub(crate) fn inspect_fm_modules_blocking() -> Result<FmModuleReport, String> {
+    inspect_modules(false)
+}
+
+/// Normal connection needs only the two libraries that define its memory layout.
+/// Keep the wider inventory/hash report available to explicit diagnostics.
+pub(crate) fn inspect_reader_modules() -> Result<FmModuleReport, String> {
+    inspect_modules(true)
+}
+
+fn inspect_modules(reader_only: bool) -> Result<FmModuleReport, String> {
     let process = detect_football_manager();
 
     if !process.detected {
@@ -99,6 +109,9 @@ pub(crate) fn inspect_fm_modules_blocking() -> Result<FmModuleReport, String> {
     let mut hashed_count = 0_usize;
 
     for module in &mut modules {
+        if reader_only && !["game_plugin.dll", "GameAssembly.dll"].iter().any(|name| module.name.eq_ignore_ascii_case(name)) {
+            continue;
+        }
         if !module.is_candidate || hashed_count >= MAX_HASHED_CANDIDATES {
             continue;
         }
