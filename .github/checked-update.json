@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.22",
-  "source_sha": "02ff8244527f8a13db4ab818335c7c31c39cf8e4",
-  "run_id": 41465485192,
+  "version": "0.7.0-beta.23",
+  "source_sha": "6db7350a05affcb7e2ced2489b2bbf6f07d373ef",
+  "run_id": 41653976899,
   "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Dodano opcjonalne przygotowanie nadzorowanej próby odczytu ceny: Transfery → nazwisko → Próbny odczyt ceny z FM. Wymaga Microsoft CDB x64 ze składnika Debugging Tools for Windows (Windows SDK); aplikacja wykrywa standardową instalację i udostępnia oficjalną instrukcję. Generuje skrypty dla bieżącego procesu, zawodnika, klubu i daty. CDB obserwuje wykonanie funkcji przez sam FM; nie uruchamia jej samodzielnie ani nie wylicza zastępczej ceny. To inwazyjna sesja debugowania z tymczasowymi punktami zatrzymania: użyj kopii zapisu i wstrzymaj czas. Przy braku wyniku po około 30 sekundach należy w konsoli nacisnąć Ctrl+C, wpisać qd i Enter. Osobną konsolę trzeba zakończyć także po zamknięciu aplikacji. -pd ustawia odłączanie debuggera przy wyjściu. Na czas działającej próby zablokowano zapisy edytora. Dodano raport z kontekstem wywołania i kursem euro oraz pole na kwotę z FM. Zgodność wyniku z ceną akceptacji oferty jest NIEPOTWIERDZONA; próbka nie uzupełnia tabeli transferów. Skrypty i działanie w FM wymagają nadzorowanego sprawdzenia u użytkownika. Testy pominięto na życzenie użytkownika; publikacja po udanej kompilacji Windows.",
+  "notes": "Poprawiono rozpoznawanie FM27 po kosmetycznym przebudowaniu bibliotek. Przesłany GameAssembly o SHA256 3f20a3829a1194c200d82bdc95b717cdeaf1b7a348eecbe6520bce7af9c0c588 różni się od poprzedniego pliku dokładnie 28 bajtami znaczników czasu i identyfikatora PDB; kod wykonywalny oraz tabele danych są identyczne. Profil rozpoznaje teraz także ściśle równoważne pliki PE, pomijając tylko wskazane pola dat, sumy kontrolnej i GUID/wieku PDB. Wszystkie pozostałe bajty kodu i danych oraz pełny hash metadanych nadal podlegają kontroli. Takie samo rozpoznawanie zastosowano do tożsamości profilu natywnej biblioteki; rzeczywiste hashe plików pozostają widoczne w raporcie modułów. Nie dopuszczono dowolnych nowych układów pamięci ani nie wyłączono kontroli edytora. Profile są wspólne dla zgodnych wersji gry na Windows, nie przypisane do konkretnego komputera. Po instalacji wybierz Połącz ponownie. Porównanie dostarczonych plików potwierdza zgodność GameAssembly; działanie połączenia w uruchomionym FM wymaga sprawdzenia u użytkownika. Testy pominięto na życzenie użytkownika; publikacja po kompilacji Windows.",
   "ui_revision": 1
 }
