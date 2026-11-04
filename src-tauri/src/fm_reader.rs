@@ -581,7 +581,7 @@ mod windows_reader {
 
     use crate::fm_editor::{EditorField,PlayerEditSnapshot,PlayerEditRequest,PlayerEditResult,AppliedChange,TeamMoraleResult};
     #[derive(Clone, Copy)]
-    enum EditEncoding {Ability,Height,ScaledAttribute,PlainAttribute,Position,BirthDate,ContractExpiry,Wage {euro_per_gbp:f64},ContractTerm {euro_per_gbp:f64,begin:usize,end:usize,index:usize,entry_type:u8}}
+    enum EditEncoding {Ability,Height,Condition,ScaledAttribute,PlainAttribute,Position,SquadNumber,BirthDate,ContractExpiry,Wage {euro_per_gbp:f64},ContractTerm {euro_per_gbp:f64,begin:usize,end:usize,index:usize,entry_type:u8}}
     #[derive(Clone)]
     struct NativeEditorField {ui:EditorField,address:usize,bytes:Vec<u8>,encoding:EditEncoding}
     #[derive(Clone)]
@@ -731,6 +731,13 @@ mod windows_reader {
             fields.push(NativeEditorField {ui:EditorField {key:"morale".into(),label:"Morale · 1–20".into(),value:raw.to_string(),kind:"number".into(),min:Some(1),max:Some(20)},
                 address,bytes:vec![raw],encoding:EditEncoding::PlainAttribute});
         }
+        let address=candidate.player_address+PLAYER_CONDITION;
+        if let Some(bytes)=process.read_exact(address,2) {
+            if let Some(raw)=read_u16(&bytes,0).filter(|value|*value<=10_000) {
+                fields.push(NativeEditorField {ui:EditorField {key:"condition".into(),label:"Kondycja · %".into(),value:format!("{:.0}",raw as f64/100.0),kind:"number".into(),min:Some(0),max:Some(100)},
+                    address,bytes,encoding:EditEncoding::Condition});
+            }
+        }
         let positions=process.read_exact(candidate.player_address+PLAYER_POSITIONS,POSITION_FIELDS.len())
             .filter(|values|values.iter().all(|value|*value<=20)&&values.contains(&20))
             .ok_or("Nie potwierdzono umiejętności gry na pozycjach.")?;
@@ -763,6 +770,11 @@ mod windows_reader {
                     if let Some(value)=read_u32(&bytes,0).and_then(format_fm_date) {
                         fields.push(NativeEditorField {ui:EditorField {key:"contract:expiry".into(),label:"Koniec kontraktu".into(),value,kind:"date".into(),min:None,max:None},address,bytes,encoding:EditEncoding::ContractExpiry});
                     }
+                }
+                let address=contract+CONTRACT_SQUAD_NUMBER;
+                if let Some(raw)=process.read_u8(address).filter(|number|*number<=99) {
+                    fields.push(NativeEditorField {ui:EditorField {key:"contract:squadNumber".into(),label:"Numer w składzie · 0 oznacza brak".into(),value:raw.to_string(),kind:"number".into(),min:Some(0),max:Some(99)},
+                        address,bytes:vec![raw],encoding:EditEncoding::SquadNumber});
                 }
                 if let Some(rate)=contract_rate {
                     let begin=process.read_ptr(contract+CONTRACT_TERMS_BEGIN).unwrap_or(0);
@@ -905,6 +917,11 @@ mod windows_reader {
                     }
                     encoded
                 },
+                EditEncoding::Condition=>{
+                    let value=change.value.parse::<u32>().map_err(|_|"Podaj kondycję od 0 do 100 procent.")?;
+                    if value>100 {return Err("Kondycja musi mieścić się w zakresie 0–100%.".into());}
+                    (value*100).to_le_bytes()[..2].to_vec()
+                },
                 EditEncoding::Wage {euro_per_gbp}=>{
                     if read_fm27_euro_rate(&process,cache.plugin_base)!=Some(euro_per_gbp) {return Err("Kurs w grze zmienił się. Otwórz edytor ponownie.".into());}
                     let annual=change.value.parse::<f64>().map_err(|_|"Podaj płacę w euro rocznie.")?;
@@ -924,7 +941,7 @@ mod windows_reader {
                 _=>{
                     let value=change.value.parse::<u32>().map_err(|_|"Wpisz liczbę całkowitą.")?;
                     if value<field.ui.min.unwrap_or(1)||value>field.ui.max.unwrap_or(20) {return Err(format!("Nieprawidłowa wartość pola „{}”.",field.ui.label));}
-                    match field.encoding {EditEncoding::Ability=>{if change.key=="ca" {ca=value as u16;}else{pa=value as u16;} (value as u16).to_le_bytes().to_vec()},EditEncoding::Height=>(value as u16).to_le_bytes().to_vec(),EditEncoding::ScaledAttribute=>vec![(value*5) as u8],_=>vec![value as u8]}
+                    match field.encoding {EditEncoding::Ability=>{if change.key=="ca" {ca=value as u16;}else{pa=value as u16;} (value as u16).to_le_bytes().to_vec()},EditEncoding::Height=>(value as u16).to_le_bytes().to_vec(),EditEncoding::ScaledAttribute=>vec![(value*5) as u8],EditEncoding::SquadNumber=>vec![value as u8],_=>vec![value as u8]}
                 },
             };
             if after==field.bytes {continue;}

@@ -180,3 +180,23 @@ owned collections and destructors. Directly hiding a vector would leave stale
 owners or leak records, so these actions remain blocked until the native cleanup
 path can be invoked without code injection or reproduced with complete ownership
 proof.
+
+## Profile edit menu, condition and squad number — beta.27
+
+The player details header owns the edit entry point. A labelled cog button opens
+an anchored menu inside the profile and the old standalone `Edit in game` button
+is removed. Opening the menu does not read or write FM; selecting the editor
+loads the same identity-checked player draft as before.
+
+The verified Player +0x258 condition value is exposed as 0–100 percent and is
+encoded back to FM's 0–10000 u16 scale. The FULL_CONTRACT +0x5D squad number is
+also exposed for exact full contracts; 0 means no assigned number and 1–99 are
+regular squad numbers. Both values use the existing original-byte preflight,
+exact readback, conditional rollback and undo path.
+
+Native RTTI confirms game actions for immediate transfers, loans, contract
+termination/release, work permits, future-transfer cancellation, unhappiness,
+injury and ban cleanup, team cohesion and tactical familiarity. These structural
+actions are not represented by scalar fields. They remain unavailable until the
+original server action can be invoked with a verified calling convention and
+live-game postconditions; the profile menu does not present inert controls.
