@@ -72,8 +72,9 @@ jobs:
           releaseName: FM Player Sorter v__VERSION__
           releaseBody: |
             Aktualizacja obecnej aplikacji przez wbudowany aktualizator.
-            Zachowano obsługę FM26 i dodano testowy profil FM27 z rozpoznawaniem aktywnej reprezentacji.
-            Odczyt FM27 wymaga sprawdzenia w działającej grze; statystyki sezonowe FM27 mogą być niedostępne.
+            Dodano dokładny profil natywny FM27 27.0.0+2493426: szybki odczyt zawodników, rozpoznawanie menedżera, barwy klubu, edycję zawodników i zasady rozgrywek.
+            Edytor zawodnika obsługuje nogi 1–20 i wszystkie pozycje 0–20. Usunięto ręczne dodawanie herbu. Poprzedni build 2486695 pozostaje obsługiwany.
+            Zmiany w pamięci trafiają do pliku kariery dopiero po zapisaniu gry w FM. Przed edycją wykonaj kopię zapisu.
           releaseDraft: false
           prerelease: ${{ github.ref_name == 'agent/fm27-compatibility' }}
           updaterJsonPreferNsis: true

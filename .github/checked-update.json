@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.24",
-  "source_sha": "5fac6870ca4002892827a30f30c3d1fca7140624",
-  "run_id": 41660016042,
-  "release_tag": "app-v0.6.0-beta.2",
-  "notes": "Przyspieszono połączenie z FM27: poprawiono rozpoznawanie menedżera, odczytując go z rejestru pracowników przed pełnym skanem pamięci. Usunięto błędny adres klasy blokujący szybką ścieżkę dla klubu. Przy łączeniu sprawdzane są tylko biblioteki potrzebne czytnikowi, bez ponownego haszowania GameAssembly. Dodano widoczny etap odczytu i postęp w MB podczas skanu awaryjnego. Odśwież dane nadal korzysta z zapamiętanego połączenia. Kompilacja Windows jest warunkiem publikacji; rzeczywisty czas odczytu i działanie w zapisie wymagają sprawdzenia w uruchomionym FM. Testy pominięto na życzenie użytkownika.",
+  "version": "0.7.0-beta.25",
+  "source_sha": "738875761eaf1b83640ac86cf7c320022b127079",
+  "run_id": 41794400879,
+  "release_tag": "app-v0.7.0-beta.25",
+  "notes": "Dodano osobny, dokładnie weryfikowany profil natywny dla FM27 27.0.0+2493426. Przywrócono szybki rejestr zawodników, rozpoznawanie menedżera, barwy klubu, edycję zawodników i zasady rozgrywek po aktualizacji gry. Edytor zawodnika obsługuje nogi 1–20 oraz każdą pozycję 0–20; usunięto ręczne dodawanie herbu. Stary build 2486695 pozostaje obsługiwany. Frontend i instalator Windows skompilowano w kontroli nr 41794400879; działanie w aktywnym zapisie wymaga sprawdzenia w FM.",
   "ui_revision": 1
 }
