@@ -3,12 +3,13 @@ export type AppModuleId =
   | "squad"
   | "core"
   | "camps"
+  | "club"
   | "transfers";
 
 export type ManagedAppMode = "club" | "nation" | "unknown";
 
 export function isAppModuleAvailable(module: AppModuleId, mode: ManagedAppMode): boolean {
-  if (module === "transfers") return mode === "club";
+  if (module === "transfers" || module === "club") return mode === "club";
   if (module === "core" || module === "camps") return mode === "nation";
   return true;
 }
@@ -20,6 +21,7 @@ const APP_MODULE_IDS: AppModuleId[] = [
   "squad",
   "core",
   "camps",
+  "club",
   "transfers",
 ];
 type ModuleDockOpenDetail = {

@@ -48,6 +48,7 @@ pub fn run() {
             fm_editor::apply_fm_player_edit,
             fm_editor::undo_fm_player_edit,
             fm_editor::set_fm_first_team_morale,
+            fm_club::get_fm_club_profile,
             fm_price::prepare_fm_price_capture,
             fm_price::start_fm_price_capture,
             fm_price::read_fm_price_capture,

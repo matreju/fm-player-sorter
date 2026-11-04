@@ -1,5 +1,31 @@
 //! Exact club-family traversal: only explicit reserve-team links, never names or affiliations.
 use std::collections::{HashSet, VecDeque};
+use serde::Serialize;
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ClubTeamSnapshot {
+    pub uid: u32,
+    pub kind: String,
+    pub reputation: u16,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ClubProfileSnapshot {
+    pub session_id: u64,
+    pub uid: u32,
+    pub name: String,
+    pub short_name: Option<String>,
+    pub teams: Vec<ClubTeamSnapshot>,
+}
+
+#[tauri::command]
+pub async fn get_fm_club_profile(session_id: u64) -> Result<ClubProfileSnapshot, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::fm_reader::get_club_profile(session_id))
+        .await
+        .map_err(|error| error.to_string())?
+}
 
 pub(crate) struct ClubNode {
     pub teams: Vec<usize>,

@@ -87,7 +87,7 @@ mod windows_reader {
     };
 
     use crate::{
-        fm_club::{self, ClubNode},
+        fm_club::{self, ClubNode, ClubProfileSnapshot, ClubTeamSnapshot},
         fm_scout::{self, ScoutingQuery, ScoutingResult, ScoutingEntry},
         fm_modules::inspect_reader_modules,
         fm_process::detect_football_manager,
@@ -1013,6 +1013,26 @@ mod windows_reader {
             for row in &mut active.database.rows {if row.get("UID").and_then(|uid|uid.parse::<u32>().ok()).is_some_and(|uid|targets.iter().any(|target|target.0==uid)) {row.insert("Morale".into(),value.to_string());}}
         }}
         Ok(TeamMoraleResult {count:targets.len(),value})
+    }
+
+    pub(super) fn get_club_profile(session_id:u64)->Result<ClubProfileSnapshot,String> {
+        let cache=refresh_slot().lock().map_err(|_|"Czytnik FM jest zajęty.")?
+            .as_ref().cloned().ok_or("Najpierw połącz aplikację z grą.")?;
+        if cache.database.session_id!=session_id {return Err("Połączenie z grą zmieniło się. Odśwież dane.".into());}
+        let club=cache.club.ok_or("Aktywna kariera nie jest karierą klubową.")?;
+        let mut process=RemoteProcess::open(cache.database.pid)?;
+        process.native_plugin_profile_id=cache.native_plugin_profile_id.clone();
+        let uid=process.read_u32(club+OBJ_UID).ok_or("Nie można odczytać identyfikatora klubu.")?;
+        let name=club_name(&process,club).ok_or("Nie można odczytać nazwy klubu.")?;
+        let short_name=process.indirect_string(club+CLUB_SHORT_NAME).filter(|value|plausible_label(value,64));
+        let mut teams=pointer_vector(&process,club+CLUB_TEAMS_BEGIN,64)?.into_iter().filter_map(|team| {
+            let uid=process.read_u32(team+OBJ_UID)?;
+            let kind=team_type_label(process.read_u8(team+TEAM_TYPE)?).to_string();
+            let reputation=process.read_u16(team+TEAM_REPUTATION).unwrap_or(0);
+            Some(ClubTeamSnapshot{uid,kind,reputation})
+        }).collect::<Vec<_>>();
+        teams.sort_by_key(|team|(team.kind.clone(),team.uid));
+        Ok(ClubProfileSnapshot{session_id,uid,name,short_name,teams})
     }
     pub(super) fn undo_player_edit(token:String)->Result<PlayerEditResult,String> {
         let _guard=SCOUTING_QUERY_LOCK.lock().map_err(|_|"Czytnik FM jest zajęty.")?;
@@ -5647,6 +5667,11 @@ pub(crate) fn undo_player_edit(_token:String)->Result<crate::fm_editor::PlayerEd
 pub(crate) fn set_first_team_morale(session_id:u64,value:u8)->Result<crate::fm_editor::TeamMoraleResult,String> {windows_reader::set_first_team_morale(session_id,value)}
 #[cfg(not(target_os="windows"))]
 pub(crate) fn set_first_team_morale(_session_id:u64,_value:u8)->Result<crate::fm_editor::TeamMoraleResult,String> {Err("Edycja morale drużyny jest dostępna w aplikacji Windows.".into())}
+
+#[cfg(target_os="windows")]
+pub(crate) fn get_club_profile(session_id:u64)->Result<crate::fm_club::ClubProfileSnapshot,String> {windows_reader::get_club_profile(session_id)}
+#[cfg(not(target_os="windows"))]
+pub(crate) fn get_club_profile(_session_id:u64)->Result<crate::fm_club::ClubProfileSnapshot,String> {Err("Dane klubu są dostępne w aplikacji Windows.".into())}
 
 #[cfg(target_os="windows")]
 pub(crate) fn inspect_league_rules(session_id:u64)->Result<crate::fm_league::LeagueRuleReport,String> {windows_reader::inspect_league_rules(session_id)}

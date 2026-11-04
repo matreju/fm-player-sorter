@@ -1,4 +1,3 @@
-import { LeagueU22Editor } from "./components/league-rules/LeagueU22Editor";
 import { useClubAppearance } from "./hooks/useClubAppearance";
 import { getGameEuroRate } from "./utils/playerFinance";
 import type { PlayerEditResult } from "./services/fmEditor";
@@ -101,6 +100,7 @@ import { normalizeTextForSearch } from "./utils/textSearch";
 import { getNationTheme } from "./utils/nationTheme";
 
 const TransferSearch = lazy(() => import("./components/transfers/TransferSearch").then(module => ({default:module.TransferSearch})));
+const ClubHub = lazy(() => import("./components/club/ClubHub").then(module => ({default:module.ClubHub})));
 const PlayerCompare = lazy(() =>
   import("./components/player-compare").then((module) => ({
     default: module.PlayerCompare,
@@ -945,7 +945,7 @@ export default function App() {
 
       <section className="desktop-workspace" aria-label="Baza zawodników">
         {snapshot?.managedMode === "club" && <section className="club-roster" aria-label="Skład klubu">
-          <div className="club-roster__heading"><div className="club-roster__identity">{teamCrest&&<img className="club-roster__crest" src={teamCrest} alt={`Herb ${snapshot.managedTeam}`}/>}<div><strong>{snapshot.managedTeam}</strong><span>Pełna lista zawodników · {rows.length} piłkarzy w klubie</span></div></div><div className="club-roster__appearance"><LeagueU22Editor key={snapshot.sessionId} sessionId={snapshot.sessionId}/><span className="club-roster__badge">KLUB</span></div></div>
+          <div className="club-roster__heading"><div className="club-roster__identity">{teamCrest&&<img className="club-roster__crest" src={teamCrest} alt={`Herb ${snapshot.managedTeam}`}/>}<div><strong>{snapshot.managedTeam}</strong><span>Pełna lista zawodników · {rows.length} piłkarzy w klubie</span></div></div><div className="club-roster__appearance"><span className="club-roster__badge">KLUB</span></div></div>
           <div className="club-roster__tabs" role="tablist" aria-label="Zespoły klubu">{[
             {id:"all",label:"Cały klub",count:rows.length},
             {id:"first",label:"Pierwsza drużyna",count:rows.filter(row=>row["Grupa klubowa"]==="Pierwsza drużyna").length},
@@ -1135,6 +1135,14 @@ export default function App() {
       </footer>
 
       <Suspense fallback={null}>
+        {managedMode === "club" && snapshot && <ClubHub
+          sessionId={snapshot.sessionId}
+          name={snapshot.managedTeam ?? "Klub"}
+          uid={snapshot.managedClubUid}
+          crest={teamCrest}
+          rows={rows}
+          databaseCount={snapshot.databasePlayerCount}
+        />}
         {managedMode === "club" && <TransferSearch euroPerGbp={getGameEuroRate(rows[0])} sessionId={snapshot?.sessionId ?? 0} clubName={snapshot?.managedTeam ?? null} onPlayerEdited={handlePlayerEdited} />}
         {rows.length > 1 && (
           <PlayerCompare

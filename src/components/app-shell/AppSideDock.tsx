@@ -46,6 +46,7 @@ const moduleButtons: Array<{
   title: string;
 }> = [
   { id: "transfers", label: "Transfery", title: "Wyszukiwarka transferowa" },
+  { id: "club", label: "Klub", title: "Informacje i edycja klubu" },
   { id: "compare", label: "Porównanie", title: "Porównywarka zawodników" },
   { id: "squad", label: "Skład", title: "Asystent wyboru składu" },
   { id: "core", label: "Trzon", title: "Trzon reprezentacji" },
