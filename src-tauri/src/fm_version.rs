@@ -6,8 +6,10 @@ use std::path::Path;
 // These identities retain every byte except explicitly parsed PE timestamps,
 // checksum and the CodeView RSDS PDB GUID/age. No code/data section is omitted.
 const FM27_ASSEMBLY_LAYOUT_SHA256:&str="01e6803b280359dc3300cc1599c7211463243fafce229671dc045232b8a67837";
-const FM27_NATIVE_LAYOUT_SHA256:&str="499016330f23753163aab6c220cb76ac413a2038fa86b37954b5833720eddd61";
-const FM27_NATIVE_PROFILE_ID:&str="bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f";
+const FM27_NATIVE_2486695_LAYOUT_SHA256:&str="499016330f23753163aab6c220cb76ac413a2038fa86b37954b5833720eddd61";
+const FM27_NATIVE_2493426_LAYOUT_SHA256:&str="f5ae562d4735f65575e71fc71304bffa62a8ccf3f125e25d45ac1ed2182c6a39";
+pub(crate) const FM27_NATIVE_2486695_PROFILE_ID:&str="bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f";
+pub(crate) const FM27_NATIVE_2493426_PROFILE_ID:&str="252ff8fb5b7a4a5a5464db6ba632e309eef9b6e65ffa992ae20575a189e66c6a";
 
 fn pe_layout_matches(path:&Path,raw_hash:&str,expected:&str)->Result<bool,String> {
     use std::{collections::BTreeMap,sync::{Mutex,OnceLock}};
@@ -30,8 +32,16 @@ pub(crate) fn assembly_matches(path:&Path,raw_hash:&str,profile:FmLayout)->Resul
 // and display the original SHA-256 separately. Unknown native code stays unknown.
 pub(crate) fn native_profile_id(path:&Path,raw_hash:Option<&str>)->Result<Option<String>,String> {
     let Some(raw)=raw_hash else {return Ok(None);};
-    if raw.eq_ignore_ascii_case(FM27_NATIVE_PROFILE_ID)||pe_layout_matches(path,raw,FM27_NATIVE_LAYOUT_SHA256)? {
-        Ok(Some(FM27_NATIVE_PROFILE_ID.into()))
+    if raw.eq_ignore_ascii_case(FM27_NATIVE_2486695_PROFILE_ID) {
+        return Ok(Some(FM27_NATIVE_2486695_PROFILE_ID.into()));
+    }
+    if raw.eq_ignore_ascii_case(FM27_NATIVE_2493426_PROFILE_ID) {
+        return Ok(Some(FM27_NATIVE_2493426_PROFILE_ID.into()));
+    }
+    if pe_layout_matches(path,raw,FM27_NATIVE_2486695_LAYOUT_SHA256)? {
+        Ok(Some(FM27_NATIVE_2486695_PROFILE_ID.into()))
+    }else if pe_layout_matches(path,raw,FM27_NATIVE_2493426_LAYOUT_SHA256)? {
+        Ok(Some(FM27_NATIVE_2493426_PROFILE_ID.into()))
     }else{Ok(Some(raw.into()))}
 }
 

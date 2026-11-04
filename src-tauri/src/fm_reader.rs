@@ -374,7 +374,9 @@ mod windows_reader {
     // float32 +0x38; its setter at 0x2F665CC writes it and updates the game's
     // own float64 formatting table. No rate is embedded in the application.
     const FM27_CURRENCY_VTABLE: usize = 0x4ED4398;
-    const FM27_PLUGIN_SHA256: &str = "bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f";
+    const FM27_NATIVE_RVA_SHIFT_2493426: usize = 0x2000;
+    const FM27_PLUGIN_2486695: &str = fm_version::FM27_NATIVE_2486695_PROFILE_ID;
+    const FM27_PLUGIN_2493426: &str = fm_version::FM27_NATIVE_2493426_PROFILE_ID;
 
     #[derive(Default)]
     struct GameCurrencyRates {
@@ -399,7 +401,7 @@ mod windows_reader {
             // Resolve this record's UID through FM's own CURRENCY enum mapping,
             // then read the active float64 rate from its formatting table. This
             // also respects loaded-save/custom rates rather than the DLL defaults.
-            let Some(rate_address) = game_currency_table_address(resolver, uid) else { return; };
+            let Some(rate_address) = game_currency_table_address(process, resolver, uid) else { return; };
             let Some(rate) = read_currency_rate(process, resolver.game_plugin.base, rate_address) else { return; };
             self.sources.insert(uid,(address,rate_address));
             let entries = if euro { &mut self.euro } else { &mut self.pound };
@@ -412,11 +414,12 @@ mod windows_reader {
             (rate.is_finite() && (0.01..100.0).contains(&rate)).then_some(rate)
         }
     }
-    fn game_currency_table_address(resolver: &MetaResolver, uid: u32) -> Option<usize> {
+    fn game_currency_table_address(process:&RemoteProcess, resolver: &MetaResolver, uid: u32) -> Option<usize> {
         let base = resolver.game_plugin.base;
+        let shift=native_plugin_shift(process)?;
         let index = if (2..=96).contains(&uid) {
             // Switch in CURRENCY_RECORD UID -> currency-enum helper, RVA 0x2F664C0.
-            let table = base + 0x4ED47B4;
+            let table = base + 0x4ED47B4 + shift;
             let relative = resolver.game_plugin.read_i32(table + (uid as usize - 2) * 4)?;
             let target = table.checked_add_signed(relative as isize)?;
             let offset = target.checked_sub(base)?;
@@ -425,10 +428,10 @@ mod windows_reader {
             else if code == [0x31, 0xC0, 0xC3] { 0 }
             else { return None; }
         } else if uid == 0x43B7AF2 { 0x35 } else { return None; };
-        (index < 66).then_some(base + 0x5707180 + index * 0x20)
+        (index < 66).then_some(base + 0x5707180 + shift + index * 0x20)
     }
     fn read_currency_rate(process: &RemoteProcess, base: usize, rate_address: usize) -> Option<f64> {
-        if process.read_u8(base + 0x570717C)? != 1 { return None; }
+        if process.read_u8(base + 0x570717C + native_plugin_shift(process)?)? != 1 { return None; }
         let rate = f64::from_bits(process.read_u64(rate_address)?);
         (rate.is_finite() && (0.000001..1_000_000.0).contains(&rate)).then_some(rate)
     }
@@ -436,8 +439,8 @@ mod windows_reader {
     // EUR -> enum 7. Read the live formatting table directly; locating the
     // database's currency-object vector or its localized names is unnecessary.
     fn read_fm27_euro_rate(process:&RemoteProcess, plugin_base:usize) -> Option<f64> {
-        if !verified_fm27(process) { return None; }
-        let pound_address=plugin_base.checked_add(0x5707180)?;
+        let shift=native_plugin_shift(process)?;
+        let pound_address=plugin_base.checked_add(0x5707180+shift)?;
         let euro_address=pound_address.checked_add(7*0x20)?;
         let pound=read_currency_rate(process,plugin_base,pound_address)?;
         let euro=read_currency_rate(process,plugin_base,euro_address)?;
@@ -458,7 +461,7 @@ mod windows_reader {
         let cache=refresh_slot().lock().map_err(|_|"Brak dostępu do menedżera list życzeń.".to_string())?
             .as_ref().cloned().ok_or("Połącz aplikację z grą, aby odczytać listy życzeń.")?;
         if cache.database.session_id!=source.session_id { return Err("Sesja gry zmieniła się. Odśwież połączenie.".into()); }
-        if source.layout.edition!=27 || cache.native_plugin_profile_id.as_deref()!=Some(FM27_PLUGIN_SHA256) {
+        if !verified_fm27(process) {
             return Err("Odczyt list życzeń nie jest jeszcze rozpoznany dla tego wydania gry.".into());
         }
         refresh_identity_check(process,&cache)?;
@@ -608,12 +611,16 @@ mod windows_reader {
     }
     pub(super) fn price_capture_context(session_id:u64,uid:u32)->Result<crate::fm_price::PriceContext,String> {
         let (process,cache,source,candidate)=editor_context(session_id,uid,false)?;
+        let shift=native_plugin_shift(&process).ok_or("Nie rozpoznano natywnego profilu FM27.")?;
+        if process.native_plugin_profile_id.as_deref()!=Some(FM27_PLUGIN_2486695) {
+            return Err("Eksperymentalny odczyt wyceny nie ma jeszcze potwierdzonego punktu wejścia w buildzie FM27 2493426.".into());
+        }
         let club=cache.club.ok_or("Odczyt ceny wymaga prowadzonego klubu.")?;
         let club_uid=cache.database.managed_club_uid.ok_or("Brak identyfikatora prowadzonego klubu.")?;
         if candidate.person_address.checked_sub(candidate.player_address)!=Some(PLAYER_OFFSET as usize) {return Err("Ta próba obsługuje wyłącznie potwierdzony układ ACTUAL_PLAYER FM27.".into());}
         let prologue=[0x41,0x57,0x41,0x56,0x41,0x55,0x41,0x54,0x56,0x57,0x55,0x53,0x48,0x81,0xEC,0x48];
         if process.read_exact(cache.plugin_base+0x15EF460,16).as_deref()!=Some(prologue.as_slice()) {return Err("Nie potwierdzono kodu funkcji ceny FM27. Próba zablokowana.".into());}
-        let game_raw=process.read_u32(cache.plugin_base+0x56AD378).ok_or("Brak daty gry.")?;
+        let game_raw=process.read_u32(cache.plugin_base+0x56AD378+shift).ok_or("Brak daty gry.")?;
         let game_date=format_fm_date(game_raw).ok_or("Nieprawidłowa data gry.")?;
         if source.game_date.map(normalize_fm_date)!=Some(normalize_fm_date(game_raw)) {return Err("Odśwież dane z FM przed przygotowaniem próby ceny.".into());}
         let euro_per_gbp=read_fm27_euro_rate(&process,cache.plugin_base).ok_or("Brak potwierdzonego kursu euro z FM.")?;
@@ -682,7 +689,8 @@ mod windows_reader {
                 address,bytes:vec![raw],encoding:EditEncoding::ScaledAttribute});
         }
         // Only confirmed full contracts: no guessed layout for trials or loans.
-        if let Some((contract,vtable,_))=identity.contract.filter(|(_,vtable,_)|*vtable==cache.plugin_base+0x4B00AE8) {
+        let native_shift=native_plugin_shift(&process).ok_or("Nie rozpoznano natywnego profilu FM27.")?;
+        if let Some((contract,vtable,_))=identity.contract.filter(|(_,vtable,_)|*vtable==cache.plugin_base+0x4B00AE8+native_shift) {
             if league_native_type(&process,cache.plugin_base,vtable).as_deref()==Some(".?AVFULL_CONTRACT@db@@") {
                 if let Some(rate)=read_fm27_euro_rate(&process,cache.plugin_base).filter(|rate|rate.is_finite()&&*rate>0.0) {
                     let address=contract+CONTRACT_WAGE;
@@ -852,7 +860,8 @@ mod windows_reader {
 
     // Research report only. No write handle, inferred ownership or edit token.
     fn league_native_type(process:&RemoteProcess,base:usize,vtable:usize)->Option<String> {
-        let in_data=|address:usize,length:usize|address>=base+0x4AD9000&&address.checked_add(length).is_some_and(|end|end<=base+0x5768000);
+        let shift=native_plugin_shift(process)?;
+        let in_data=|address:usize,length:usize|address>=base+0x4AD9000+shift&&address.checked_add(length).is_some_and(|end|end<=base+0x5768000+shift);
         if !in_data(vtable.checked_sub(8)?,8) {return None;}
         let locator=process.read_ptr(vtable-8)?;
         if !in_data(locator,24) {return None;}
@@ -878,8 +887,9 @@ mod windows_reader {
         refresh_identity_check(&process,&cache)?;
         let started=Instant::now();let regions=process.private_rw_regions();
         let base=cache.plugin_base;
-        let game_date=process.read_u32(base+0x56AD378).filter(|raw|decode_fm_date(*raw).is_some()).map(normalize_fm_date);
-        let age_vtable=base+0x4DF74B8;let eligibility_vtable=base+0x4E27288;
+        let shift=native_plugin_shift(&process).ok_or("Nie rozpoznano natywnego profilu FM27.")?;
+        let game_date=process.read_u32(base+0x56AD378+shift).filter(|raw|decode_fm_date(*raw).is_some()).map(normalize_fm_date);
+        let age_vtable=base+0x4DF74B8+shift;let eligibility_vtable=base+0x4E27288+shift;
         let age_type=".?AVAGE_EXTRA_SQUAD_SELECTION_RULE@sicomps@@";
         let eligibility_type=".?AVUNDER_AGE_PLAYERS_ELIGIBLE_EXTRA_SQUAD_SELECTION_RULE@sicomps@@";
         if league_native_type(&process,base,age_vtable).as_deref()!=Some(age_type)||league_native_type(&process,base,eligibility_vtable).as_deref()!=Some(eligibility_type) {return Err("Nie potwierdzono struktur reguł wieku w pamięci gry.".into());}
@@ -954,7 +964,7 @@ mod windows_reader {
         }
         refresh_identity_check(&process,&cache)?;
         if scouting_slot().lock().map_err(|_|"Czytnik FM jest zajęty.")?.as_ref().map(|source|source.session_id)!=Some(session_id) {return Err("Dane gry zmieniły się podczas diagnostyki. Ponów odczyt.".into());}
-        if process.read_u32(base+0x56AD378).filter(|raw|decode_fm_date(*raw).is_some()).map(normalize_fm_date)!=game_date {return Err("Data gry zmieniła się podczas diagnostyki. Wstrzymaj FM i ponów odczyt.".into());}
+        if process.read_u32(base+0x56AD378+shift).filter(|raw|decode_fm_date(*raw).is_some()).map(normalize_fm_date)!=game_date {return Err("Data gry zmieniła się podczas diagnostyki. Wstrzymaj FM i ponów odczyt.".into());}
         let mut warnings=vec!["Raport tylko do odczytu. Nie potwierdza aktywnej reguły ani adresu do edycji.".into(),"Łącza są kandydatami z ograniczonego przeglądu pamięci; wymagają sprawdzenia układu i powiązania z sezonem/fazą.".into(),"Próbki wieku 19–24 mogą pochodzić z innych lig, sezonów lub z pamięci podręcznej interfejsu.".into(),"Skan pomija regiony większe niż 512 MiB. Brak próbki nie oznacza braku reguły.".into()];
         if truncated {warnings.push("Odczyt ograniczony limitem czasu, danych lub liczby obiektów; raport jest częściowy.".into());}
         if read_failures>0 {warnings.push("Część regionów była chwilowo niedostępna.".into());}
@@ -1291,13 +1301,13 @@ mod windows_reader {
     /// The exact-build gate and secondary RTTI offset identify human objects;
     /// DOB/contract/back-reference/uniqueness checks below identify a real job.
     fn read_fm27_human_managers(process: &RemoteProcess, resolver: &MetaResolver) -> Option<HashSet<HumanManagerCandidate>> {
-        if !verified_fm27(process) { return None; }
-        let slot=resolver.game_plugin.base+0x5703818;
+        let shift=native_plugin_shift(process)?;
+        let slot=resolver.game_plugin.base+0x5703818+shift;
         let begin=process.read_ptr(slot)?;
         let end=process.read_ptr(slot+8)?;
         let length=end.checked_sub(begin)?;
         if begin<0x10_000 || length%8!=0 || !(1..=2_000_000).contains(&(length/8)) { return None; }
-        let vtable=resolver.game_plugin.base+0x4CC08D8;
+        let vtable=resolver.game_plugin.base+0x4CC08D8+shift;
         if resolver.dynamic_offset(vtable)!=Some(process.layout.human_manager_person as i32) { return None; }
         let pointers=process.read_exact(begin,length)?;
         let mut managers=HashSet::new();
@@ -1325,19 +1335,14 @@ mod windows_reader {
         resolver: &MetaResolver,
         managers: &HashSet<HumanManagerCandidate>,
     ) -> Option<usize> {
-        const VERIFIED_PLUGIN: &str = "bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f";
         // Person secondary vtable: COL offset 0x440, HUMAN_NON_PLAYER@db.
         // 0x4CC086C is RTTI hierarchy data, not a vtable.
         const HUMAN_PERSON_VTABLE_RVA: usize = 0x4CC08D8;
-        if process.layout.edition != 27
-            || !process.native_plugin_profile_id.as_deref()
-                .map(|hash| hash.eq_ignore_ascii_case(VERIFIED_PLUGIN)).unwrap_or(false) {
-            return None;
-        }
+        let shift=native_plugin_shift(process)?;
         let mut active = Vec::new();
         for manager in managers {
             if process.read_ptr(manager.person_address)
-                != Some(resolver.game_plugin.base + HUMAN_PERSON_VTABLE_RVA) { continue; }
+                != Some(resolver.game_plugin.base + HUMAN_PERSON_VTABLE_RVA + shift) { continue; }
             let Some((year, _)) = process.read_u32(manager.person_address + PERSON_DOB)
                 .and_then(decode_fm_date) else { continue; };
             // The platform account placeholder shares the class, but has an
@@ -1569,16 +1574,24 @@ mod windows_reader {
         if process.layout.edition!=27 {return "Edytor obsługuje FM27. To połączenie dotyczy innej edycji gry.".into();}
         format!("Rozpoznano FM27, ale biblioteka game_plugin.dll nie ma potwierdzonej zgodności po aktualizacji gry. To blokuje edytor i zasady rozgrywek oraz szybki odczyt rejestru i barw. Potrzebny jest aktualny plik game_plugin.dll z folderu gry. Identyfikator biblioteki: {}.",process.native_plugin_profile_id.as_deref().unwrap_or("nie udało się odczytać pliku"))
     }
+    fn native_plugin_shift(process:&RemoteProcess)->Option<usize> {
+        if process.layout.edition!=27 {return None;}
+        match process.native_plugin_profile_id.as_deref()? {
+            FM27_PLUGIN_2486695=>Some(0),
+            FM27_PLUGIN_2493426=>Some(FM27_NATIVE_RVA_SHIFT_2493426),
+            _=>None,
+        }
+    }
     fn verified_fm27(process: &RemoteProcess) -> bool {
-        process.layout.edition==27 && process.native_plugin_profile_id.as_deref()==Some(FM27_PLUGIN_SHA256)
+        native_plugin_shift(process).is_some()
     }
     // FM27 native home-shirt palette: CLUB + B0 -> info + 78 pointer vector.
     // Verified against 1sbc/1scl in CLUB::get (110A55F/110665C), 114BC00,
-    // and 114DFE0/114E3A0 in FM27_PLUGIN_SHA256. Read only, no native calls.
+    // and 114DFE0/114E3A0 in the supported native profiles. Read only, no native calls.
     fn read_club_colors(process: &RemoteProcess, club: usize, plugin_base: usize) -> Option<[String; 2]> {
-        if !verified_fm27(process) { return None; }
+        let shift=native_plugin_shift(process)?;
         // The native getters clamp the kit season global to this build's 2026 season.
-        let year=process.read_u16(plugin_base+0x56C70F0)?.min(2026);
+        let year=process.read_u16(plugin_base+0x56C70F0+shift)?.min(2026);
         if year<1900 { return None; }
         let info=process.read_ptr(club+0xB0)?;
         let kits=pointer_vector(process,info+0x78,256).ok()?;
@@ -1605,9 +1618,9 @@ mod windows_reader {
         Some(colors.clone())
     }
     fn native_player_vector(process: &RemoteProcess, base: usize) -> Option<(usize,usize)> {
-        if !verified_fm27(process) { return None; }
-        let begin=process.read_ptr(base+0x57037D0)?;
-        let end=process.read_ptr(base+0x57037D8)?;
+        let shift=native_plugin_shift(process)?;
+        let begin=process.read_ptr(base+0x57037D0+shift)?;
+        let end=process.read_ptr(base+0x57037D8+shift)?;
         let length=end.checked_sub(begin)?;
         (begin>=0x10_000 && length%8==0 && (500..=2_000_000).contains(&(length/8))).then_some((begin,end))
     }
@@ -1646,12 +1659,12 @@ mod windows_reader {
         Some(players)
     }
     fn collect_registry_currencies(process: &RemoteProcess, resolver: &MetaResolver, rates: &mut GameCurrencyRates) {
-        if !verified_fm27(process) { return; }
-        let vtable=resolver.game_plugin.base+FM27_CURRENCY_VTABLE;
+        let Some(shift)=native_plugin_shift(process) else {return;};
+        let vtable=resolver.game_plugin.base+FM27_CURRENCY_VTABLE+shift;
         if resolver.native_type_name(vtable).as_deref()!=Some(".?AVCURRENCY_RECORD@db@@") { return; }
         // Inspect only the bounded entity-array cluster; verify every currency
         // object's RTTI/vtable before treating a vector as currency records.
-        for offset in (0x5703000..0x5705000).step_by(8) {
+        for offset in (0x5703000+shift..0x5705000+shift).step_by(8) {
             let slot=resolver.game_plugin.base+offset;
             let Some(begin)=process.read_ptr(slot).filter(|p|*p>=0x10_000) else { continue; };
             let Some(end)=process.read_ptr(slot+8) else { continue; };
@@ -1778,9 +1791,9 @@ mod windows_reader {
         let (groups,own_clubs)=if let Some(club)=cache.club {
             collect_managed_club_players(&process,club,cache.team,&candidates,Some(&source.own_uids))?
         } else { (HashMap::new(),HashSet::new()) };
-        let world_date=if verified_fm27(&process) {
-            process.read_u32(cache.plugin_base+0x56AD378).filter(|raw|decode_fm_date(*raw).is_some()).map(normalize_fm_date)
-        } else { None };
+        let world_date=native_plugin_shift(&process).and_then(|shift|
+            process.read_u32(cache.plugin_base+0x56AD378+shift).filter(|raw|decode_fm_date(*raw).is_some()).map(normalize_fm_date)
+        );
         let derived_year=world_date.and_then(decode_fm_date).map(|(year,_)|year).unwrap_or(source.derived_year);
         let mut eur=None; let mut gbp=None;
         for &(uid,record,table,is_euro) in &cache.currency_sources {
@@ -1910,9 +1923,8 @@ mod windows_reader {
         let mut human_context_candidates = HashSet::<HumanContextCandidate>::new();
         let mut class_offset_histogram = HashMap::<i32, u64>::new();
         let mut scanned_bytes = 0u64;
-        let currency_vtable = (process.layout.edition == 27
-            && process.native_plugin_profile_id.as_deref() == Some(FM27_PLUGIN_SHA256))
-            .then_some(resolver.game_plugin.base + FM27_CURRENCY_VTABLE)
+        let currency_vtable = native_plugin_shift(&process)
+            .map(|shift|resolver.game_plugin.base + FM27_CURRENCY_VTABLE + shift)
             .filter(|vtable| resolver.native_type_name(*vtable).as_deref() == Some(".?AVCURRENCY_RECORD@db@@"));
         let mut currency_rates = GameCurrencyRates::default();
         if direct_registry { collect_registry_currencies(&process,&resolver,&mut currency_rates); }
@@ -2205,9 +2217,9 @@ mod windows_reader {
 
         let database_player_count = player_candidates.len();
         // Documented FM27 Steam world clock; never use a fixture date as today's date.
-        let world_date = if process.layout.edition == 27 && process.native_plugin_profile_id.as_deref()
-            .map(|hash| hash.eq_ignore_ascii_case("bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f")).unwrap_or(false) {
-            process.read_u32(resolver.game_plugin.base + 0x56AD378)
+        let native_shift=native_plugin_shift(&process);
+        let world_date = if let Some(shift)=native_shift {
+            process.read_u32(resolver.game_plugin.base + 0x56AD378 + shift)
                 .filter(|raw| decode_fm_date(*raw).is_some()).map(normalize_fm_date)
         } else { None };
         let derived_year = world_date.and_then(decode_fm_date).map(|(year,_)| year)
@@ -2257,8 +2269,8 @@ mod windows_reader {
             .and_then(|team| read_team_date_anchor(&process, team, derived_year))
             .or_else(|| choose_date_vote(&squad_links.date_votes, derived_year));
         let schedule_raw = date_anchor.as_ref().map(|anchor| anchor.raw);
-        let monitor_candidates = world_date.map(|_| vec![DateCandidate {
-            address: resolver.game_plugin.base + 0x56AD378,
+        let monitor_candidates = world_date.zip(native_shift).map(|(_,shift)| vec![DateCandidate {
+            address: resolver.game_plugin.base + 0x56AD378 + shift,
             kind: DateCandidateKind::PackedFmDate, object_context: false, module_static: true,
         }]).unwrap_or_default();
         let game_date = world_date.and_then(format_fm_date);
@@ -3970,8 +3982,7 @@ mod windows_reader {
         process: &RemoteProcess, root: usize, first_team: usize, candidates: &HashMap<u32,PlayerCandidate>, prior_own: Option<&HashSet<u32>>,
     ) -> Result<(HashMap<u32,String>,HashSet<usize>),String> {
         let mut own_clubs = HashSet::new();
-        let linked_reserves = process.layout.edition==27 && process.native_plugin_profile_id.as_deref()
-            .map(|hash| hash.eq_ignore_ascii_case("bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f")).unwrap_or(false);
+        let linked_reserves = verified_fm27(process);
         let mut teams = fm_club::club_teams(root, |club| {
             own_clubs.insert(club);
             if club_name(process,club).filter(|name| plausible_label(name,120)).is_none() {

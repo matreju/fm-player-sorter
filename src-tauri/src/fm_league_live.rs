@@ -29,7 +29,8 @@ fn league_quota_context(session_id:u64,write:bool)->Result<(RemoteProcess,Refres
     Ok((process,cache))
 }
 fn league_live_date(process:&RemoteProcess,base:usize)->Result<u32,String> {
-    process.read_u32(base+0x56AD378).filter(|date|decode_fm_date(*date).is_some()).map(normalize_fm_date).ok_or_else(||"Nie potwierdzono aktualnej daty FM.".into())
+    let shift=native_plugin_shift(process).ok_or("Nie rozpoznano natywnego profilu FM27.")?;
+    process.read_u32(base+0x56AD378+shift).filter(|date|decode_fm_date(*date).is_some()).map(normalize_fm_date).ok_or_else(||"Nie potwierdzono aktualnej daty FM.".into())
 }
 fn league_capture(process:&RemoteProcess,guards:&mut Vec<LeagueGuard>,address:usize,length:usize)->Result<Vec<u8>,String> {
     let bytes=process.read_exact(address,length).ok_or("Gra nie udostępnia teraz kompletnych zasad ligi.")?;
