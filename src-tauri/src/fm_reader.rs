@@ -5626,6 +5626,10 @@ pub(crate) fn apply_player_edit(_request:crate::fm_editor::PlayerEditRequest)->R
 pub(crate) fn undo_player_edit(token:String)->Result<crate::fm_editor::PlayerEditResult,String> {windows_reader::undo_player_edit(token)}
 #[cfg(not(target_os="windows"))]
 pub(crate) fn undo_player_edit(_token:String)->Result<crate::fm_editor::PlayerEditResult,String> {Err("Edytor jest dostępny w aplikacji Windows.".into())}
+#[cfg(target_os="windows")]
+pub(crate) fn set_first_team_morale(session_id:u64,value:u8)->Result<crate::fm_editor::TeamMoraleResult,String> {windows_reader::set_first_team_morale(session_id,value)}
+#[cfg(not(target_os="windows"))]
+pub(crate) fn set_first_team_morale(_session_id:u64,_value:u8)->Result<crate::fm_editor::TeamMoraleResult,String> {Err("Edycja morale drużyny jest dostępna w aplikacji Windows.".into())}
 
 #[cfg(target_os="windows")]
 pub(crate) fn inspect_league_rules(session_id:u64)->Result<crate::fm_league::LeagueRuleReport,String> {windows_reader::inspect_league_rules(session_id)}
