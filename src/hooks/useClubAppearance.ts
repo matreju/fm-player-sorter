@@ -1,0 +1,41 @@
+import { useEffect, useState } from "react";
+import { getClubTheme, type NationTheme } from "../utils/nationTheme";
+
+function loadImage(source:string):Promise<HTMLImageElement> {
+  return new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(new Error("Nie można odczytać herbu."));image.src=source;});
+}
+function palette(image:HTMLImageElement):NationTheme {
+  const canvas=document.createElement("canvas");canvas.width=48;canvas.height=48;
+  const context=canvas.getContext("2d");if(!context)return getClubTheme();
+  context.drawImage(image,0,0,48,48);
+  const data=context.getImageData(0,0,48,48).data;
+  const buckets=new Map<number,{count:number;r:number;g:number;b:number}>();
+  for(let i=0;i<data.length;i+=4){
+    const r=data[i],g=data[i+1],b=data[i+2],max=Math.max(r,g,b),min=Math.min(r,g,b);
+    if(data[i+3]<180||max<45||max-min<40)continue;
+    const key=(r>>5)*64+(g>>5)*8+(b>>5);
+    const bucket=buckets.get(key)??{count:0,r:0,g:0,b:0};bucket.count++;bucket.r+=r;bucket.g+=g;bucket.b+=b;buckets.set(key,bucket);
+  }
+  const colors=[...buckets.values()].sort((a,b)=>b.count-a.count);
+  if(!colors.length)return getClubTheme();
+  const rgb=(c:typeof colors[number])=>[c.r/c.count,c.g/c.count,c.b/c.count];
+  const main=rgb(colors[0]);
+  const second=colors.find(c=>c.count>=colors[0].count*0.15&&rgb(c).reduce((sum,x,i)=>sum+(x-main[i])**2,0)>18000);
+  const hex=(values:number[])=>`#${values.map(x=>Math.round(x).toString(16).padStart(2,"0")).join("")}`;
+  const accent=second?rgb(second):main;
+  // Keep crest colours, lifting only brightness for dark-surface controls.
+  const lift=Math.max(0,155-Math.max(...accent));
+  return getClubTheme(hex(main),hex(accent.map(x=>Math.min(255,x+lift))));
+}
+
+export function useClubAppearance(uid:number|null,gameCrest:string|null|undefined,gameColors?:[string,string]|null){
+  const source=uid?gameCrest??null:null;
+  const [appearance,setAppearance]=useState<{uid:number;source:string;theme:NationTheme}|null>(null);
+  useEffect(()=>{
+    let active=true;
+    if(uid&&source)void loadImage(source).then(image=>{if(active)setAppearance({uid,source,theme:palette(image)});}).catch(()=>{if(active)setAppearance(null);});
+    return()=>{active=false;};
+  },[uid,source]);
+  const nativeTheme=uid&&gameColors?.length===2&&gameColors.every(color=>/^#[\da-f]{6}$/i.test(color))?getClubTheme(...gameColors):null;
+  return {crest:source,theme:nativeTheme??(appearance?.uid===uid&&appearance.source===source?appearance.theme:getClubTheme())};
+}

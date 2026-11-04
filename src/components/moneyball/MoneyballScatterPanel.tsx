@@ -1,3 +1,4 @@
+import { getPlayerPositionSortRank } from "../../utils/playerPositionType";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { TableRow } from "../../types/table";
 import { AppButton, AppSelectField } from "../ui";
@@ -11,7 +12,6 @@ import {
   MAX_HIGHLIGHTED_PLAYERS,
   getHighlightColor,
   isGoalkeeperRow,
-  normalizePositionText,
   type ChartPreset,
   type ComparisonFilter,
   type MetricDefinition,
@@ -62,41 +62,6 @@ function getPlayerDisplayLabel(row: TableRow): string {
   }`;
 }
 
-function getPlayerPositionSortRank(row: TableRow): number {
-  const position = normalizePositionText(row["Pozycja"]);
-
-  if (isGoalkeeperRow(row)) return 0;
-
-  if (/O\s*\([^)]*[SŚ]/i.test(position) || position.includes("STOPER")) {
-    return 10;
-  }
-
-  if (/O\s*\([^)]*L/i.test(position)) return 20;
-  if (/O\s*\([^)]*P/i.test(position)) return 21;
-
-  if (/WO\s*\([^)]*L/i.test(position)) return 25;
-  if (/WO\s*\([^)]*P/i.test(position)) return 26;
-
-  if (/\bDP\b/i.test(position)) return 30;
-
-  if (/P\s*\([^)]*[SŚ]/i.test(position)) return 40;
-
-  if (/OP\s*\([^)]*[SŚ]/i.test(position)) return 50;
-
-  if (/OP\s*\([^)]*L/i.test(position) || /P\s*\([^)]*L/i.test(position)) {
-    return 60;
-  }
-
-  if (/OP\s*\([^)]*P/i.test(position) || /P\s*\([^)]*P/i.test(position)) {
-    return 61;
-  }
-
-  if (/\bN\s*\(/i.test(position) || position.includes("NAPAST")) {
-    return 70;
-  }
-
-  return 999;
-}
 
 function getPositionText(row: TableRow): string {
   return (row["Pozycja"] || "").toLowerCase();
@@ -611,8 +576,8 @@ const hasHighlightedPoints = chartData.highlightedPoints.length > 0;
           <h3 style={styles.title}>Mapa Moneyball</h3>
 <div style={styles.subtitle}>
   {goalkeeperMode
-    ? "Bramkarz na tle bramkarzy z importu"
-    : "Zawodnik na tle wybranej grupy z importu"}
+    ? "Bramkarz na tle bramkarzy z kadry"
+    : "Zawodnik na tle wybranej grupy z kadry"}
 </div>
         </div>
 

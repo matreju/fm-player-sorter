@@ -26,6 +26,9 @@ import {
 import { MoneyballProfile } from "../moneyball";
 import { AppButton, AppSelectField } from "../ui";
 import { buildPlayerNationalReport } from "../../utils/playerNationalReport";
+import { PlayerEditor } from "../player-editor/PlayerEditor";
+import type { PlayerEditResult } from "../../services/fmEditor";
+import { PlayerFmOverview } from "./PlayerFmOverview";
 
 const ROLE_SCORE_COLUMN = "Dopasowanie";
 const CLUB_FORM_COLUMN = "Forma klubu";
@@ -52,6 +55,8 @@ type PlayerRoleInsights = {
 };
 
 type PlayerDetailsPanelProps = {
+  sessionId: number;
+  onPlayerEdited: (result: PlayerEditResult) => void;
   player: TableRow;
   rows: TableRow[];
   roleMatch: RoleScoreResult | null;
@@ -89,7 +94,7 @@ const detailStyles: Record<string, CSSProperties> = {
   },
 
 modal: {
-  width: "min(1360px, calc(100vw - 28px))",
+  width: "min(1580px, calc(100vw - 20px))",
   maxHeight: "calc(100vh - 28px)",
   overflow: "auto",
   border: "1px solid #334155",
@@ -141,6 +146,37 @@ meta: {
     height: 42,
     borderRadius: 13,
     fontSize: 22,
+  },
+  heroActions: {
+    position: "relative",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  editMenu: {
+    position: "absolute",
+    zIndex: 20,
+    top: 48,
+    right: 50,
+    width: 310,
+    padding: 10,
+    border: "1px solid #3b4d68",
+    borderRadius: 13,
+    background: "#101a2b",
+    boxShadow: "0 20px 55px rgba(0,0,0,.55)",
+  },
+  editMenuTitle: {
+    display: "block",
+    marginBottom: 5,
+    color: "#f8fafc",
+    fontSize: 13,
+    fontWeight: 950,
+  },
+  editMenuText: {
+    margin: "0 0 10px",
+    color: "#9fb0c8",
+    fontSize: 11,
+    lineHeight: 1.45,
   },
 body: {
   padding: 10,
@@ -568,9 +604,13 @@ export function PlayerDetailsPanel({
   getPlayerMark,
   getPlayerSelectionPosition,
   onClose,
+  sessionId,
+  onPlayerEdited,
 }: PlayerDetailsPanelProps) {
   const modalRef = useRef<HTMLElement | null>(null);
   const [showMoneyball, setShowMoneyball] = useState(false);
+  const [editorOpen,setEditorOpen]=useState(false);
+  const [editMenuOpen,setEditMenuOpen]=useState(false);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -646,20 +686,43 @@ export function PlayerDetailsPanel({
             </div>
           </div>
 
-          <AppButton
-            type="button"
-            variant="neutral"
-            size="icon"
-            onClick={onClose}
-            style={detailStyles.closeButton}
-            aria-label="Zamknij szczegóły zawodnika"
-            title="Zamknij"
-          >
-            ×
-          </AppButton>
+          <div style={detailStyles.heroActions}>
+            <AppButton
+              type="button"
+              variant={editMenuOpen?"primary":"neutral"}
+              size="icon"
+              disabled={!sessionId}
+              onClick={()=>setEditMenuOpen(open=>!open)}
+              style={detailStyles.closeButton}
+              aria-label="Rozwiń opcje edycji zawodnika"
+              aria-expanded={editMenuOpen}
+              title="Opcje edycji zawodnika"
+            >
+              ⚙
+            </AppButton>
+            {editMenuOpen&&<div style={detailStyles.editMenu} role="menu" aria-label="Opcje edycji zawodnika">
+              <strong style={detailStyles.editMenuTitle}>Edycja w profilu zawodnika</strong>
+              <p style={detailStyles.editMenuText}>Atrybuty, pozycje i nogi, kondycja, morale, numer w składzie oraz kontrakt zawodnika. Zmiany są sprawdzane ponownym odczytem z FM.</p>
+              <AppButton type="button" variant="primary" onClick={()=>{setEditMenuOpen(false);setEditorOpen(true);}}>Rozwiń opcje edycji</AppButton>
+            </div>}
+            <AppButton
+              type="button"
+              variant="neutral"
+              size="icon"
+              onClick={onClose}
+              style={detailStyles.closeButton}
+              aria-label="Zamknij szczegóły zawodnika"
+              title="Zamknij"
+            >
+              ×
+            </AppButton>
+          </div>
         </header>
 
         <div style={detailStyles.body}>
+          {editorOpen&&<PlayerEditor key={`${sessionId}:${player.UID}`} sessionId={sessionId} uid={Number(player.UID)} onClose={()=>setEditorOpen(false)} onApplied={onPlayerEdited}/>}
+          <PlayerFmOverview player={player} />
+
           <div style={detailStyles.topGrid}>
             <section style={detailStyles.heroCard}>
               <div style={detailStyles.sectionEyebrow}>Raport zawodnika</div>
@@ -670,8 +733,8 @@ export function PlayerDetailsPanel({
 
               <div style={detailStyles.sectionText}>
                 Raport pokazuje statystyki meczowe/Moneyball na tle aktualnie
-                wczytanej listy. Skróty z importu są rozwijane do pełnych nazw,
-                a niejednoznaczne kolumny są pomijane.
+                wczytanej kadry. Pola z bezpośredniego odczytu FM są porównywane
+                z zawodnikami uprawnionymi do gry dla tej reprezentacji.
               </div>
             </section>
 

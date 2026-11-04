@@ -91,7 +91,7 @@ function getShots90(row: TableRow): number | null {
 }
 
 function getShotAccuracy(row: TableRow): number | null {
-  return getNumberFromColumns(row, ["% strzałów"]);
+  return getNumberFromColumns(row, ["Celne strzały (%)", "% strzałów"]);
 }
 
 function getShotConversion(row: TableRow): number | null {
@@ -146,13 +146,13 @@ function getPer90FromTotal(row: TableRow, columns: string[]): number | null {
 }
 
 function getGoalkeeperSavesPer90(row: TableRow): number | null {
-  const direct = getNumberFromColumns(row, ["Obs/90", "Obr./90"]);
+  const direct = getNumberFromColumns(row, ["Obrony/90", "Obs/90", "Obr./90"]);
 
   if (direct !== null) {
     return direct;
   }
 
-  return getPer90FromTotal(row, ["Obs"]);
+  return getPer90FromTotal(row, ["Obrony", "Obs"]);
 }
 
 function getGoalkeeperParriesPer90(row: TableRow): number | null {
@@ -162,7 +162,7 @@ function getGoalkeeperParriesPer90(row: TableRow): number | null {
     return direct;
   }
 
-  return getPer90FromTotal(row, ["Sps"]);
+  return getPer90FromTotal(row, ["Sparowane strzały", "Sps"]);
 }
 
 function getGoalkeeperParriesToCornerPer90(row: TableRow): number | null {
@@ -172,7 +172,7 @@ function getGoalkeeperParriesToCornerPer90(row: TableRow): number | null {
     return direct;
   }
 
-  return getPer90FromTotal(row, ["Ssr"]);
+  return getPer90FromTotal(row, ["Strzały przeniesione", "Ssr"]);
 }
 function getHeadersWon90(row: TableRow): number | null {
   const direct = getNumberFromColumns(row, [
@@ -185,7 +185,7 @@ function getHeadersWon90(row: TableRow): number | null {
     return direct;
   }
 
-  const headersWon = getNumberFromColumns(row, ["Głw"]);
+  const headersWon = getNumberFromColumns(row, ["Wygrane główki", "Głw"]);
   const minutes = getNumberFromColumns(row, ["Minuty"]);
 
   if (headersWon === null || minutes === null || minutes <= 0) {
@@ -316,7 +316,7 @@ export const CHART_PRESETS: ChartPreset[] = [
     description: "Aktywność i jakość wrzutek z bocznych sektorów.",
     xLabel: "Udane dośrodkowania %",
     yLabel: "Próby dośrodkowań/90 min",
-    xMetric: { columns: ["Doś C/P"] },
+    xMetric: { columns: ["Dośrodkowania (%)", "Doś C/P"] },
     yMetric: { columns: ["Doś P/90", "Pr Doś zG/90"] },
     note: "Prawy górny róg = dużo dośrodkowań i dobra jakość.",
     quadrants: {
@@ -344,7 +344,7 @@ export const CHART_PRESETS: ChartPreset[] = [
     description: "Skuteczność i częstotliwość pojedynków główkowych.",
     xLabel: "Wygrane pojedynki główkowe (%)",
     yLabel: "Próby zagrań głową/90 min",
-    xMetric: { columns: ["% Głw"] },
+    xMetric: { columns: ["Główki (%)", "% Głw"] },
     yMetric: { getValue: getHeadersWon90 },
     note: "Prawy górny róg = dużo główek i skuteczna gra głową.",
     quadrants: {
@@ -372,7 +372,7 @@ export const CHART_PRESETS: ChartPreset[] = [
     description: "Aktywność w odbiorze i skuteczność prób odbioru.",
     xLabel: "Skuteczność wślizgów (%)",
     yLabel: "Próby odbiorów piłki/90 min",
-    xMetric: { columns: ["Odb%"] },
+    xMetric: { columns: ["Odbiory (%)", "Odb%"] },
     yMetric: { columns: ["W/90"] },
     note: "Prawy górny róg = dużo prób odbioru i wysoka skuteczność.",
     quadrants: {
@@ -400,7 +400,7 @@ export const CHART_PRESETS: ChartPreset[] = [
     description: "Liczba podań i celność podań.",
     xLabel: "Celność podań (%)",
     yLabel: "Próby podań/90 min",
-    xMetric: { columns: ["Pod %"] },
+    xMetric: { columns: ["Podania (%)", "Pod %"] },
     yMetric: { columns: ["Pod/90"] },
     note: "Prawy górny róg = dużo podań i dobra celność.",
     quadrants: {
@@ -429,7 +429,7 @@ export const CHART_PRESETS: ChartPreset[] = [
     xLabel: "Podania do przodu/90 min",
     yLabel: "Celność podań (%)",
     xMetric: { columns: ["Podania dP/90"] },
-    yMetric: { columns: ["Pod %"] },
+    yMetric: { columns: ["Podania (%)", "Pod %"] },
     note: "Prawy górny róg = dużo celnych podań progresywnych.",
     quadrants: {
       topLeft: {
@@ -571,7 +571,7 @@ export const GOALKEEPER_CHART_PRESETS: ChartPreset[] = [
     description: "Procent obron i liczba interwencji na 90 minut.",
     xLabel: "Procent obron (%)",
     yLabel: "Obronione/90 min",
-    xMetric: { columns: ["OS %"] },
+    xMetric: { columns: ["Obrony (%)", "OS %"] },
     yMetric: { getValue: getGoalkeeperSavesPer90 },
     note: "Prawy górny róg = broni dużo strzałów i ma wysoki procent obron.",
     quadrants: {
@@ -599,8 +599,8 @@ export const GOALKEEPER_CHART_PRESETS: ChartPreset[] = [
     description: "Procent obron i gole uniknięte względem xG.",
     xLabel: "Procent obron (%)",
     yLabel: "Uniknięte oczekiwane gole",
-    xMetric: { columns: ["OS %"] },
-    yMetric: { columns: ["xGUn"] },
+    xMetric: { columns: ["Obrony (%)", "OS %"] },
+    yMetric: { columns: ["xG uniknięte", "xGUn"] },
     note: "Prawy górny róg = wysoki procent obron i dodatnie xG uniknięte.",
     quadrants: {
       topLeft: {
@@ -655,7 +655,7 @@ export const GOALKEEPER_CHART_PRESETS: ChartPreset[] = [
     description: "Celność i liczba podań bramkarza.",
     xLabel: "Celność podań (%)",
     yLabel: "Podania/90",
-    xMetric: { columns: ["Pod %"] },
+    xMetric: { columns: ["Podania (%)", "Pod %"] },
     yMetric: { columns: ["Pod/90"] },
     note: "Prawy górny róg = aktywny i dokładny w rozegraniu.",
     quadrants: {
