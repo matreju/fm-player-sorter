@@ -72,8 +72,8 @@ jobs:
           releaseName: FM Player Sorter v__VERSION__
           releaseBody: |
             Aktualizacja obecnej aplikacji przez wbudowany aktualizator.
-            Rozszerzono edytor kontraktu o obsługiwane premie i klauzule pieniężne. Można zmieniać ich kwoty oraz usuwać po jednej pozycji na zapis.
-            Dodano edycję morale zawodnika 1–20 i ustawianie morale całej pierwszej drużyny. Bardziej złożone premie zależne od rozgrywek oraz usuwanie kontuzji i zawieszeń nie są jeszcze dostępne.
+            Ikona koła zębatego w nagłówku profilu zawodnika rozwija teraz opcje edycji; usunięto stary osobny przycisk „Edytuj w grze”.
+            Dodano edycję kondycji 0–100% i numeru w składzie 0–99 obok dotychczasowych danych, morale i kontraktu. Złożone akcje transferu, rozwiązania kontraktu, leczenia i zawieszeń wymagają jeszcze kontrolowanego testu procedur FM.
             Zmiany w pamięci trafiają do pliku kariery dopiero po zapisaniu gry w FM. Przed edycją wykonaj kopię zapisu.
           releaseDraft: false
           prerelease: ${{ github.ref_name == 'agent/fm27-compatibility' }}

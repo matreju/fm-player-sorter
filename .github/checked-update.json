@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.26",
-  "source_sha": "6024a71228bdc8e46df9805ec4401f379ca125a2",
-  "run_id": 41831927663,
-  "release_tag": "app-v0.7.0-beta.26",
-  "notes": "Rozszerzono edytor kontraktu o obsługiwane premie i klauzule pieniężne: można zmieniać ich kwoty oraz usuwać po jednej pozycji na zapis. Dodano edycję morale zawodnika 1–20 i ustawianie morale całej pierwszej drużyny. Bardziej złożone premie zależne od rozgrywek oraz bezpieczne usuwanie kontuzji i zawieszeń nie są jeszcze dostępne. Frontend, backend, testy i instalator Windows przeszły kontrolę nr 41831927663. Przed edycją wykonaj kopię zapisu kariery.",
+  "version": "0.7.0-beta.27",
+  "source_sha": "ffd3c67890b8c25aeb6df61e82ba6c1636fd4472",
+  "run_id": 41884825928,
+  "release_tag": "app-v0.7.0-beta.27",
+  "notes": "Przeniesiono wejście do edycji bezpośrednio do nagłówka profilu zawodnika: ikona koła zębatego rozwija opcje edycji, a stary osobny przycisk został usunięty. Dodano edycję kondycji 0–100% oraz numeru w składzie 0–99 obok dotychczasowych danych, morale i kontraktu. Złożone akcje transferu, rozwiązania kontraktu oraz usuwania kontuzji i zawieszeń pozostają zablokowane do kontrolowanego testu oryginalnych procedur FM na aktywnej grze. Frontend, backend, testy i instalator Windows przeszły kontrolę nr 41884825928. Przed edycją wykonaj kopię zapisu kariery.",
   "ui_revision": 1
 }
