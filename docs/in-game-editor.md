@@ -148,3 +148,35 @@ unsupported by the existing graphics loader; local overrides cover that case.
 The earlier rule-editing limitation is superseded only for the narrow, guarded
 Ekstraklasa 3 -> 0 operation in [league-u22-editor.md](league-u22-editor.md).
 Other league-rule editing and individual age exemptions remain unsupported.
+
+## Contract terms and morale — beta.26
+
+The exact FM27 FULL_CONTRACT layout stores its compact terms in a native vector
+at +0x68/+0x70/+0x78. Static serialization confirms eight-byte entries with a
+u32 amount at +0, auxiliary u16 at +4, type at +6 and flags at +7. The editor
+exposes only confirmed monetary term kinds: signing/loyalty and agent fees,
+minimum-fee release variants, appearance/goal/clean-sheet/cap/unused-sub/assist
+bonuses and their landmark variants. Amounts are converted from integral GBP to
+EUR using the live game rate. A changed rate rejects a pending write.
+
+Deleting a term is restricted to one term per save. It shifts only the remaining
+POD entries, zeroes the unused last slot and moves the vector end by exactly eight
+bytes. Begin/end/capacity, type, original bytes, contract identity and writable
+heap bounds are checked before writing. The normal exact-byte readback, rollback
+and undo path applies. New terms are not inserted because allocation/capacity
+ownership is deliberately not guessed. Complex competition and award bonuses in
+the separate 0x20-byte collection are not exposed without live confirmation.
+
+Player morale is the existing verified Player +0x26C byte and is editable from
+1 to 20. A separate club-only action sets the current first-team players to 20,
+excluding reserves and youth by the live Player -> current Team link. Every
+target UID, vtable, team and old morale byte is preflighted; writes are read back
+and earlier changes are conditionally rolled back on failure.
+
+The native game implements injury and ban removal through cleanup routines, not
+one scalar field. Injuries own a pointer collection at Player +0xF8 and also
+update condition, global injury indexes and notifications; bans have several
+owned collections and destructors. Directly hiding a vector would leave stale
+owners or leak records, so these actions remain blocked until the native cleanup
+path can be invoked without code injection or reproduced with complete ownership
+proof.

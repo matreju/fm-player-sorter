@@ -137,6 +137,9 @@ mod windows_reader {
     const CONTRACT_EXPIRY: usize = 0x48;
     const CONTRACT_STATUS: usize = 0x57;
     const CONTRACT_SQUAD_NUMBER: usize = 0x5D;
+    const CONTRACT_TERMS_BEGIN: usize = 0x68;
+    const CONTRACT_TERMS_END: usize = 0x70;
+    const CONTRACT_TERMS_CAPACITY: usize = 0x78;
 
     const CLUB_NAME: usize = 0xC0;
     const CLUB_SHORT_NAME: usize = 0xC8;
@@ -576,9 +579,9 @@ mod windows_reader {
             shortlists:shortlists.into_iter().map(|list|list.info).collect(),shortlist_error})
     }
 
-    use crate::fm_editor::{EditorField,PlayerEditSnapshot,PlayerEditRequest,PlayerEditResult,AppliedChange};
+    use crate::fm_editor::{EditorField,PlayerEditSnapshot,PlayerEditRequest,PlayerEditResult,AppliedChange,TeamMoraleResult};
     #[derive(Clone, Copy)]
-    enum EditEncoding {Ability,Height,ScaledAttribute,PlainAttribute,Position,BirthDate,ContractExpiry,Wage {euro_per_gbp:f64}}
+    enum EditEncoding {Ability,Height,ScaledAttribute,PlainAttribute,Position,BirthDate,ContractExpiry,Wage {euro_per_gbp:f64},ContractTerm {euro_per_gbp:f64,begin:usize,end:usize,index:usize,entry_type:u8}}
     #[derive(Clone)]
     struct NativeEditorField {ui:EditorField,address:usize,bytes:Vec<u8>,encoding:EditEncoding}
     #[derive(Clone)]
@@ -593,6 +596,55 @@ mod windows_reader {
     static EDITOR_SEQUENCE:AtomicU64=AtomicU64::new(1);
     fn editor_state()->&'static Mutex<EditorState> {EDITOR_STATE.get_or_init(||Mutex::new(EditorState::default()))}
     fn editor_token()->String {format!("edit-{}",EDITOR_SEQUENCE.fetch_add(1,Ordering::Relaxed))}
+
+    fn editable_contract_term(entry_type:u8)->Option<&'static str> {
+        Some(match entry_type {
+            0=>"Pozostały bonus lojalnościowy / za podpis",
+            1=>"Opłata dla agenta",
+            2=>"Klauzula oferty minimalnej",
+            3=>"Klauzula odstępnego po spadku",
+            4=>"Klauzula odstępnego po braku awansu",
+            12=>"Premia po osiągnięciu liczby bramek",
+            16=>"Klauzula oferty minimalnej · kluby zagraniczne",
+            17=>"Klauzula oferty minimalnej · wyższa liga",
+            18=>"Klauzula oferty minimalnej · kluby krajowe",
+            27=>"Klauzula oferty minimalnej · główne rozgrywki kontynentalne",
+            31=>"Klauzula oferty minimalnej · dowolne rozgrywki kontynentalne",
+            32=>"Premia za występ",
+            33=>"Premia za bramkę",
+            34=>"Premia za czyste konto",
+            35=>"Premia za występ w reprezentacji",
+            36=>"Premia dla niewykorzystanego rezerwowego",
+            39=>"Premia za asystę",
+            40=>"Premia po osiągnięciu liczby asyst",
+            41=>"Premia po osiągnięciu liczby bramek i asyst",
+            _=>return None,
+        })
+    }
+    fn contract_terms_after_delete(before:&[u8])->Option<Vec<u8>> {
+        if before.len()<8||before.len()%8!=0 {return None;}
+        let mut after=before[8..].to_vec();after.extend_from_slice(&[0;8]);Some(after)
+    }
+
+    #[cfg(test)]
+    mod editor_contract_tests {
+        use super::{contract_terms_after_delete,editable_contract_term};
+        #[test]
+        fn removing_a_compact_term_shifts_only_the_tail_and_zeros_the_last_slot() {
+            let before=(0u8..24).collect::<Vec<_>>();
+            let after=contract_terms_after_delete(&before).unwrap();
+            assert_eq!(&after[..16],&before[8..]);
+            assert_eq!(&after[16..],&[0;8]);
+            assert!(contract_terms_after_delete(&before[..23]).is_none());
+        }
+        #[test]
+        fn only_confirmed_monetary_term_types_are_editable() {
+            assert_eq!(editable_contract_term(2),Some("Klauzula oferty minimalnej"));
+            assert_eq!(editable_contract_term(32),Some("Premia za występ"));
+            assert!(editable_contract_term(37).is_none());
+            assert!(editable_contract_term(255).is_none());
+        }
+    }
 
     fn editor_context(session_id:u64,uid:u32,write:bool)->Result<(RemoteProcess,RefreshSession,ScoutingSession,PlayerCandidate),String> {
         let source=scouting_slot().lock().map_err(|_|"Czytnik FM jest zajęty.")?.as_ref().cloned().ok_or("Połącz aplikację z grą.")?;
@@ -674,6 +726,11 @@ mod windows_reader {
                 fields.push(NativeEditorField {ui:EditorField {key:"height".into(),label:"Wzrost · cm".into(),value:height.to_string(),kind:"number".into(),min:Some(130),max:Some(230)},address,bytes,encoding:EditEncoding::Height});
             }
         }
+        let address=candidate.player_address+PLAYER_MORALE;
+        if let Some(raw)=process.read_u8(address).filter(|value|(1..=20).contains(value)) {
+            fields.push(NativeEditorField {ui:EditorField {key:"morale".into(),label:"Morale · 1–20".into(),value:raw.to_string(),kind:"number".into(),min:Some(1),max:Some(20)},
+                address,bytes:vec![raw],encoding:EditEncoding::PlainAttribute});
+        }
         let positions=process.read_exact(candidate.player_address+PLAYER_POSITIONS,POSITION_FIELDS.len())
             .filter(|values|values.iter().all(|value|*value<=20)&&values.contains(&20))
             .ok_or("Nie potwierdzono umiejętności gry na pozycjach.")?;
@@ -692,7 +749,8 @@ mod windows_reader {
         let native_shift=native_plugin_shift(&process).ok_or("Nie rozpoznano natywnego profilu FM27.")?;
         if let Some((contract,vtable,_))=identity.contract.filter(|(_,vtable,_)|*vtable==cache.plugin_base+0x4B00AE8+native_shift) {
             if league_native_type(&process,cache.plugin_base,vtable).as_deref()==Some(".?AVFULL_CONTRACT@db@@") {
-                if let Some(rate)=read_fm27_euro_rate(&process,cache.plugin_base).filter(|rate|rate.is_finite()&&*rate>0.0) {
+                let contract_rate=read_fm27_euro_rate(&process,cache.plugin_base).filter(|rate|rate.is_finite()&&*rate>0.0);
+                if let Some(rate)=contract_rate {
                     let address=contract+CONTRACT_WAGE;
                     if let Some(bytes)=process.read_exact(address,4) {
                         if let Some(wage)=read_u32(&bytes,0).filter(|wage|*wage<=10_000_000) {
@@ -704,6 +762,25 @@ mod windows_reader {
                 if let Some(bytes)=process.read_exact(address,4) {
                     if let Some(value)=read_u32(&bytes,0).and_then(format_fm_date) {
                         fields.push(NativeEditorField {ui:EditorField {key:"contract:expiry".into(),label:"Koniec kontraktu".into(),value,kind:"date".into(),min:None,max:None},address,bytes,encoding:EditEncoding::ContractExpiry});
+                    }
+                }
+                if let Some(rate)=contract_rate {
+                    let begin=process.read_ptr(contract+CONTRACT_TERMS_BEGIN).unwrap_or(0);
+                    let end=process.read_ptr(contract+CONTRACT_TERMS_END).unwrap_or(0);
+                    let capacity=process.read_ptr(contract+CONTRACT_TERMS_CAPACITY).unwrap_or(0);
+                    let regions=process.private_rw_regions();
+                    let valid=begin>=0x10_000&&begin<=end&&end<=capacity&&(end-begin)%8==0&&(capacity-begin)%8==0&&(end-begin)/8<=64
+                        &&pointer_in_regions(begin,&regions)&&(end==begin||pointer_in_regions(end-1,&regions))&&(capacity==begin||pointer_in_regions(capacity-1,&regions));
+                    if valid {
+                        for index in 0..(end-begin)/8 {
+                            let address=begin+index*8;
+                            let Some(entry)=process.read_exact(address,8) else {continue;};
+                            let Some(entry_type)=entry.get(6).copied() else {continue;};
+                            let Some(label)=editable_contract_term(entry_type) else {continue;};
+                            let Some(amount)=read_u32(&entry,0).filter(|amount|*amount<=1_000_000_000) else {continue;};
+                            fields.push(NativeEditorField {ui:EditorField {key:format!("contract:term:{index}:{entry_type}"),label:format!("{label} · EUR"),value:format!("{:.2}",amount as f64*rate),kind:"number".into(),min:Some(0),max:Some(1_000_000_000)},
+                                address,bytes:entry[..4].to_vec(),encoding:EditEncoding::ContractTerm {euro_per_gbp:rate,begin,end,index,entry_type}});
+                        }
                     }
                 }
             }
@@ -785,6 +862,10 @@ mod windows_reader {
     pub(super) fn apply_player_edit(request:PlayerEditRequest)->Result<PlayerEditResult,String> {
         let _guard=SCOUTING_QUERY_LOCK.lock().map_err(|_|"Czytnik FM jest zajęty.")?;
         if request.changes.is_empty()||request.changes.len()>96 {return Err("Wybierz od 1 do 96 zmienionych pól.".into());}
+        let term_changes=request.changes.iter().filter(|change|change.key.starts_with("contract:term:")).count();
+        if request.changes.iter().any(|change|change.key.starts_with("contract:term:")&&change.value=="__delete__")&&term_changes!=1 {
+            return Err("Usuwaj po jednej premii lub klauzuli na zapis. Pozostałe zmiany wykonaj osobno.".into());
+        }
         let draft=editor_state().lock().map_err(|_|"Edytor jest zajęty.")?.drafts.remove(&request.token).ok_or("Podgląd edycji wygasł. Wczytaj dane ponownie.")?;
         if draft.opened.elapsed().as_secs()>300 {return Err("Podgląd edycji wygasł. Wczytaj dane ponownie.".into());}
         let (process,cache,source,candidate)=editor_context(draft.identity.session_id,draft.identity.uid,true)?;
@@ -794,6 +875,19 @@ mod windows_reader {
             if !keys.insert(change.key.clone()) {return Err("Powtórzone pole edycji.".into());}
             let field=draft.fields.iter().find(|field|field.ui.key==change.key).ok_or("Nieznane pole edycji.")?;
             if change.value==field.ui.value {continue;}
+            if let EditEncoding::ContractTerm {begin,end,index,entry_type,..}=field.encoding {
+                if change.value=="__delete__" {
+                    let (contract,_,_)=draft.identity.contract.ok_or("Kontrakt nie jest już dostępny.")?;
+                    if process.read_ptr(contract+CONTRACT_TERMS_BEGIN)!=Some(begin)||process.read_ptr(contract+CONTRACT_TERMS_END)!=Some(end) {return Err("Lista premii i klauzul zmieniła się w FM. Otwórz edytor ponownie.".into());}
+                    let address=begin+index*8;
+                    let before=process.read_exact(address,end-address).ok_or("Nie można odczytać warunku kontraktu.")?;
+                    if before.len()<8||before.get(6).copied()!=Some(entry_type)||before[..4]!=field.bytes {return Err("Warunek kontraktu zmienił się w FM. Otwórz edytor ponownie.".into());}
+                    let after=contract_terms_after_delete(&before).ok_or("Nieprawidłowa lista warunków kontraktu.")?;
+                    patches.push(EditorPatch {address,before,after,change:AppliedChange {label:field.ui.label.clone(),before:field.ui.value.clone(),after:"usunięto".into()}});
+                    patches.push(EditorPatch {address:contract+CONTRACT_TERMS_END,before:(end as u64).to_le_bytes().to_vec(),after:((end-8) as u64).to_le_bytes().to_vec(),change:AppliedChange {label:"Lista warunków kontraktu".into(),before:"aktywna".into(),after:"zaktualizowana".into()}});
+                    continue;
+                }
+            }
             let mut actual_value=change.value.clone();
             let after=match field.encoding {
                 EditEncoding::BirthDate|EditEncoding::ContractExpiry=>{
@@ -818,6 +912,14 @@ mod windows_reader {
                     if !annual.is_finite()||annual<0.0||annual>1_000_000_000.0||weekly>10_000_000.0 {return Err("Nieprawidłowa płaca podstawowa.".into());}
                     actual_value=format!("{:.2}",weekly*52.0*euro_per_gbp);
                     (weekly as u32).to_le_bytes().to_vec()
+                },
+                EditEncoding::ContractTerm {euro_per_gbp,..}=>{
+                    if read_fm27_euro_rate(&process,cache.plugin_base)!=Some(euro_per_gbp) {return Err("Kurs w grze zmienił się. Otwórz edytor ponownie.".into());}
+                    let euro=change.value.parse::<f64>().map_err(|_|"Podaj wartość warunku w euro albo użyj przycisku Usuń.")?;
+                    let native=(euro/euro_per_gbp).round();
+                    if !euro.is_finite()||euro<0.0||euro>1_000_000_000.0||native>1_000_000_000.0 {return Err("Nieprawidłowa wartość premii lub klauzuli.".into());}
+                    actual_value=format!("{:.2}",native*euro_per_gbp);
+                    (native as u32).to_le_bytes().to_vec()
                 },
                 _=>{
                     let value=change.value.parse::<u32>().map_err(|_|"Wpisz liczbę całkowitą.")?;
@@ -846,6 +948,54 @@ mod windows_reader {
         if state.undos.len()>=8 {state.undos.clear();}
         state.undos.insert(token.clone(),EditorUndo {identity:draft.identity,patches:patches.clone()});drop(state);
         finish_player_edit(&process,&cache,&source,&candidate,patches,Some(token))
+    }
+
+    pub(super) fn set_first_team_morale(session_id:u64,value:u8)->Result<TeamMoraleResult,String> {
+        let _guard=SCOUTING_QUERY_LOCK.lock().map_err(|_|"Czytnik FM jest zajęty.")?;
+        if !(1..=20).contains(&value) {return Err("Morale musi mieścić się w zakresie 1–20.".into());}
+        let source=scouting_slot().lock().map_err(|_|"Czytnik FM jest zajęty.")?.as_ref().cloned().ok_or("Połącz aplikację z grą.")?;
+        let cache=refresh_slot().lock().map_err(|_|"Czytnik FM jest zajęty.")?.as_ref().cloned().ok_or("Połącz aplikację z grą.")?;
+        if source.session_id!=session_id||cache.database.session_id!=session_id {return Err("Dane gry zostały odświeżone. Spróbuj ponownie.".into());}
+        if cache.club.is_none() {return Err("Zmiana morale całej drużyny jest dostępna w karierze klubowej.".into());}
+        if detect_football_manager().pid!=Some(source.pid) {return Err("Zmienił się proces gry. Połącz aplikację ponownie.".into());}
+        let mut process=RemoteProcess::open_editor(source.pid)?;process.layout=source.layout;process.native_plugin_profile_id=cache.native_plugin_profile_id.clone();
+        if !verified_fm27(&process) {return Err(native_compatibility_error(&process));}
+        refresh_identity_check(&process,&cache)?;
+        let mut targets=Vec::new();
+        for cached in source.candidates.iter().filter(|candidate|source.own_uids.contains(&candidate.uid)) {
+            let Some(candidate)=live_candidate(&process,cached) else {continue;};
+            if process.read_ptr(candidate.player_address+0x130)!=Some(cache.team) {continue;}
+            let Some(vtable)=process.read_ptr(candidate.person_address) else {continue;};
+            let Some(offset)=candidate.person_address.checked_sub(candidate.player_address) else {continue;};
+            if !cache.player_classes.iter().any(|(known,class)|*known==offset&&*class==vtable) {continue;}
+            let Some(before)=process.read_u8(candidate.player_address+PLAYER_MORALE).filter(|current|*current<=20) else {continue;};
+            targets.push((candidate.uid,candidate.person_address,candidate.player_address,vtable,before));
+        }
+        if targets.is_empty() {return Err("Nie znaleziono potwierdzonych zawodników aktualnej pierwszej drużyny.".into());}
+        for &(uid,person,player,vtable,before) in &targets {
+            if process.read_u32(person+OBJ_UID)!=Some(uid)||process.read_ptr(person)!=Some(vtable)||process.read_ptr(player+0x130)!=Some(cache.team)||process.read_u8(player+PLAYER_MORALE)!=Some(before) {
+                return Err("Skład lub morale zmieniły się w FM. Wstrzymaj grę, odśwież dane i spróbuj ponownie.".into());
+            }
+        }
+        let changed=targets.iter().filter(|target|target.4!=value).copied().collect::<Vec<_>>();
+        for (index,&(_,person,player,vtable,before)) in changed.iter().enumerate() {
+            let valid=process.read_ptr(person)==Some(vtable)&&process.read_ptr(player+0x130)==Some(cache.team)&&process.read_u8(player+PLAYER_MORALE)==Some(before);
+            if !valid||process.write_exact(player+PLAYER_MORALE,&[value]).is_err()||process.read_u8(player+PLAYER_MORALE)!=Some(value) {
+                let mut unreverted=0usize;
+                for &(_,done_person,done_player,done_vtable,done_before) in changed[..=index].iter().rev() {
+                    if process.read_ptr(done_person)!=Some(done_vtable)||process.read_ptr(done_player+0x130)!=Some(cache.team) {unreverted+=1;continue;}
+                    let current=process.read_u8(done_player+PLAYER_MORALE);
+                    if current==Some(done_before) {continue;}
+                    if current!=Some(value)||process.write_exact(done_player+PLAYER_MORALE,&[done_before]).is_err()||process.read_u8(done_player+PLAYER_MORALE)!=Some(done_before) {unreverted+=1;}
+                }
+                return Err(if unreverted==0 {"Nie udało się zapisać morale. Wcześniejsze zmiany zostały cofnięte.".into()} else {format!("Nie udało się zakończyć zapisu; nie cofnięto morale {unreverted} zawodników. Sprawdź skład w FM przed dalszą edycją.")});
+            }
+        }
+        refresh_identity_check(&process,&cache)?;
+        if let Ok(mut slot)=refresh_slot().lock() {if let Some(active)=slot.as_mut().filter(|active|active.database.session_id==session_id) {
+            for row in &mut active.database.rows {if row.get("UID").and_then(|uid|uid.parse::<u32>().ok()).is_some_and(|uid|targets.iter().any(|target|target.0==uid)) {row.insert("Morale".into(),value.to_string());}}
+        }}
+        Ok(TeamMoraleResult {count:targets.len(),value})
     }
     pub(super) fn undo_player_edit(token:String)->Result<PlayerEditResult,String> {
         let _guard=SCOUTING_QUERY_LOCK.lock().map_err(|_|"Czytnik FM jest zajęty.")?;

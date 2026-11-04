@@ -28,6 +28,10 @@ pub struct PlayerEditResult {
     pub session_id:u64, pub uid:u32, pub row:FmTableRow, pub message:Option<String>, pub changes:Vec<AppliedChange>,pub undo_token:Option<String>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all="camelCase")]
+pub struct TeamMoraleResult {pub count:usize,pub value:u8}
+
 #[tauri::command]
 pub async fn get_fm_player_editor(session_id:u64,uid:u32)->Result<PlayerEditSnapshot,String> {
     tauri::async_runtime::spawn_blocking(move||crate::fm_reader::get_player_editor(session_id,uid)).await.map_err(|e|e.to_string())?
@@ -39,4 +43,9 @@ pub async fn apply_fm_player_edit(request:PlayerEditRequest)->Result<PlayerEditR
 #[tauri::command]
 pub async fn undo_fm_player_edit(token:String)->Result<PlayerEditResult,String> {
     tauri::async_runtime::spawn_blocking(move||crate::fm_reader::undo_player_edit(token)).await.map_err(|e|e.to_string())?
+}
+
+#[tauri::command]
+pub async fn set_fm_first_team_morale(session_id:u64,value:u8)->Result<TeamMoraleResult,String> {
+    tauri::async_runtime::spawn_blocking(move||crate::fm_reader::set_first_team_morale(session_id,value)).await.map_err(|e|e.to_string())?
 }
