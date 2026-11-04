@@ -72,8 +72,8 @@ jobs:
           releaseName: FM Player Sorter v__VERSION__
           releaseBody: |
             Aktualizacja obecnej aplikacji przez wbudowany aktualizator.
-            Dodano dokładny profil natywny FM27 27.0.0+2493426: szybki odczyt zawodników, rozpoznawanie menedżera, barwy klubu, edycję zawodników i zasady rozgrywek.
-            Edytor zawodnika obsługuje nogi 1–20 i wszystkie pozycje 0–20. Usunięto ręczne dodawanie herbu. Poprzedni build 2486695 pozostaje obsługiwany.
+            Rozszerzono edytor kontraktu o obsługiwane premie i klauzule pieniężne. Można zmieniać ich kwoty oraz usuwać po jednej pozycji na zapis.
+            Dodano edycję morale zawodnika 1–20 i ustawianie morale całej pierwszej drużyny. Bardziej złożone premie zależne od rozgrywek oraz usuwanie kontuzji i zawieszeń nie są jeszcze dostępne.
             Zmiany w pamięci trafiają do pliku kariery dopiero po zapisaniu gry w FM. Przed edycją wykonaj kopię zapisu.
           releaseDraft: false
           prerelease: ${{ github.ref_name == 'agent/fm27-compatibility' }}

@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0-beta.25",
-  "source_sha": "738875761eaf1b83640ac86cf7c320022b127079",
-  "run_id": 41794400879,
-  "release_tag": "app-v0.7.0-beta.25",
-  "notes": "Dodano osobny, dokładnie weryfikowany profil natywny dla FM27 27.0.0+2493426. Przywrócono szybki rejestr zawodników, rozpoznawanie menedżera, barwy klubu, edycję zawodników i zasady rozgrywek po aktualizacji gry. Edytor zawodnika obsługuje nogi 1–20 oraz każdą pozycję 0–20; usunięto ręczne dodawanie herbu. Stary build 2486695 pozostaje obsługiwany. Frontend i instalator Windows skompilowano w kontroli nr 41794400879; działanie w aktywnym zapisie wymaga sprawdzenia w FM.",
+  "version": "0.7.0-beta.26",
+  "source_sha": "6024a71228bdc8e46df9805ec4401f379ca125a2",
+  "run_id": 41831927663,
+  "release_tag": "app-v0.7.0-beta.26",
+  "notes": "Rozszerzono edytor kontraktu o obsługiwane premie i klauzule pieniężne: można zmieniać ich kwoty oraz usuwać po jednej pozycji na zapis. Dodano edycję morale zawodnika 1–20 i ustawianie morale całej pierwszej drużyny. Bardziej złożone premie zależne od rozgrywek oraz bezpieczne usuwanie kontuzji i zawieszeń nie są jeszcze dostępne. Frontend, backend, testy i instalator Windows przeszły kontrolę nr 41831927663. Przed edycją wykonaj kopię zapisu kariery.",
   "ui_revision": 1
 }
