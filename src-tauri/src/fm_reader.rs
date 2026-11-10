@@ -1475,6 +1475,7 @@ mod windows_reader {
         let Some(human) = process.read_ptr(begin).filter(|value| *value >= 0x10_000) else {
             return resolution;
         };
+        resolution.human_address = Some(human);
         let person = human.saturating_add(process.layout.human_manager_person);
         let Some(team) = contract_team(process, person) else {
             return resolution;
@@ -1658,6 +1659,7 @@ mod windows_reader {
     #[derive(Clone, Copy, Debug, Default)]
     struct ActiveHumanTeamResolution {
         registry_slot: Option<usize>,
+        human_address: Option<usize>,
         team_address: Option<usize>,
         signature_match_count: usize,
         active_manager_count: usize,
@@ -2336,7 +2338,20 @@ mod windows_reader {
                 &nation_counts,
                 &mut binding_diagnostics,
             )
-        }));
+        })).or_else(|| {
+            // FM27 national-team jobs may omit Person -> Contract -> Team.
+            // Restrict the graph resolver to the one HUMAN object proven by
+            // the native active-manager registry. The resolver still requires
+            // one unambiguous manager-linked national team and validates its
+            // squad/nation relationship independently.
+            let active_human=active_human_team.human_address?;
+            let active_managers=human_managers.iter()
+                .filter(|manager|manager.staff_address==active_human)
+                .cloned().collect::<HashSet<_>>();
+            if active_managers.len()!=1 {return None;}
+            resolve_user_national_team(&process,&regions,&club_candidates,&active_managers,
+                &player_candidates,&nation_counts).0
+        });
         let managed = managed.ok_or_else(|| {
             format!(
                 "Wykryto {}, ale nie udało się jednoznacznie odczytać prowadzonego zespołu z kontraktu menedżera ani powiązania humanTeam. Aplikacja nie zgaduje kraju na podstawie liczby zawodników. Kod diagnostyczny: C{}/B{}/V{}/H{}/K{}/D{}/T{}/Q{}/A{}/P{}/L{}/E{}/I{}/F{}/Y{}/N{}/U{}/J{}/X{}/O{}/W{}/S{}/Z{}/G{}/M{}/GT{}/R{}/MC{}/VC{}/IC{}.",
