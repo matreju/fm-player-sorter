@@ -72,8 +72,8 @@ jobs:
           releaseName: FM Player Sorter v__VERSION__
           releaseBody: |
             Aktualizacja obecnej aplikacji przez wbudowany aktualizator.
-            Dodano profil odczytu dla aktualizacji FM27 z 10 listopada 2026 (GameAssembly a170a2f9…, metadane 774da150…).
-            Tryb reprezentacji pokazuje wszystkich zawodników z główną narodowością prowadzonego kraju, dzięki czemu można samodzielnie wybierać powołania. Natywne funkcje edycji pozostają zablokowane dla nowego game_plugin.dll do czasu osobnego potwierdzenia jego struktur.
+            Rozszerzono profil aktualizacji FM27 z 10 listopada 2026 o bezpieczne rozpoznawanie reprezentacji przez graf aktywnego menedżera, gdy gra nie udostępnia już pracy przez dotychczasowy kontrakt Person.
+            Resolver działa wyłącznie dla jednego menedżera potwierdzonego przez natywny rejestr i wymaga jednoznacznego zespołu narodowego. Tryb reprezentacji pokazuje wszystkich zawodników z główną narodowością prowadzonego kraju.
             Zmiany w pamięci trafiają do pliku kariery dopiero po zapisaniu gry w FM. Przed edycją wykonaj kopię zapisu.
           releaseDraft: false
           prerelease: ${{ github.ref_name == 'agent/fm27-compatibility' }}
