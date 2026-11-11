@@ -24,13 +24,23 @@ fn league_quota_context(session_id:u64,write:bool)->Result<(RemoteProcess,Refres
     if detect_football_manager().pid!=Some(cache.database.pid) {return Err("Zmienił się proces FM. Połącz aplikację ponownie.".into());}
     let mut process=if write {RemoteProcess::open_editor(cache.database.pid)?}else{RemoteProcess::open(cache.database.pid)?};
     process.layout=source.layout;process.native_plugin_profile_id=cache.native_plugin_profile_id.clone();
-    if !verified_fm27(&process) {return Err(native_compatibility_error(&process));}
+    if !league_compatible_fm27(&process) {return Err(native_compatibility_error(&process));}
     refresh_identity_check(&process,&cache)?;
     Ok((process,cache))
 }
-fn league_live_date(process:&RemoteProcess,base:usize)->Result<u32,String> {
-    let shift=native_plugin_shift(process).ok_or("Nie rozpoznano natywnego profilu FM27.")?;
-    process.read_u32(base+0x56AD378+shift).filter(|date|decode_fm_date(*date).is_some()).map(normalize_fm_date).ok_or_else(||"Nie potwierdzono aktualnej daty FM.".into())
+fn league_live_date(process:&RemoteProcess,cache:&RefreshSession)->Result<u32,String> {
+    if let Some(shift)=native_plugin_shift(process) {
+        return process.read_u32(cache.plugin_base+0x56AD378+shift).filter(|date|decode_fm_date(*date).is_some()).map(normalize_fm_date).ok_or_else(||"Nie potwierdzono aktualnej daty FM.".into());
+    }
+    if process.native_plugin_profile_id.as_deref()==Some(FM27_PLUGIN_2026_11_10) {
+        let schedule=process.read_ptr(cache.team+TEAM_SCHEDULE).ok_or("Nie odczytano terminarza prowadzonej drużyny.")?;
+        for offset in SCHEDULE_DATE {
+            if let Some(raw)=process.read_u32(schedule+offset).filter(|raw|decode_fm_date(*raw).is_some()) {
+                return Ok(normalize_fm_date(raw));
+            }
+        }
+    }
+    Err("Nie potwierdzono daty kontrolnej FM dla zasad rozgrywek.".into())
 }
 fn league_capture(process:&RemoteProcess,guards:&mut Vec<LeagueGuard>,address:usize,length:usize)->Result<Vec<u8>,String> {
     let bytes=process.read_exact(address,length).ok_or("Gra nie udostępnia teraz kompletnych zasad ligi.")?;
@@ -238,7 +248,7 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
         if child<0x10_000||child%8!=0||child==root||read_u64(&league_capture(&process,&mut guards,child+0x68,8)?,0)!=Some(0) {return Err("Nie potwierdzono wariantu zasad meczu.".into());}
         candidates.push((child,"Wariant meczu"));
     }
-    let date=league_live_date(&process,base)?;let mut rules=Vec::new();let mut rule_keys=Vec::new();let mut drafts=Vec::new();let mut shared_default=false;
+    let date=league_live_date(&process,&cache)?;let mut rules=Vec::new();let mut rule_keys=Vec::new();let mut drafts=Vec::new();let mut shared_default=false;
     for (fixture,variant) in candidates {
         let uid=read_u32(&league_capture(&process,&mut guards,fixture+0x108,4)?,0).ok_or("Nie odczytano właściciela zasad.")?;
         if uid!=competition_uid&&uid!=u32::MAX {warnings.push(format!("{variant}: właściciel {} nie odpowiada wybranym rozgrywkom. Ten wariant pominięto.",uid as i32));continue;}
@@ -335,7 +345,7 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
 }
 fn league_verify_quota(process:&RemoteProcess,cache:&RefreshSession,draft:&LeagueQuotaDraft,date:u32)->Result<(),String> {
     refresh_identity_check(process,cache)?;
-    if cache.database.session_id!=draft.session_id||cache.database.pid!=draft.pid||cache.team!=draft.team||cache.plugin_base!=draft.base||cache.database.managed_club_uid.or(cache.database.managed_team_uid)!=Some(draft.owner_uid)||process.creation_time()!=Some(draft.created)||league_live_date(process,draft.base)?!=date {return Err("Gra, drużyna lub data zmieniły się. Wstrzymaj FM i otwórz zasady ponownie.".into());}
+    if cache.database.session_id!=draft.session_id||cache.database.pid!=draft.pid||cache.team!=draft.team||cache.plugin_base!=draft.base||cache.database.managed_club_uid.or(cache.database.managed_team_uid)!=Some(draft.owner_uid)||process.creation_time()!=Some(draft.created)||league_live_date(process,cache)?!=date {return Err("Gra, drużyna lub data zmieniły się. Wstrzymaj FM i otwórz zasady ponownie.".into());}
     for guard in &draft.guards {
         if process.read_exact(guard.address,guard.bytes.len()).as_ref()!=Some(&guard.bytes) {return Err("FM przebudował zasady ligi. Otwórz je ponownie; zapis na starych adresach jest zablokowany.".into());}
     }
@@ -391,7 +401,7 @@ pub(super) fn undo_league_u22(token:String)->Result<LeagueU22Result,String> {
     let _lock=SCOUTING_QUERY_LOCK.lock().map_err(|_|"Czytnik FM jest zajęty.")?;
     let mut draft=league_quota_state().lock().map_err(|_|"Edytor zasad jest zajęty.")?.undos.remove(&token).ok_or("Nie zachowano tej zmiany do cofnięcia w bieżącej sesji aplikacji.")?;
     let (process,cache)=league_quota_context(draft.session_id,true)?;
-    let date=league_live_date(&process,draft.base)?;
+    let date=league_live_date(&process,&cache)?;
     let before=read_u32(&draft.patches[0].after,0).ok_or("Nie odczytano limitu.")?;
     let after=read_u32(&draft.patches[0].before,0).ok_or("Nie odczytano poprzedniego limitu.")?;
     for patch in &mut draft.patches {std::mem::swap(&mut patch.before,&mut patch.after);}

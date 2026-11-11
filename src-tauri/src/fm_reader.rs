@@ -380,6 +380,7 @@ mod windows_reader {
     const FM27_NATIVE_RVA_SHIFT_2493426: usize = 0x2000;
     const FM27_PLUGIN_2486695: &str = fm_version::FM27_NATIVE_2486695_PROFILE_ID;
     const FM27_PLUGIN_2493426: &str = fm_version::FM27_NATIVE_2493426_PROFILE_ID;
+    const FM27_PLUGIN_2026_11_10: &str = "f79b0a3413dd0e3f461b0afbc3ff397003f4a26d7525a30717428de6a8b91196";
 
     #[derive(Default)]
     struct GameCurrencyRates {
@@ -1047,8 +1048,15 @@ mod windows_reader {
 
     // Research report only. No write handle, inferred ownership or edit token.
     fn league_native_type(process:&RemoteProcess,base:usize,vtable:usize)->Option<String> {
-        let shift=native_plugin_shift(process)?;
-        let in_data=|address:usize,length:usize|address>=base+0x4AD9000+shift&&address.checked_add(length).is_some_and(|end|end<=base+0x5768000+shift);
+        let (data_start,data_end)=if process.native_plugin_profile_id.as_deref()==Some(FM27_PLUGIN_2026_11_10) {
+            // Exact RTTI-bearing PE sections of the uploaded F79B... DLL.
+            // Code and global addresses are not borrowed from an older build.
+            (0x4BDD000usize,0x5885000usize)
+        } else {
+            let shift=native_plugin_shift(process)?;
+            (0x4AD9000usize+shift,0x5768000usize+shift)
+        };
+        let in_data=|address:usize,length:usize|address>=base+data_start&&address.checked_add(length).is_some_and(|end|end<=base+data_end);
         if !in_data(vtable.checked_sub(8)?,8) {return None;}
         let locator=process.read_ptr(vtable-8)?;
         if !in_data(locator,24) {return None;}
@@ -1773,6 +1781,10 @@ mod windows_reader {
     }
     fn verified_fm27(process: &RemoteProcess) -> bool {
         native_plugin_shift(process).is_some()
+    }
+    fn league_compatible_fm27(process: &RemoteProcess) -> bool {
+        verified_fm27(process)
+            || process.native_plugin_profile_id.as_deref() == Some(FM27_PLUGIN_2026_11_10)
     }
     // FM27 native home-shirt palette: CLUB + B0 -> info + 78 pointer vector.
     // Verified against 1sbc/1scl in CLUB::get (110A55F/110665C), 114BC00,
