@@ -103,6 +103,8 @@ export function AppSideDock({mode = "unknown"}: {mode?: ManagedAppMode}) {
 
       {moduleButtons.filter(button => isAppModuleAvailable(button.id, mode)).map((button) => {
         const isActive = activeModule === button.id;
+        const label = button.id === "club" && mode === "nation" ? "Reprezentacja" : button.label;
+        const title = button.id === "club" && mode === "nation" ? "Informacje i zasady reprezentacji" : button.title;
         return (
           <button
             key={button.id}
@@ -111,11 +113,11 @@ export function AppSideDock({mode = "unknown"}: {mode?: ManagedAppMode}) {
               ...buttonStyle,
               ...(isActive ? activeButtonStyle : {}),
             }}
-            title={button.title}
+              title={title}
             aria-pressed={isActive}
             onClick={() => handleModuleClick(button.id)}
           >
-            {button.label}
+            {label}
           </button>
         );
       })}

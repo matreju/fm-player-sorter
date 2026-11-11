@@ -97,6 +97,17 @@ function formatAttributeNumber(value: number): string {
   return value.toFixed(1);
 }
 
+function formatClubSeasonStats(candidate: SlotCandidate): string {
+  const position = candidate.position.toLocaleUpperCase("pl");
+  const goalkeeper = /(^|[,(\s])BR([),\s]|$)/.test(position) || position.includes("BRAMKARZ");
+  const defender = /(^|[,(\s])O([),\s]|$)/.test(position) || position.includes("OBROŃCA");
+  const value = (name: string) => candidate.row[name]?.trim() || "—";
+  const common = `Klub: ${value("Mecze")} mecz. · ${value("Minuty")} min`;
+  if (goalkeeper) return `${common} · ${value("Czyste konta")} cz. kont`;
+  const attacking = `${common} · ${value("Gole")} goli · ${value("Asysty")} asyst`;
+  return defender ? `${attacking} · ${value("Czyste konta")} cz. kont` : attacking;
+}
+
 function getAttributePreviewValue(row: TableRow, attributeName: string) {
   const parsed = parseAttributeValue(String(row[attributeName] ?? ""));
 
@@ -723,6 +734,10 @@ export function SquadBuilderActiveSlotPanel({
 
                   <div style={styles.miniCandidateMeta}>
                     {candidate.position} · {candidate.club}
+                  </div>
+
+                  <div style={styles.miniCandidateMeta}>
+                    {formatClubSeasonStats(candidate)}
                   </div>
 
                   {scoreMode === "campaign-callups" && (

@@ -9,7 +9,8 @@ export type AppModuleId =
 export type ManagedAppMode = "club" | "nation" | "unknown";
 
 export function isAppModuleAvailable(module: AppModuleId, mode: ManagedAppMode): boolean {
-  if (module === "transfers" || module === "club") return mode === "club";
+  if (module === "transfers") return mode === "club";
+  if (module === "club") return mode === "club" || mode === "nation";
   if (module === "core" || module === "camps") return mode === "nation";
   return true;
 }

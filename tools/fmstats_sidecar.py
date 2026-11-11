@@ -220,7 +220,7 @@ def _read_stats(
             best: dict[int, tuple[tuple[int, int], Any]] = {}
             for stat in career.player_season_stats():
                 selected = selected_players.get(stat.player_uid)
-                if selected is None or _season_kind(stat) != "overall":
+                if selected is None:
                     continue
                 unique_id, current_team_id = selected
                 priority = (

@@ -102,6 +102,7 @@ import { getNationTheme } from "./utils/nationTheme";
 
 const TransferSearch = lazy(() => import("./components/transfers/TransferSearch").then(module => ({default:module.TransferSearch})));
 const ClubHub = lazy(() => import("./components/club/ClubHub").then(module => ({default:module.ClubHub})));
+const NationHub = lazy(() => import("./components/nation/NationHub").then(module => ({default:module.NationHub})));
 const PlayerCompare = lazy(() =>
   import("./components/player-compare").then((module) => ({
     default: module.PlayerCompare,
@@ -1144,6 +1145,15 @@ export default function App() {
           sessionId={snapshot.sessionId}
           name={snapshot.managedTeam ?? "Klub"}
           uid={snapshot.managedClubUid}
+          crest={teamCrest}
+          rows={rows}
+          databaseCount={snapshot.databasePlayerCount}
+        />}
+        {managedMode === "nation" && snapshot && <NationHub
+          sessionId={snapshot.sessionId}
+          name={snapshot.managedNation ?? snapshot.managedTeam ?? "Reprezentacja"}
+          teamName={snapshot.managedTeam}
+          uid={snapshot.managedNationUid}
           crest={teamCrest}
           rows={rows}
           databaseCount={snapshot.databasePlayerCount}

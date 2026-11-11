@@ -8,7 +8,7 @@ struct LeagueGuard {address:usize,bytes:Vec<u8>}
 struct LeagueQuotaPatch {address:usize,before:Vec<u8>,after:Vec<u8>}
 #[derive(Clone)]
 struct LeagueQuotaDraft {
-    session_id:u64,pid:u32,created:u64,team:usize,club_uid:u32,base:usize,
+    session_id:u64,pid:u32,created:u64,team:usize,owner_uid:u32,base:usize,
     game_date:u32,shared_default:bool,persistent:bool,competition_uid:u32,phase_id:String,guards:Vec<LeagueGuard>,patches:Vec<LeagueQuotaPatch>,opened:Instant,
 }
 #[derive(Default)]
@@ -18,7 +18,7 @@ fn league_quota_state()->&'static Mutex<LeagueQuotaState> {LEAGUE_QUOTA_STATE.ge
 
 fn league_quota_context(session_id:u64,write:bool)->Result<(RemoteProcess,RefreshSession),String> {
     let cache=refresh_slot().lock().map_err(|_|"Czytnik FM jest zajęty.")?.as_ref().cloned().ok_or("Najpierw połącz aplikację z grą.")?;
-    if cache.database.session_id!=session_id||cache.club.is_none() {return Err("Połącz aplikację z prowadzonym klubem i otwórz zasady ligi ponownie.".into());}
+    if cache.database.session_id!=session_id {return Err("Połącz aplikację z prowadzoną drużyną i otwórz zasady rozgrywek ponownie.".into());}
     let source=scouting_slot().lock().map_err(|_|"Czytnik FM jest zajęty.")?.as_ref().cloned().ok_or("Połącz aplikację z grą.")?;
     if source.session_id!=session_id||source.pid!=cache.database.pid {return Err("Dane gry zmieniły się. Otwórz zasady ponownie.".into());}
     if detect_football_manager().pid!=Some(cache.database.pid) {return Err("Zmienił się proces FM. Połącz aplikację ponownie.".into());}
@@ -272,7 +272,8 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
             let token=if allowed {
                 let mut protected=if persistent {local_guards.clone()}else{guards.clone()};
                 protected.retain(|guard|!patches.iter().any(|patch|guard.address==patch.address&&guard.bytes.len()==4));
-                let draft=LeagueQuotaDraft{session_id,pid:cache.database.pid,created:process.creation_time().ok_or("Nie potwierdzono procesu FM.")?,team:cache.team,club_uid:cache.database.managed_club_uid.ok_or("Nie potwierdzono klubu.")?,base,game_date:date,shared_default:shared,persistent,competition_uid,phase_id:phase_id.clone(),guards:protected,patches,opened:Instant::now()};
+                let owner_uid=cache.database.managed_club_uid.or(cache.database.managed_team_uid).ok_or("Nie potwierdzono prowadzonej drużyny.")?;
+                let draft=LeagueQuotaDraft{session_id,pid:cache.database.pid,created:process.creation_time().ok_or("Nie potwierdzono procesu FM.")?,team:cache.team,owner_uid,base,game_date:date,shared_default:shared,persistent,competition_uid,phase_id:phase_id.clone(),guards:protected,patches,opened:Instant::now()};
                 league_verify_quota(&process,&cache,&draft,date)?;
                 let token=editor_token();drafts.push((token.clone(),draft));Some(token)
             }else{None};
@@ -334,7 +335,7 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
 }
 fn league_verify_quota(process:&RemoteProcess,cache:&RefreshSession,draft:&LeagueQuotaDraft,date:u32)->Result<(),String> {
     refresh_identity_check(process,cache)?;
-    if cache.database.session_id!=draft.session_id||cache.database.pid!=draft.pid||cache.team!=draft.team||cache.plugin_base!=draft.base||cache.database.managed_club_uid!=Some(draft.club_uid)||process.creation_time()!=Some(draft.created)||league_live_date(process,draft.base)?!=date {return Err("Gra, klub lub data zmieniły się. Wstrzymaj FM i otwórz zasady ponownie.".into());}
+    if cache.database.session_id!=draft.session_id||cache.database.pid!=draft.pid||cache.team!=draft.team||cache.plugin_base!=draft.base||cache.database.managed_club_uid.or(cache.database.managed_team_uid)!=Some(draft.owner_uid)||process.creation_time()!=Some(draft.created)||league_live_date(process,draft.base)?!=date {return Err("Gra, drużyna lub data zmieniły się. Wstrzymaj FM i otwórz zasady ponownie.".into());}
     for guard in &draft.guards {
         if process.read_exact(guard.address,guard.bytes.len()).as_ref()!=Some(&guard.bytes) {return Err("FM przebudował zasady ligi. Otwórz je ponownie; zapis na starych adresach jest zablokowany.".into());}
     }

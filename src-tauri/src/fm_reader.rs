@@ -2402,21 +2402,21 @@ mod windows_reader {
         let (club_groups, own_clubs) = if let Some(club) = managed_club {
             collect_managed_club_players(&process, club, managed.team_address, &player_candidates, None)?
         } else { (HashMap::new(), HashSet::new()) };
-        let national_roster = if club_mode {
+        let national_wishlist = if club_mode {
             None
         } else {
-            let roster = collect_team_roster_uids(
+            let wishlist = collect_national_wishlist_uids(
                 &process,
                 managed.team_address,
                 &player_candidates,
             );
-            if roster.is_empty() {
+            if wishlist.is_empty() {
                 return Err(
-                    "Rozpoznano reprezentację, ale jej aktualna lista krajowa jest pusta albo nieczytelna. Otwórz ekran kadry w FM i ponów połączenie."
+                    "Rozpoznano reprezentację, ale Krajowa lista życzeń jest pusta albo nieczytelna. Otwórz w FM: Lista krajowa → Krajowa lista życzeń i ponów połączenie."
                         .to_string(),
                 );
             }
-            Some(roster)
+            Some(wishlist)
         };
         let selected_candidates = player_candidates
             .values()
@@ -2424,9 +2424,9 @@ mod windows_reader {
                 (if club_mode {
                     club_groups.contains_key(&candidate.uid)
                 } else {
-                    national_roster
+                    national_wishlist
                         .as_ref()
-                        .is_some_and(|roster| roster.contains(&candidate.uid))
+                        .is_some_and(|wishlist| wishlist.contains(&candidate.uid))
                 })
                     && managed_gender
                         .map(|female| candidate.female == female)
@@ -5083,6 +5083,54 @@ mod windows_reader {
             }
         }
         roster
+    }
+
+    fn collect_national_wishlist_uids(
+        process: &RemoteProcess,
+        team: usize,
+        candidates: &HashMap<u32, PlayerCandidate>,
+    ) -> HashSet<u32> {
+        let active_roster = collect_team_roster_uids(process, team, candidates);
+        let by_address = candidates
+            .values()
+            .flat_map(|candidate| [
+                (candidate.person_address, candidate.uid),
+                (candidate.player_address, candidate.uid),
+            ])
+            .collect::<HashMap<_, _>>();
+        let resolve = |entry: usize| {
+            by_address.get(&entry).copied().or_else(|| {
+                (0..=0x80).step_by(8).find_map(|offset| {
+                    process.read_ptr(entry + offset)
+                        .and_then(|address| by_address.get(&address).copied())
+                })
+            })
+        };
+        let mut matches = Vec::<HashSet<u32>>::new();
+        for offset in (0x10..=0x400).step_by(8) {
+            if offset == TEAM_PLAYERS_BEGIN { continue; }
+            let Some(begin) = process.read_ptr(team + offset) else { continue; };
+            let Some(end) = process.read_ptr(team + offset + 8) else { continue; };
+            let Some(capacity) = process.read_ptr(team + offset + 16) else { continue; };
+            if begin < 0x10_000 || end <= begin || capacity < end || begin % 8 != 0
+                || (end - begin) % 8 != 0 || (end - begin) / 8 > 2_000 { continue; }
+            let count = (end - begin) / 8;
+            if count <= active_roster.len() { continue; }
+            let Some(bytes) = process.read_exact(begin, end - begin) else { continue; };
+            let resolved = bytes.chunks_exact(8).filter_map(|chunk| {
+                let entry = u64::from_le_bytes(chunk.try_into().ok()?) as usize;
+                resolve(entry)
+            }).collect::<HashSet<_>>();
+            if resolved.len() > active_roster.len() && resolved.len() * 100 >= count * 70 {
+                matches.push(resolved);
+            }
+        }
+        matches.sort_by_key(|values| std::cmp::Reverse(values.len()));
+        let Some(best) = matches.first() else { return HashSet::new(); };
+        if matches.get(1).is_some_and(|next| next.len() == best.len() && next != best) {
+            return HashSet::new();
+        }
+        best.clone()
     }
 
     fn looks_like_club(process: &RemoteProcess, address: usize) -> bool {
