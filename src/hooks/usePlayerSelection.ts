@@ -34,6 +34,10 @@ type PlayerSelectionAction =
     }
   | {
       type: "clear";
+    }
+  | {
+      type: "sync-selected";
+      keys: string[];
     };
 
 function loadPlayerMarksFromStorage(): Record<string, PlayerMark> {
@@ -88,6 +92,20 @@ function playerSelectionReducer(
     return {
       playerMarks: {},
       playerSelectionPositions: {},
+    };
+  }
+
+  if (action.type === "sync-selected") {
+    const selected = new Set(action.keys);
+    const nextMarks = Object.fromEntries(
+      Object.entries(state.playerMarks).filter(([, mark]) => mark === "rejected")
+    ) as Record<string, PlayerMark>;
+    for (const key of selected) nextMarks[key] = "selected";
+    return {
+      playerMarks: nextMarks,
+      playerSelectionPositions: Object.fromEntries(
+        Object.entries(state.playerSelectionPositions).filter(([key]) => selected.has(key))
+      ),
     };
   }
 
@@ -238,6 +256,13 @@ export function usePlayerSelection({
     });
   }, []);
 
+  const syncSelectedPlayers = useCallback((rows: TableRow[]) => {
+    dispatchSelection({
+      type: "sync-selected",
+      keys: rows.filter((row) => row["Powołany"] === "Tak").map(getPlayerKey),
+    });
+  }, []);
+
   const getMarkedCellStyle = useCallback(
     (mark: PlayerMark | null): CSSProperties => {
       if (mark === "selected") {
@@ -268,6 +293,7 @@ export function usePlayerSelection({
     setPlayerSelectionPosition,
     togglePlayerMark,
     clearPlayerSelection,
+    syncSelectedPlayers,
     getMarkedCellStyle,
   };
 }

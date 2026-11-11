@@ -72,8 +72,8 @@ jobs:
           releaseName: FM Player Sorter v__VERSION__
           releaseBody: |
             Aktualizacja obecnej aplikacji przez wbudowany aktualizator.
-            Tryb reprezentacji odczytuje trwałą Krajową listę życzeń z grafu danych reprezentacji i federacji, niezależnie od aktualnie otwartego ekranu FM, zamiast 26-osobowej kadry zgłoszonej do rozgrywek.
-            Zaktualizowano czytnik zapisów do fmsave 0.12.1. Kafelki kandydatów pokazują klubowe mecze, minuty, gole, asysty oraz czyste konta zależnie od pozycji.
+            Tryb reprezentacji odrzuca kolekcję wszystkich zawodników narodowości, zachowuje Krajową listę życzeń i automatycznie oznacza bieżącą kadrę powołanych. Zgrupowanie automatyczne korzysta wyłącznie z powołanych.
+            Statystyki klubowe mają awaryjne sumowanie z historii meczów, gdy FM27 nie zwraca zbiorczego rekordu sezonu. Kafelki pokazują mecze, minuty, gole, asysty oraz czyste konta zależnie od pozycji.
             Dodano panel Reprezentacja z informacjami o kraju, stadionie, federacji, aktywnych rozgrywkach i edytorem zasad. Limit powołań jest dostępny jako „Wielkość kadry — maksimum”. Kolejne połączenia korzystają z pamięci skrótów niezmienionych plików gry.
             Zmiany w pamięci trafiają do pliku kariery dopiero po zapisaniu gry w FM. Przed edycją wykonaj kopię zapisu.
           releaseDraft: false

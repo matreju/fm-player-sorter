@@ -2402,15 +2402,24 @@ mod windows_reader {
         let (club_groups, own_clubs) = if let Some(club) = managed_club {
             collect_managed_club_players(&process, club, managed.team_address, &player_candidates, None)?
         } else { (HashMap::new(), HashSet::new()) };
+        let active_national_roster = if club_mode {
+            HashSet::new()
+        } else {
+            collect_team_roster_uids(&process, managed.team_address, &player_candidates)
+        };
         let national_wishlist = if club_mode {
             None
         } else {
-            let wishlist = collect_national_wishlist_uids(
+            let mut wishlist = collect_national_wishlist_uids(
                 &process,
                 managed.team_address,
                 managed.nation_address,
                 &player_candidates,
+                &active_national_roster,
             );
+            // Powołani muszą być widoczni na liście kandydatów nawet wtedy,
+            // gdy FM przechowuje listę życzeń i bieżącą kadrę osobno.
+            wishlist.extend(active_national_roster.iter().copied());
             if wishlist.is_empty() {
                 return Err(
                     "Rozpoznano reprezentację, ale nie udało się jednoznacznie odczytać trwałej Krajowej listy życzeń z danych reprezentacji lub federacji."
@@ -2513,6 +2522,7 @@ mod windows_reader {
         let current_raw = world_date.or(schedule_raw);
         let mut headers = table_headers();
         if club_mode { headers.push("Grupa klubowa".into()); }
+        else { headers.push("Powołany".into()); }
         let mut rows = players
             .into_values()
             .map(|player| {
@@ -2522,6 +2532,8 @@ mod windows_reader {
                 if club_mode {
                     row.insert("Klub".into(), managed_team.clone().unwrap_or_default());
                     row.insert("Grupa klubowa".into(), club_groups.get(&uid).cloned().unwrap_or_default());
+                } else {
+                    row.insert("Powołany".into(), if active_national_roster.contains(&uid) { "Tak" } else { "Nie" }.into());
                 }
                 row
             })
@@ -5091,8 +5103,8 @@ mod windows_reader {
         team: usize,
         nation: usize,
         candidates: &HashMap<u32, PlayerCandidate>,
+        active_roster: &HashSet<u32>,
     ) -> HashSet<u32> {
-        let active_roster = collect_team_roster_uids(process, team, candidates);
         let by_address = candidates
             .values()
             .flat_map(|candidate| [
@@ -5130,18 +5142,25 @@ mod windows_reader {
                 if end <= pointer || capacity < end || (end - pointer) % 8 != 0
                     || (end - pointer) / 8 > 2_000 { continue; }
                 let count = (end - pointer) / 8;
-                if count <= active_roster.len() { continue; }
+                // Krajowa lista życzeń ma rozmiar listy scoutingowej, nie całej
+                // populacji narodowości. Odrzuca to kolekcję 443 Polaków.
+                if count <= active_roster.len() || count > 200 { continue; }
                 let Some(bytes) = process.read_exact(pointer, end - pointer) else { continue; };
                 let resolved = bytes.chunks_exact(8).filter_map(|chunk| {
                     resolve(u64::from_le_bytes(chunk.try_into().ok()?) as usize)
                 }).collect::<HashSet<_>>();
-                if resolved.len() > active_roster.len() && resolved.len() * 100 >= count * 50
+                let roster_overlap = resolved.intersection(active_roster).count();
+                if resolved.len() > active_roster.len() && resolved.len() <= 200
+                    && roster_overlap > 0 && resolved.len() * 100 >= count * 50
                     && !matches.iter().any(|existing| existing == &resolved) {
                     matches.push(resolved);
                 }
             }
         }
-        matches.sort_by_key(|values| std::cmp::Reverse(values.len()));
+        matches.sort_by_key(|values| std::cmp::Reverse((
+            values.intersection(active_roster).count(),
+            values.len(),
+        )));
         let Some(best) = matches.first() else { return HashSet::new(); };
         if matches.get(1).is_some_and(|next| next.len() == best.len() && next != best) {
             return HashSet::new();

@@ -203,7 +203,8 @@ const [careerPlayerSortDirection, setCareerPlayerSortDirection] =
   useEffect(() => {
     if (rows.length === 0) return;
 
-    const players = sortCampPlayersBySurname(rows.map(createPlayerSnapshot));
+    const calledRows = rows.filter((row) => row["Powołany"] === "Tak");
+    const players = sortCampPlayersBySurname(calledRows.map(createPlayerSnapshot));
     const playersByUid = new Map(
       players.filter((player) => player.uid).map((player) => [player.uid!, player])
     );

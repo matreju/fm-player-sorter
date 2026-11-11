@@ -377,6 +377,7 @@ export default function App() {
     setPlayerSelectionPosition,
     togglePlayerMark,
     clearPlayerSelection,
+    syncSelectedPlayers,
     getMarkedCellStyle,
   } = usePlayerSelection({ analysisPositionGroup });
 
@@ -757,6 +758,7 @@ export default function App() {
           setRows(current=>merge(current));
           setHeaders(current=>Array.from(new Set([...current,...result.headers])));
         });
+        if (result.managedMode === "nation") syncSelectedPlayers(result.rows);
         setSnapshot(current=>createFmSnapshot({...result,
           rows:merge(current?.rows??[]),headers:Array.from(new Set([...(current?.headers??[]),...result.headers])),
           teamLogoDataUrl:current?.teamLogoDataUrl??null}));
@@ -769,6 +771,7 @@ export default function App() {
       const nextScope = `${result.managedMode}:${result.managedClubUid ?? result.managedNationUid ?? result.managedTeamUid}`;
       if ((lastManagedScope.current !== null && lastManagedScope.current !== nextScope) || (lastManagedScope.current === null && result.managedMode === "club")) clearPlayerSelection();
       lastManagedScope.current = nextScope;
+      if (result.managedMode === "nation") syncSelectedPlayers(result.rows);
       setSnapshot(createFmSnapshot(result));
       setNationalMatches([]);
       setSupplementaryDataLoading(true);
@@ -845,7 +848,7 @@ export default function App() {
         },
       );
     },
-    [clearPlayerSelection],
+    [clearPlayerSelection, syncSelectedPlayers],
   );
 
   const handleFmUnavailable = useCallback(() => {

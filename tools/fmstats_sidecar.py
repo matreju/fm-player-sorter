@@ -169,6 +169,13 @@ def _format_value(value: Any) -> str:
     return str(value)
 
 
+def _as_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _season_kind(stat: Any) -> str:
     kind = getattr(stat, "kind", "")
     return str(getattr(kind, "value", kind)).lower()
@@ -213,18 +220,23 @@ def _read_stats(
         with fmsave.open(copied_save) as career:
             selected_players: dict[int, tuple[int, int | None]] = {}
             for player in career.players():
-                unique_id = getattr(player, "unique_id", None)
+                unique_id = _as_int(getattr(player, "unique_id", None))
                 if unique_id in wanted_unique_ids:
-                    selected_players[player.uid] = (unique_id, getattr(player, "team_id", None))
+                    player_uid = _as_int(getattr(player, "uid", None))
+                    if player_uid is not None:
+                        selected_players[player_uid] = (
+                            unique_id,
+                            _as_int(getattr(player, "team_id", None)),
+                        )
 
             best: dict[int, tuple[tuple[int, int], Any]] = {}
             for stat in career.player_season_stats():
-                selected = selected_players.get(stat.player_uid)
+                selected = selected_players.get(_as_int(stat.player_uid))
                 if selected is None:
                     continue
                 unique_id, current_team_id = selected
                 priority = (
-                    int(current_team_id is not None and stat.team_id == current_team_id),
+                    int(current_team_id is not None and _as_int(stat.team_id) == current_team_id),
                     int(getattr(stat, "minutes", 0)),
                 )
                 if unique_id not in best or priority > best[unique_id][0]:
@@ -236,9 +248,22 @@ def _read_stats(
             }
 
             match_groups: dict[tuple[str, int, int], list[dict[str, Any]]] = {}
+            club_totals: dict[int, dict[str, int]] = {}
             for stat in career.player_match_stats():
-                selected = selected_players.get(stat.player_uid)
+                selected = selected_players.get(_as_int(stat.player_uid))
                 if selected is None or not getattr(stat, "has_stats", False):
+                    continue
+                unique_id, _ = selected
+                if getattr(stat, "opponent_club_uid", None) is not None:
+                    total = club_totals.setdefault(unique_id, {
+                        "Mecze": 0, "Minuty": 0, "Gole": 0,
+                        "Asysty": 0, "Czyste konta": 0,
+                    })
+                    total["Mecze"] += 1
+                    total["Minuty"] += _as_int(getattr(stat, "minutes", 0)) or 0
+                    total["Gole"] += _as_int(getattr(stat, "goals", 0)) or 0
+                    total["Asysty"] += _as_int(getattr(stat, "assists", 0)) or 0
+                    total["Czyste konta"] += _as_int(getattr(stat, "clean_sheets", 0)) or 0
                     continue
                 # A club opponent resolves to club_uid. International opponents
                 # deliberately have no club, which separates national matches
@@ -250,7 +275,6 @@ def _read_stats(
                 competition_id = getattr(stat, "competition_id", None)
                 if date is None or opponent_team_id is None or competition_id is None:
                     continue
-                unique_id, _ = selected
                 key = (date.isoformat(), int(competition_id), int(opponent_team_id))
                 match_groups.setdefault(key, []).append(
                     {
@@ -261,6 +285,14 @@ def _read_stats(
                         "rating": getattr(stat, "rating", None),
                     }
                 )
+
+            # FM27 may expose per-match history even when its season aggregate
+            # is missing. Fill the four visible club figures from that history.
+            for unique_id, totals in club_totals.items():
+                row = rows.setdefault(str(unique_id), {})
+                for label, value in totals.items():
+                    if row.get(label, "") == "":
+                        row[label] = str(value)
 
             fixture_index: dict[tuple[str, int], Any] = {}
             if match_groups:
