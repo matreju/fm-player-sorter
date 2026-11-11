@@ -1,7 +1,7 @@
 {
   "name": "fm-player-sorter",
   "private": true,
-  "version": "0.7.0-beta.39",
+  "version": "0.7.0-beta.40",
   "type": "module",
   "scripts": {
     "dev": "vite",

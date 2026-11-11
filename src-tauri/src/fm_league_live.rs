@@ -9,7 +9,7 @@ struct LeagueQuotaPatch {address:usize,before:Vec<u8>,after:Vec<u8>}
 #[derive(Clone)]
 struct LeagueQuotaDraft {
     session_id:u64,pid:u32,created:u64,team:usize,owner_uid:u32,base:usize,
-    game_date:u32,shared_default:bool,persistent:bool,competition_uid:u32,phase_id:String,guards:Vec<LeagueGuard>,patches:Vec<LeagueQuotaPatch>,opened:Instant,
+    game_date:u32,shared_default:bool,persistent:bool,code_patch:bool,competition_uid:u32,phase_id:String,guards:Vec<LeagueGuard>,patches:Vec<LeagueQuotaPatch>,opened:Instant,
 }
 #[derive(Default)]
 struct LeagueQuotaState {drafts:HashMap<String,LeagueQuotaDraft>,undos:HashMap<String,LeagueQuotaDraft>}
@@ -283,7 +283,7 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
                 let mut protected=if persistent {local_guards.clone()}else{guards.clone()};
                 protected.retain(|guard|!patches.iter().any(|patch|guard.address==patch.address&&guard.bytes.len()==4));
                 let owner_uid=cache.database.managed_club_uid.or(cache.database.managed_team_uid).ok_or("Nie potwierdzono prowadzonej drużyny.")?;
-                let draft=LeagueQuotaDraft{session_id,pid:cache.database.pid,created:process.creation_time().ok_or("Nie potwierdzono procesu FM.")?,team:cache.team,owner_uid,base,game_date:date,shared_default:shared,persistent,competition_uid,phase_id:phase_id.clone(),guards:protected,patches,opened:Instant::now()};
+                let draft=LeagueQuotaDraft{session_id,pid:cache.database.pid,created:process.creation_time().ok_or("Nie potwierdzono procesu FM.")?,team:cache.team,owner_uid,base,game_date:date,shared_default:shared,persistent,code_patch:false,competition_uid,phase_id:phase_id.clone(),guards:protected,patches,opened:Instant::now()};
                 league_verify_quota(&process,&cache,&draft,date)?;
                 let token=editor_token();drafts.push((token.clone(),draft));Some(token)
             }else{None};
@@ -335,6 +335,36 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
         }
         rules.push(view);
     }
+    // FM27 uses a guarded engine default of 23 when ACTUAL_COMP has no
+    // explicit max_squad_size property. Competitions such as Nations League
+    // carry their own value (eg. 26) and are deliberately unaffected.
+    if process.native_plugin_profile_id.as_deref()==Some(FM27_PLUGIN_2026_11_10) {
+        let property_header=league_capture(&process,&mut guards,actual+0x38,16)?;
+        let begin=read_u64(&property_header,0).unwrap_or(0) as usize;
+        let end=read_u64(&property_header,8).unwrap_or(0) as usize;
+        let explicit_max=if begin>=0x10_000&&end>=begin&&(end-begin)%16==0&&end-begin<=4096 {
+            league_capture(&process,&mut guards,begin,end-begin)?.chunks_exact(16)
+                .any(|entry|read_u32(entry,0)==Some(0x6D78_7373))
+        }else{false};
+        if !explicit_max {
+            shared_default=true;
+            let addresses=[base+0x129E293,base+0x129E29B];
+            let values=addresses.iter().filter_map(|address|process.read_u8(*address)).collect::<Vec<_>>();
+            if values.len()==2&&values[0]==values[1]&&values[0]<=99 {
+                let value=values[0] as u32;
+                let patches=addresses.iter().map(|address|LeagueQuotaPatch{address:*address,before:vec![value as u8],after:vec![value as u8]}).collect::<Vec<_>>();
+                let mut protected=guards.clone();
+                for address in addresses {protected.push(LeagueGuard{address:address-2,bytes:process.read_exact(address-2,2).ok_or("Nie potwierdzono kodu domyślnego limitu FM.")?});}
+                protected.retain(|guard|!patches.iter().any(|patch|guard.address==patch.address));
+                let owner_uid=cache.database.managed_club_uid.or(cache.database.managed_team_uid).ok_or("Nie potwierdzono prowadzonej drużyny.")?;
+                let draft=LeagueQuotaDraft{session_id,pid:cache.database.pid,created:process.creation_time().ok_or("Nie potwierdzono procesu FM.")?,team:cache.team,owner_uid,base,game_date:date,shared_default:true,persistent:false,code_patch:true,competition_uid,phase_id:phase_id.clone(),guards:protected,patches,opened:Instant::now()};
+                league_verify_quota(&process,&cache,&draft,date)?;
+                let token=editor_token();
+                drafts.push((token.clone(),draft));
+                rules.push(LeagueRuleView{id:"engine-default-max".into(),label:"Domyślny limit powołań (rozgrywki bez własnego limitu)".into(),copies:2,value,mode:"Maksimum".into(),token:Some(token),persistent:false,note:Some("Eliminacje korzystają z domyślnej wartości 23. Zmiana obejmie wszystkie rozgrywki bez własnego limitu; Nations League z własnym limitem 26 pozostanie bez zmian.".into())});
+            }
+        }
+    }
     if rules.is_empty(){warnings.push("FM nie udostępnił reguł wyboru kadry dla tej fazy. Pozostałe przepisy, np. punkty lub dogrywka, nie mają jeszcze obsługi w edytorze.".into());}
     let mut state=league_quota_state().lock().map_err(|_|"Edytor zasad jest zajęty.")?;
     state.drafts.retain(|_,draft|draft.session_id!=session_id&&draft.opened.elapsed().as_secs()<300);
@@ -362,14 +392,16 @@ fn league_write_quota(process:&RemoteProcess,cache:&RefreshSession,draft:&League
     verify_values(0)?;
     let mut failure=None;
     for (index,patch) in draft.patches.iter().enumerate() {
-        if let Err(error)=verify_values(index).and_then(|_|process.write_exact(patch.address,&patch.after)) {failure=Some((index,error));break;}
+        let write=||if draft.code_patch {process.write_code_exact(patch.address,&patch.after)}else{process.write_exact(patch.address,&patch.after)};
+        if let Err(error)=verify_values(index).and_then(|_|write()) {failure=Some((index,error));break;}
     }
     if failure.is_none() {if let Err(error)=verify_values(draft.patches.len()) {failure=Some((draft.patches.len()-1,error));}}
     if let Some((last,error))=failure {
         let mut unreverted=0;
         for patch in draft.patches[..=last].iter().rev() {
             if process.read_exact(patch.address,patch.before.len()).as_ref()==Some(&patch.before) {continue;}
-            if league_verify_quota(process,cache,draft,date).is_err()||process.read_exact(patch.address,patch.after.len()).as_ref()!=Some(&patch.after)||process.write_exact(patch.address,&patch.before).is_err() {unreverted+=1;}
+            let restore=||if draft.code_patch {process.write_code_exact(patch.address,&patch.before)}else{process.write_exact(patch.address,&patch.before)};
+            if league_verify_quota(process,cache,draft,date).is_err()||process.read_exact(patch.address,patch.after.len()).as_ref()!=Some(&patch.after)||restore().is_err() {unreverted+=1;}
         }
         return Err(if unreverted==0 {format!("{error} Przywrócono wcześniejsze limity.")}else{format!("Niepełny zapis: {error} Nie potwierdzono przywrócenia {unreverted} pól. Sprawdź zasady w FM przed zapisaniem kariery.")});
     }
@@ -386,9 +418,9 @@ pub(super) fn disable_league_u22(token:String,value:u32,accept_shared_default:bo
         state.drafts.remove(&token).ok_or("Podgląd wygasł. Odczytaj zasady ponownie.")?
     };
     if draft.opened.elapsed().as_secs()>300 {return Err("Podgląd wygasł. Odczytaj zasady ponownie.".into());}
-    let before=read_u32(&draft.patches[0].before,0).ok_or("Nie odczytano poprzedniego limitu.")?;
+    let before=if draft.code_patch {draft.patches[0].before[0] as u32}else{read_u32(&draft.patches[0].before,0).ok_or("Nie odczytano poprzedniego limitu.")?};
     if before==value {return Err("Wpisany limit jest już ustawiony w FM.".into());}
-    for patch in &mut draft.patches {patch.after=value.to_le_bytes().to_vec();}
+    for patch in &mut draft.patches {patch.after=if draft.code_patch {vec![value as u8]}else{value.to_le_bytes().to_vec()};}
     let (process,cache)=league_quota_context(draft.session_id,true)?;
     league_write_quota(&process,&cache,&draft,draft.game_date)?;
     draft.opened=Instant::now();
@@ -402,8 +434,8 @@ pub(super) fn undo_league_u22(token:String)->Result<LeagueU22Result,String> {
     let mut draft=league_quota_state().lock().map_err(|_|"Edytor zasad jest zajęty.")?.undos.remove(&token).ok_or("Nie zachowano tej zmiany do cofnięcia w bieżącej sesji aplikacji.")?;
     let (process,cache)=league_quota_context(draft.session_id,true)?;
     let date=league_live_date(&process,&cache)?;
-    let before=read_u32(&draft.patches[0].after,0).ok_or("Nie odczytano limitu.")?;
-    let after=read_u32(&draft.patches[0].before,0).ok_or("Nie odczytano poprzedniego limitu.")?;
+    let before=if draft.code_patch {draft.patches[0].after[0] as u32}else{read_u32(&draft.patches[0].after,0).ok_or("Nie odczytano limitu.")?};
+    let after=if draft.code_patch {draft.patches[0].before[0] as u32}else{read_u32(&draft.patches[0].before,0).ok_or("Nie odczytano poprzedniego limitu.")?};
     for patch in &mut draft.patches {std::mem::swap(&mut patch.before,&mut patch.after);}
     league_write_quota(&process,&cache,&draft,date)?;
     Ok(LeagueU22Result{session_id:draft.session_id,shared_default:draft.shared_default,persistent:draft.persistent,before,after,record_count:draft.patches.len(),undo_token:None})

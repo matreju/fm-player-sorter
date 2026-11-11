@@ -76,11 +76,11 @@ mod windows_reader {
     use windows::Win32::{
         Foundation::{CloseHandle, HANDLE, FILETIME},
         System::{
-            Diagnostics::Debug::{ReadProcessMemory, WriteProcessMemory},
+            Diagnostics::Debug::{FlushInstructionCache, ReadProcessMemory, WriteProcessMemory},
             Memory::{
-                VirtualQueryEx, MEMORY_BASIC_INFORMATION, MEM_COMMIT, MEM_PRIVATE,
+                VirtualProtectEx, VirtualQueryEx, MEMORY_BASIC_INFORMATION, MEM_COMMIT, MEM_PRIVATE,
                 PAGE_EXECUTE_READWRITE, PAGE_EXECUTE_WRITECOPY, PAGE_GUARD, PAGE_NOACCESS,
-                PAGE_READWRITE, PAGE_WRITECOPY,
+                PAGE_PROTECTION_FLAGS, PAGE_READWRITE, PAGE_WRITECOPY,
             },
             Threading::{GetProcessTimes, OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ, PROCESS_VM_WRITE, PROCESS_VM_OPERATION},
         },
@@ -1208,6 +1208,19 @@ mod windows_reader {
                 .map_err(|e|format!("Błąd zapisu pamięci: {e}"))?;
             if written!=bytes.len() || self.read_exact(address,bytes.len()).as_deref()!=Some(bytes) {return Err("Gra nie potwierdziła zapisanej wartości.".into());}
             Ok(())
+        }
+        fn write_code_exact(&self,address:usize,bytes:&[u8])->Result<(),String> {
+            let mut old=PAGE_PROTECTION_FLAGS::default();
+            unsafe {VirtualProtectEx(self.handle.0,address as *const c_void,bytes.len(),PAGE_EXECUTE_READWRITE,&mut old)}
+                .map_err(|e|format!("Nie można odblokować domyślnego limitu powołań: {e}"))?;
+            let result=self.write_exact(address,bytes).and_then(|_|unsafe {
+                FlushInstructionCache(self.handle.0,Some(address as *const c_void),bytes.len())
+                    .map_err(|e|format!("Nie odświeżono limitu w FM: {e}"))
+            });
+            let mut restored=PAGE_PROTECTION_FLAGS::default();
+            let restore=unsafe {VirtualProtectEx(self.handle.0,address as *const c_void,bytes.len(),old,&mut restored)}
+                .map_err(|e|format!("Nie przywrócono ochrony pamięci FM: {e}"));
+            result.and(restore)
         }
         fn creation_time(&self) -> Option<u64> {
             let (mut created,mut exited,mut kernel,mut user)=(FILETIME::default(),FILETIME::default(),FILETIME::default(),FILETIME::default());
@@ -2429,6 +2442,7 @@ mod windows_reader {
         } else {
             let mut wishlist = collect_national_wishlist_uids(
                 &process,
+                active_human_team.human_address,
                 managed.team_address,
                 managed.nation_address,
                 &player_candidates,
@@ -5137,6 +5151,7 @@ mod windows_reader {
 
     fn collect_national_wishlist_uids(
         process: &RemoteProcess,
+        human: Option<usize>,
         team: usize,
         nation: usize,
         candidates: &HashMap<u32, PlayerCandidate>,
@@ -5149,14 +5164,52 @@ mod windows_reader {
                 (candidate.player_address, candidate.uid),
             ])
             .collect::<HashMap<_, _>>();
+        // Krajowa lista życzeń widoczna w UI należy do aktywnego HUMAN, nie do
+        // wektora kadry NATIONAL_TEAM. To ten sam potwierdzony układ, którego
+        // używa wyszukiwarka list życzeń: HUMAN +230 -> listy, lista +50/+80
+        // -> rekordy zawodników. Największa aktywna lista odpowiada domyślnej
+        // liście krajowej (np. 119), podczas gdy TEAM_PLAYERS zawiera 23–26.
+        if let Some(human) = human {
+            if let Ok(lists) = pointer_vector(process, human + 0x230, 1024) {
+                let mut human_lists = Vec::<HashSet<u32>>::new();
+                for list in lists {
+                    if process.read_u8(list + 0x4C).is_some_and(|kind| kind > 1) { continue; }
+                    let mut members = HashSet::new();
+                    if let Ok(targets) = pointer_vector(process, list + 0x50, 200_000) {
+                        for target in targets {
+                            if let Some(address) = process.read_ptr(target + 0x60)
+                                && let Some(uid) = by_address.get(&address).copied() {
+                                members.insert(uid);
+                            }
+                        }
+                    }
+                    if let Ok(entries) = pointer_vector(process, list + 0x80, 200_000) {
+                        for entry in entries {
+                            if let Some(address) = process.read_ptr(entry)
+                                && let Some(uid) = by_address.get(&address).copied() {
+                                members.insert(uid);
+                            }
+                        }
+                    }
+                    if members.len() > active_roster.len() && members.len() <= 2_000 {
+                        human_lists.push(members);
+                    }
+                }
+                human_lists.sort_by_key(|members| std::cmp::Reverse(members.len()));
+                if let Some(members) = human_lists.into_iter().next() { return members; }
+            }
+        }
         let resolve = |entry: usize| {
             let mut pending = VecDeque::from([(entry, 0usize)]);
             let mut seen = HashSet::new();
             while let Some((address, depth)) = pending.pop_front() {
-                if !seen.insert(address) || seen.len() > 96 { continue; }
+                if !seen.insert(address) || seen.len() > 256 { continue; }
                 if let Some(uid) = by_address.get(&address).copied() { return Some(uid); }
-                if depth >= 2 { continue; }
-                for offset in (0..=0x180).step_by(8) {
+                // Wpisy Krajowej listy życzeń FM27 są rekordami shortlisty,
+                // a nie bezpośrednimi wskaźnikami PERSON/PLAYER. W aktualnym
+                // buildzie właściwy zawodnik może leżeć trzy ogniwa niżej.
+                if depth >= 3 { continue; }
+                for offset in (0..=0x300).step_by(8) {
                     if let Some(pointer) = process.read_ptr(address + offset)
                         .filter(|pointer| *pointer >= 0x10_000 && *pointer < 0x0000_8000_0000_0000 && *pointer % 8 == 0) {
                         pending.push_back((pointer, depth + 1));
@@ -5169,11 +5222,11 @@ mod windows_reader {
         let mut visited = HashSet::new();
         let mut matches = Vec::<HashSet<u32>>::new();
         while let Some((object, depth)) = objects.pop_front() {
-            if !visited.insert(object) || visited.len() > 128 { continue; }
-            for offset in (0x10..=0x600).step_by(8) {
+            if !visited.insert(object) || visited.len() > 768 { continue; }
+            for offset in (0x10..=0x900).step_by(8) {
                 let Some(pointer) = process.read_ptr(object + offset)
                     .filter(|pointer| *pointer >= 0x10_000 && *pointer < 0x0000_8000_0000_0000 && *pointer % 8 == 0) else { continue; };
-                if depth < 2 { objects.push_back((pointer, depth + 1)); }
+                if depth < 3 { objects.push_back((pointer, depth + 1)); }
                 let Some(end) = process.read_ptr(object + offset + 8) else { continue; };
                 let Some(capacity) = process.read_ptr(object + offset + 16) else { continue; };
                 if end <= pointer || capacity < end || (end - pointer) % 8 != 0

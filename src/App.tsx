@@ -46,9 +46,7 @@ import { AppSideDock } from "./components/app-shell";
 import { MainToolbar } from "./components/main-toolbar";
 import { PlayerCardGrid } from "./components/player-cards";
 import { PlayerTable } from "./components/player-table";
-import { SquadDepthDrawer } from "./components/squad-depth";
 import { usePlayerSelection } from "./hooks/usePlayerSelection";
-import { useSquadDepth } from "./hooks/useSquadDepth";
 import {
   loadFootballManagerSeasonStats,
   loadFootballManagerTeamLogo,
@@ -362,7 +360,6 @@ export default function App() {
   const [selectedPlayerKey, setSelectedPlayerKey] = useState<string | null>(
     null,
   );
-  const [squadDepthOpen, setSquadDepthOpen] = useState(false);
   const [comparePlayerKey, setComparePlayerKey] = useState("");
   const [compareRequestId, setCompareRequestId] = useState(0);
 
@@ -380,16 +377,6 @@ export default function App() {
     syncSelectedPlayers,
     getMarkedCellStyle,
   } = usePlayerSelection({ analysisPositionGroup });
-
-  const {
-    selectedPlayersWithoutPositionCount,
-    squadDepthByPosition,
-    squadDepthWarnings,
-  } = useSquadDepth({
-    rows,
-    playerMarks,
-    playerSelectionPositions,
-  });
 
   useEffect(() => {
     // Snapshoty z poprzednich wersji nie mogą udawać aktywnego połączenia z FM.
@@ -1211,18 +1198,6 @@ export default function App() {
         {managedMode === "nation" && <NationalCoreDrawer rows={rows} />}
       </Suspense>
 
-      <SquadDepthDrawer
-        selectedPlayersCount={selectedPlayersCount}
-        selectedPlayersWithPositionCount={selectedPlayersWithPositionCount}
-        selectedPlayersWithoutPositionCount={
-          selectedPlayersWithoutPositionCount
-        }
-        rejectedPlayersCount={rejectedPlayersCount}
-        squadDepthOpen={squadDepthOpen}
-        setSquadDepthOpen={setSquadDepthOpen}
-        squadDepthWarnings={squadDepthWarnings}
-        squadDepthByPosition={squadDepthByPosition}
-      />
     </main>
   );
 }
