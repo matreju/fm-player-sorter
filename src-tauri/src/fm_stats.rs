@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
+use serde::{Deserialize, Serialize};
 
 pub const SEASON_STATS_HEADERS: &[&str] = &[
-    "Występy", "Z ławki", "Minuty", "Śr. ocena", "Gracz meczu", "Gole", "Asysty",
+    "Mecze", "Występy", "Z ławki", "Minuty", "Śr. ocena", "Gracz meczu", "Gole", "Asysty",
     "Żółte kartki", "Czerwone kartki", "xG", "npxG", "xA", "Strzały", "Celne strzały",
     "Strzały spoza pola karnego", "Gole spoza pola karnego", "Strzały z rzutów wolnych",
     "Rzuty karne (próby)", "Wykorzystane rzuty karne", "Podania (próby)", "Celne podania",
@@ -29,6 +30,35 @@ pub const SEASON_STATS_HEADERS: &[&str] = &[
 
 pub type SeasonStatsRows = BTreeMap<String, BTreeMap<String, String>>;
 
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NationalMatchAppearance {
+    pub uid: u32,
+    pub minutes: Option<u16>,
+    pub goals: Option<u8>,
+    pub assists: Option<u8>,
+    pub rating: Option<f32>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NationalMatchRecord {
+    pub id: String,
+    pub date: String,
+    pub opponent: String,
+    pub competition: String,
+    pub team_goals: Option<u8>,
+    pub opponent_goals: Option<u8>,
+    pub appearances: Vec<NationalMatchAppearance>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct SeasonStatsData {
+    pub rows: SeasonStatsRows,
+    #[serde(default, rename = "nationalMatches")]
+    pub national_matches: Vec<NationalMatchRecord>,
+}
+
 #[cfg(target_os = "windows")]
 mod platform {
     use std::{
@@ -39,9 +69,9 @@ mod platform {
         process::{Command, Stdio},
     };
 
-    use serde::{Deserialize, Serialize};
+    use serde::Serialize;
 
-    use super::SeasonStatsRows;
+    use super::SeasonStatsData;
 
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
@@ -51,28 +81,23 @@ mod platform {
         uids: Vec<u32>,
     }
 
-    #[derive(Deserialize)]
-    struct StatsResponse {
-        rows: SeasonStatsRows,
-    }
-
-    pub fn load_latest_save_stats(uids: &[u32]) -> SeasonStatsRows {
+    pub fn load_latest_save_stats(uids: &[u32]) -> SeasonStatsData {
         let Some(sidecar) = find_sidecar() else {
-            return SeasonStatsRows::new();
+            return SeasonStatsData::default();
         };
         if uids.is_empty() {
-            return SeasonStatsRows::new();
+            return SeasonStatsData::default();
         }
 
         let Some(edition) = crate::fm_version::current_edition() else {
-            return SeasonStatsRows::new();
+            return SeasonStatsData::default();
         };
         let request = match serde_json::to_vec(&StatsRequest {
             edition,
             uids: uids.to_vec(),
         }) {
             Ok(request) => request,
-            Err(_) => return SeasonStatsRows::new(),
+            Err(_) => return SeasonStatsData::default(),
         };
         let mut child = match Command::new(sidecar)
             .stdin(Stdio::piped())
@@ -82,22 +107,21 @@ mod platform {
             .spawn()
         {
             Ok(child) => child,
-            Err(_) => return SeasonStatsRows::new(),
+            Err(_) => return SeasonStatsData::default(),
         };
         if let Some(mut stdin) = child.stdin.take() {
             if stdin.write_all(&request).is_err() {
-                return SeasonStatsRows::new();
+                return SeasonStatsData::default();
             }
         }
         let output = match child.wait_with_output() {
             Ok(output) if output.status.success() => output,
-            _ => return SeasonStatsRows::new(),
+            _ => return SeasonStatsData::default(),
         };
-        let response = match serde_json::from_slice::<StatsResponse>(&output.stdout) {
+        match serde_json::from_slice::<SeasonStatsData>(&output.stdout) {
             Ok(response) => response,
-            Err(_) => return SeasonStatsRows::new(),
-        };
-        response.rows
+            Err(_) => SeasonStatsData::default(),
+        }
     }
 
     fn find_sidecar() -> Option<PathBuf> {
@@ -121,6 +145,6 @@ mod platform {
 pub use platform::load_latest_save_stats;
 
 #[cfg(not(target_os = "windows"))]
-pub fn load_latest_save_stats(_uids: &[u32]) -> SeasonStatsRows {
-    SeasonStatsRows::new()
+pub fn load_latest_save_stats(_uids: &[u32]) -> SeasonStatsData {
+    SeasonStatsData::default()
 }

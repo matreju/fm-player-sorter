@@ -38,7 +38,7 @@ jobs:
       - name: Build FM26 statistics reader
         shell: pwsh
         run: |
-          python -m pip install fmsave==0.5.10 pyinstaller==6.16.0
+          python -m pip install fmsave==0.11.0 pyinstaller==6.16.0
           python -m PyInstaller --onefile --noconfirm --clean --collect-all fmsave --name fmstats tools/fmstats_sidecar.py
           New-Item -ItemType Directory -Force src-tauri/binaries | Out-Null
           Copy-Item dist/fmstats.exe src-tauri/binaries/fmstats-x86_64-pc-windows-msvc.exe
@@ -72,8 +72,9 @@ jobs:
           releaseName: FM Player Sorter v__VERSION__
           releaseBody: |
             Aktualizacja obecnej aplikacji przez wbudowany aktualizator.
-            Rozszerzono profil aktualizacji FM27 z 10 listopada 2026 o bezpieczne rozpoznawanie reprezentacji przez graf aktywnego menedżera, gdy gra nie udostępnia już pracy przez dotychczasowy kontrakt Person.
-            Resolver działa wyłącznie dla jednego menedżera potwierdzonego przez natywny rejestr i wymaga jednoznacznego zespołu narodowego. Tryb reprezentacji pokazuje wszystkich zawodników z główną narodowością prowadzonego kraju.
+            Tryb reprezentacji pokazuje wyłącznie zawodników z aktualnej listy krajowej prowadzonego zespołu, zamiast wszystkich piłkarzy tej narodowości.
+            Zaktualizowano czytnik zapisów do fmsave 0.11.0 z obsługą FM27. Tabela pokazuje klubowe mecze, minuty, gole, asysty i czyste konta z bieżącego sezonu; dla bramkarzy ukrywa gole i asysty, a czyste konta pokazuje bramkarzom oraz obrońcom.
+            Zgrupowania automatycznie synchronizują bieżącą listę krajową i dostępną historię meczów reprezentacji, w tym minuty, gole, asysty, oceny oraz odczytane wyniki.
             Zmiany w pamięci trafiają do pliku kariery dopiero po zapisaniu gry w FM. Przed edycją wykonaj kopię zapisu.
           releaseDraft: false
           prerelease: ${{ github.ref_name == 'agent/fm27-compatibility' }}

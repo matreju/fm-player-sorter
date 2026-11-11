@@ -53,6 +53,7 @@ import {
   loadFootballManagerSeasonStats,
   loadFootballManagerTeamLogo,
   type FmDatabaseLoadResult,
+  type FmNationalMatch,
   type FmSeasonStatsResult,
 } from "./services/fmConnection";
 import type {
@@ -316,6 +317,7 @@ export default function App() {
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<TableRow[]>([]);
   const [snapshot, setSnapshot] = useState<StoredFmSnapshot | null>(null);
+  const [nationalMatches, setNationalMatches] = useState<FmNationalMatch[]>([]);
   const managedMode = snapshot?.managedMode ?? "unknown";
   useEffect(() => {
     // Close drawers when the managed context changes or FM disconnects.
@@ -427,7 +429,7 @@ export default function App() {
     () =>
       headers.length === 0
         ? []
-        : (snapshot?.managedMode === "club" ? [PLAYER_MARK_COLUMN,"Nazwisko","Pozycja","Narodowość",OVERALL_ABILITY_COLUMN,"PA","Wiek","Kondycja","Wartość","Pensja","Koniec kontraktu",ROLE_SCORE_COLUMN] : BASE_TABLE_COLUMNS).filter((header) =>
+        : (snapshot?.managedMode === "club" ? [PLAYER_MARK_COLUMN,"Nazwisko","Pozycja","Narodowość",OVERALL_ABILITY_COLUMN,"PA","Wiek","Kondycja","Wartość","Pensja","Koniec kontraktu",ROLE_SCORE_COLUMN] : [...BASE_TABLE_COLUMNS,"Mecze","Minuty","Gole","Asysty","Czyste konta"]).filter((header) =>
             availableTableHeaders.includes(header),
           ),
     [availableTableHeaders, headers.length, snapshot?.managedMode],
@@ -767,6 +769,7 @@ export default function App() {
       if ((lastManagedScope.current !== null && lastManagedScope.current !== nextScope) || (lastManagedScope.current === null && result.managedMode === "club")) clearPlayerSelection();
       lastManagedScope.current = nextScope;
       setSnapshot(createFmSnapshot(result));
+      setNationalMatches([]);
       setSupplementaryDataLoading(true);
 
       startTransition(() => {
@@ -797,6 +800,7 @@ export default function App() {
         headers: [],
         rows: {},
         playerCount: 0,
+        nationalMatches: [],
       } satisfies FmSeasonStatsResult));
       const logoPromise = loadFootballManagerTeamLogo(
         result.managedMode === "club" ? null : result.managedNationUid,
@@ -835,6 +839,7 @@ export default function App() {
             setHeaders(enrichedHeaders);
           });
           setSnapshot(createFmSnapshot(enrichedResult));
+          setNationalMatches(stats.nationalMatches);
           setSupplementaryDataLoading(false);
         },
       );
@@ -1186,6 +1191,7 @@ export default function App() {
         )}
         {managedMode === "nation" && <CampsDrawer
           rows={rows}
+          importedMatches={nationalMatches}
           getPlayerMark={getPlayerMark}
           getPlayerSelectionPosition={getPlayerSelectionPosition}
         />}

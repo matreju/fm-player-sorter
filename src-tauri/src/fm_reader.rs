@@ -2402,10 +2402,32 @@ mod windows_reader {
         let (club_groups, own_clubs) = if let Some(club) = managed_club {
             collect_managed_club_players(&process, club, managed.team_address, &player_candidates, None)?
         } else { (HashMap::new(), HashSet::new()) };
+        let national_roster = if club_mode {
+            None
+        } else {
+            let roster = collect_team_roster_uids(
+                &process,
+                managed.team_address,
+                &player_candidates,
+            );
+            if roster.is_empty() {
+                return Err(
+                    "Rozpoznano reprezentację, ale jej aktualna lista krajowa jest pusta albo nieczytelna. Otwórz ekran kadry w FM i ponów połączenie."
+                        .to_string(),
+                );
+            }
+            Some(roster)
+        };
         let selected_candidates = player_candidates
             .values()
             .filter(|candidate| {
-                (if club_mode { club_groups.contains_key(&candidate.uid) } else { candidate.nation_address == managed_nation_address })
+                (if club_mode {
+                    club_groups.contains_key(&candidate.uid)
+                } else {
+                    national_roster
+                        .as_ref()
+                        .is_some_and(|roster| roster.contains(&candidate.uid))
+                })
                     && managed_gender
                         .map(|female| candidate.female == female)
                         .unwrap_or(true)
@@ -5028,6 +5050,39 @@ mod windows_reader {
             }
         }
         votes
+    }
+
+    fn collect_team_roster_uids(
+        process: &RemoteProcess,
+        team: usize,
+        candidates: &HashMap<u32, PlayerCandidate>,
+    ) -> HashSet<u32> {
+        let by_address = candidates
+            .values()
+            .flat_map(|candidate| {
+                [
+                    (candidate.person_address, candidate.uid),
+                    (candidate.player_address, candidate.uid),
+                ]
+            })
+            .collect::<HashMap<_, _>>();
+        let mut roster = HashSet::new();
+        let Ok(entries) = pointer_vector(process, team + TEAM_PLAYERS_BEGIN, 200) else {
+            return roster;
+        };
+        for entry in entries {
+            let uid = by_address.get(&entry).copied().or_else(|| {
+                (0..=0x80).step_by(8).find_map(|offset| {
+                    process
+                        .read_ptr(entry + offset)
+                        .and_then(|address| by_address.get(&address).copied())
+                })
+            });
+            if let Some(uid) = uid {
+                roster.insert(uid);
+            }
+        }
+        roster
     }
 
     fn looks_like_club(process: &RemoteProcess, address: usize) -> bool {

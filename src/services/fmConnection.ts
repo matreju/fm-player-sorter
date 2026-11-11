@@ -269,6 +269,25 @@ export interface FmSeasonStatsResult {
   headers: string[];
   rows: Record<string, Record<string, string>>;
   playerCount: number;
+  nationalMatches: FmNationalMatch[];
+}
+
+export interface FmNationalMatchAppearance {
+  uid: number;
+  minutes: number | null;
+  goals: number | null;
+  assists: number | null;
+  rating: number | null;
+}
+
+export interface FmNationalMatch {
+  id: string;
+  date: string;
+  opponent: string;
+  competition: string;
+  teamGoals: number | null;
+  opponentGoals: number | null;
+  appearances: FmNationalMatchAppearance[];
 }
 
 export async function inspectFootballManagerReaderProfile(): Promise<FmReaderProfileStatus> {
@@ -300,7 +319,7 @@ export async function loadFootballManagerSeasonStats(
   uids: number[],
 ): Promise<FmSeasonStatsResult> {
   if (!isTauri()) {
-    return { headers: [], rows: {}, playerCount: 0 };
+    return { headers: [], rows: {}, playerCount: 0, nationalMatches: [] };
   }
 
   return invoke<FmSeasonStatsResult>("load_fm_season_stats", { uids });

@@ -179,6 +179,9 @@ def _row_for_stat(stat: Any) -> dict[str, str]:
         label: _format_value(getattr(stat, field, None))
         for label, field in (*RAW_FIELDS, *COMPUTED_FIELDS)
     }
+    starts = getattr(stat, "starts", 0) or 0
+    substitute_appearances = getattr(stat, "substitute_appearances", 0) or 0
+    row["Mecze"] = _format_value(starts + substitute_appearances)
     saves = [
         getattr(stat, "saves_held", None),
         getattr(stat, "saves_parried", None),
@@ -199,7 +202,9 @@ def _row_for_stat(stat: Any) -> dict[str, str]:
     return row
 
 
-def _read_stats(save_path: Path, wanted_unique_ids: set[int]) -> dict[str, dict[str, str]]:
+def _read_stats(
+    save_path: Path, wanted_unique_ids: set[int]
+) -> tuple[dict[str, dict[str, str]], list[dict[str, Any]]]:
     import fmsave
 
     with tempfile.TemporaryDirectory(prefix="fm-player-sorter-") as temp_directory:
@@ -225,10 +230,87 @@ def _read_stats(save_path: Path, wanted_unique_ids: set[int]) -> dict[str, dict[
                 if unique_id not in best or priority > best[unique_id][0]:
                     best[unique_id] = (priority, stat)
 
-            return {
+            rows = {
                 str(unique_id): _row_for_stat(stat)
                 for unique_id, (_, stat) in best.items()
             }
+
+            match_groups: dict[tuple[str, int, int], list[dict[str, Any]]] = {}
+            for stat in career.player_match_stats():
+                selected = selected_players.get(stat.player_uid)
+                if selected is None or not getattr(stat, "has_stats", False):
+                    continue
+                # A club opponent resolves to club_uid. International opponents
+                # deliberately have no club, which separates national matches
+                # from the same players' club histories.
+                if getattr(stat, "opponent_club_uid", None) is not None:
+                    continue
+                date = getattr(stat, "date", None)
+                opponent_team_id = getattr(stat, "opponent_team_id", None)
+                competition_id = getattr(stat, "competition_id", None)
+                if date is None or opponent_team_id is None or competition_id is None:
+                    continue
+                unique_id, _ = selected
+                key = (date.isoformat(), int(competition_id), int(opponent_team_id))
+                match_groups.setdefault(key, []).append(
+                    {
+                        "uid": unique_id,
+                        "minutes": getattr(stat, "minutes", None),
+                        "goals": getattr(stat, "goals", None),
+                        "assists": getattr(stat, "assists", None),
+                        "rating": getattr(stat, "rating", None),
+                    }
+                )
+
+            fixture_index: dict[tuple[str, int], Any] = {}
+            if match_groups:
+                for fixture in career.fixtures():
+                    date = getattr(fixture, "date", None)
+                    if date is None or not getattr(fixture, "played", False):
+                        continue
+                    date_key = date.isoformat()
+                    fixture_index[(date_key, int(fixture.home_team_id))] = fixture
+                    fixture_index[(date_key, int(fixture.away_team_id))] = fixture
+
+            national_matches: list[dict[str, Any]] = []
+            for (date, competition_id, opponent_team_id), appearances in match_groups.items():
+                fixture = fixture_index.get((date, opponent_team_id))
+                opponent = f"Reprezentacja #{opponent_team_id}"
+                competition = f"Rozgrywki #{competition_id}"
+                team_goals = None
+                opponent_goals = None
+                if fixture is not None:
+                    competition = getattr(fixture, "competition_name", None) or competition
+                    opponent_is_home = int(fixture.home_team_id) == opponent_team_id
+                    if opponent_is_home:
+                        opponent = (
+                            getattr(fixture, "home_club_short_name", None)
+                            or getattr(fixture, "home_club_name", None)
+                            or opponent
+                        )
+                        team_goals = getattr(fixture, "away_goals", None)
+                        opponent_goals = getattr(fixture, "home_goals", None)
+                    else:
+                        opponent = (
+                            getattr(fixture, "away_club_short_name", None)
+                            or getattr(fixture, "away_club_name", None)
+                            or opponent
+                        )
+                        team_goals = getattr(fixture, "home_goals", None)
+                        opponent_goals = getattr(fixture, "away_goals", None)
+                national_matches.append(
+                    {
+                        "id": f"fm-{date}-{competition_id}-{opponent_team_id}",
+                        "date": date,
+                        "opponent": opponent,
+                        "competition": competition,
+                        "teamGoals": team_goals,
+                        "opponentGoals": opponent_goals,
+                        "appearances": sorted(appearances, key=lambda item: item["uid"]),
+                    }
+                )
+            national_matches.sort(key=lambda item: item["date"], reverse=True)
+            return rows, national_matches
 
 
 def main() -> int:
@@ -237,11 +319,19 @@ def main() -> int:
         request = json.load(sys.stdin)
         wanted = {int(value) for value in request.get("uids", []) if int(value) > 0}
         save_path = _latest_save(int(request.get("edition", 26)))
-        rows = {} if save_path is None or not wanted else _read_stats(save_path, wanted)
-        sys.stdout.write(json.dumps({"rows": rows}, ensure_ascii=False, separators=(",", ":")))
+        rows, national_matches = (
+            ({}, []) if save_path is None or not wanted else _read_stats(save_path, wanted)
+        )
+        sys.stdout.write(
+            json.dumps(
+                {"rows": rows, "nationalMatches": national_matches},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        )
         return 0
     except Exception:
-        sys.stdout.write('{"rows":{}}')
+        sys.stdout.write('{"rows":{},"nationalMatches":[]}')
         return 0
 
 

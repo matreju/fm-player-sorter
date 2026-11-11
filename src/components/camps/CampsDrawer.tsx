@@ -10,6 +10,7 @@ import type {
 } from "../../types/camp";
 import { useModuleDrawer } from "../../hooks/useModuleDrawer";
 import type { TableRow } from "../../types/table";
+import type { FmNationalMatch } from "../../services/fmConnection";
 import { loadCamps, saveCamps } from "../../utils/campStorage";
 import { loadCampaigns, saveCampaigns } from "../../utils/campaignStorage";
 import { styles } from "./CampsDrawer.styles";
@@ -54,6 +55,16 @@ import {
 type PlayerMark = "selected" | "rejected";
 function getDefaultMatchTypeForCamp(campType: CampType): CampMatchType {
   return campType;
+}
+function getImportedMatchType(competition: string): CampMatchType {
+  const value = competition.toLocaleLowerCase("pl");
+  if (value.includes("nations") || value.includes("narodów")) return "nations-league";
+  if (value.includes("friendly") || value.includes("towarz")) return "friendly";
+  if (value.includes("qualif") || value.includes("elimin")) return "qualifiers";
+  if (value.includes("world cup") || value.includes("euro") || value.includes("mistrz")) {
+    return "tournament";
+  }
+  return "other";
 }
 function getPlayerSurnameSortKey(player: CampPlayerSnapshot): string {
   const name = player.name.trim();
@@ -124,12 +135,14 @@ function comparePlayerSummaries(
 
 type CampsDrawerProps = {
   rows: TableRow[];
+  importedMatches?: FmNationalMatch[];
   getPlayerMark?: (row: TableRow) => PlayerMark | null;
   getPlayerSelectionPosition?: (row: TableRow) => string;
 };
 
 export function CampsDrawer({
   rows,
+  importedMatches = [],
   getPlayerMark,
   getPlayerSelectionPosition,
 }: CampsDrawerProps) {
@@ -186,6 +199,52 @@ const [careerPlayerSortDirection, setCareerPlayerSortDirection] =
 
     setCamps((current) => migrateCampsToUniqueIds(current, rows));
   }, [rows]);
+
+  useEffect(() => {
+    if (rows.length === 0) return;
+
+    const players = sortCampPlayersBySurname(rows.map(createPlayerSnapshot));
+    const playersByUid = new Map(
+      players.filter((player) => player.uid).map((player) => [player.uid!, player])
+    );
+    const dates = importedMatches.map((match) => match.date).filter(Boolean).sort();
+    const matches: CampMatch[] = importedMatches.map((match) => ({
+      id: match.id,
+      opponent: match.opponent,
+      date: match.date,
+      type: getImportedMatchType(match.competition),
+      teamGoals: match.teamGoals === null ? "" : String(match.teamGoals),
+      opponentGoals:
+        match.opponentGoals === null ? "" : String(match.opponentGoals),
+      appearances: match.appearances.flatMap((appearance) => {
+        const player = playersByUid.get(String(appearance.uid));
+        if (!player) return [];
+        return [{
+          playerKey: player.key,
+          played: true,
+          minutes: appearance.minutes === null ? "" : String(appearance.minutes),
+          goals: appearance.goals === null ? "" : String(appearance.goals),
+          assists: appearance.assists === null ? "" : String(appearance.assists),
+          rating: appearance.rating === null ? "" : String(appearance.rating),
+        }];
+      }),
+    }));
+    const automaticCamp: Camp = {
+      id: "fm-auto-national-current",
+      name: "Zgrupowanie z FM (automatyczne)",
+      type: "other",
+      dateFrom: dates[0] ?? "",
+      dateTo: dates.at(-1) ?? "",
+      players,
+      matches,
+      createdAt: new Date().toISOString(),
+    };
+    setCamps((current) => {
+      const existing = current.findIndex((camp) => camp.id === automaticCamp.id);
+      if (existing < 0) return [automaticCamp, ...current];
+      return current.map((camp) => camp.id === automaticCamp.id ? automaticCamp : camp);
+    });
+  }, [importedMatches, rows]);
 
   useEffect(() => {
     if (!activeCampaignId && campaigns.length > 0) {

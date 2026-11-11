@@ -5,7 +5,7 @@ use crate::{
     fm_reader::{
         read_fm_date_status, read_fm_native_database, refresh_fm_native_database, FmClassOffsetStat, FmDateStatus, FmTableRow,
     },
-    fm_stats::{load_latest_save_stats, SeasonStatsRows, SEASON_STATS_HEADERS},
+    fm_stats::{load_latest_save_stats, NationalMatchRecord, SeasonStatsRows, SEASON_STATS_HEADERS},
     fm_process::detect_football_manager,
 };
 
@@ -52,6 +52,7 @@ pub struct FmSeasonStatsResult {
     pub headers: Vec<String>,
     pub rows: SeasonStatsRows,
     pub player_count: usize,
+    pub national_matches: Vec<NationalMatchRecord>,
 }
 
 impl FmDatabaseLoadResult {
@@ -179,14 +180,15 @@ pub async fn refresh_fm_database() -> Result<FmDatabaseLoadResult,String> {
 #[tauri::command(rename_all = "camelCase")]
 pub async fn load_fm_season_stats(uids: Vec<u32>) -> Result<FmSeasonStatsResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let rows = load_latest_save_stats(&uids);
+        let data = load_latest_save_stats(&uids);
         FmSeasonStatsResult {
             headers: SEASON_STATS_HEADERS
                 .iter()
                 .map(|header| (*header).to_string())
                 .collect(),
-            player_count: rows.len(),
-            rows,
+            player_count: data.rows.len(),
+            rows: data.rows,
+            national_matches: data.national_matches,
         }
     })
     .await

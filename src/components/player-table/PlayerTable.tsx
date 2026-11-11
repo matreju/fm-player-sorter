@@ -171,6 +171,7 @@ const GENERAL_COLUMNS = new Set([
 ]);
 
 const RESULT_COLUMNS = new Set([
+  "Mecze",
   "Występy",
   "Z ławki",
   "Minuty",
@@ -325,6 +326,14 @@ function displayCell(header:string, value:string|undefined, rate:number|undefine
     return formatPlayerFinance(header, value, rate);
   }
   return value;
+}
+function displayPositionStat(row: TableRow, header: string, rate: number | undefined): string {
+  const position = (row["Pozycja"] ?? "").toLocaleUpperCase("pl");
+  const goalkeeper = /(^|[,(\s])BR([),\s]|$)/.test(position) || position.includes("BRAMKARZ");
+  const defender = /(^|[,(\s])O([),\s]|$)/.test(position) || position.includes("OBROŃCA");
+  if (goalkeeper && (header === "Gole" || header === "Asysty")) return "—";
+  if (header === "Czyste konta" && !goalkeeper && !defender) return "—";
+  return displayCell(header, row[header], rate);
 }
 
 function getDefaultColumnWidth(header: string): number {
@@ -832,7 +841,7 @@ export function PlayerTable({
                         }}
                         title={["Pensja","Wartość","Cena wywoławcza"].includes(header) ? (getGameEuroRate(row) ? FINANCE_NOTE : FINANCE_UNAVAILABLE) : row[header] || undefined}
                       >
-                        {displayCell(header,row[header],getGameEuroRate(row))}
+                        {displayPositionStat(row,header,getGameEuroRate(row))}
                       </td>
                     );
                   })}
