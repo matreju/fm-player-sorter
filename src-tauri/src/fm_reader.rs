@@ -5177,17 +5177,19 @@ mod windows_reader {
                     let mut members = HashSet::new();
                     if let Ok(targets) = pointer_vector(process, list + 0x50, 200_000) {
                         for target in targets {
-                            if let Some(address) = process.read_ptr(target + 0x60)
-                                && let Some(uid) = by_address.get(&address).copied() {
-                                members.insert(uid);
+                            if let Some(address) = process.read_ptr(target + 0x60) {
+                                if let Some(uid) = by_address.get(&address).copied() {
+                                    members.insert(uid);
+                                }
                             }
                         }
                     }
                     if let Ok(entries) = pointer_vector(process, list + 0x80, 200_000) {
                         for entry in entries {
-                            if let Some(address) = process.read_ptr(entry)
-                                && let Some(uid) = by_address.get(&address).copied() {
-                                members.insert(uid);
+                            if let Some(address) = process.read_ptr(entry) {
+                                if let Some(uid) = by_address.get(&address).copied() {
+                                    members.insert(uid);
+                                }
                             }
                         }
                     }
