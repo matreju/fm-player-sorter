@@ -72,7 +72,7 @@ jobs:
           releaseName: FM Player Sorter v__VERSION__
           releaseBody: |
             Aktualizacja obecnej aplikacji przez wbudowany aktualizator.
-            Tryb reprezentacji odczytuje Krajową listę życzeń jako osobną kolekcję, zamiast 26-osobowej kadry zgłoszonej do rozgrywek.
+            Tryb reprezentacji odczytuje trwałą Krajową listę życzeń z grafu danych reprezentacji i federacji, niezależnie od aktualnie otwartego ekranu FM, zamiast 26-osobowej kadry zgłoszonej do rozgrywek.
             Zaktualizowano czytnik zapisów do fmsave 0.12.1. Kafelki kandydatów pokazują klubowe mecze, minuty, gole, asysty oraz czyste konta zależnie od pozycji.
             Dodano panel Reprezentacja z informacjami o kraju, stadionie, federacji, aktywnych rozgrywkach i edytorem zasad. Limit powołań jest dostępny jako „Wielkość kadry — maksimum”. Kolejne połączenia korzystają z pamięci skrótów niezmienionych plików gry.
             Zmiany w pamięci trafiają do pliku kariery dopiero po zapisaniu gry w FM. Przed edycją wykonaj kopię zapisu.

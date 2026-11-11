@@ -2408,11 +2408,12 @@ mod windows_reader {
             let wishlist = collect_national_wishlist_uids(
                 &process,
                 managed.team_address,
+                managed.nation_address,
                 &player_candidates,
             );
             if wishlist.is_empty() {
                 return Err(
-                    "Rozpoznano reprezentację, ale Krajowa lista życzeń jest pusta albo nieczytelna. Otwórz w FM: Lista krajowa → Krajowa lista życzeń i ponów połączenie."
+                    "Rozpoznano reprezentację, ale nie udało się jednoznacznie odczytać trwałej Krajowej listy życzeń z danych reprezentacji lub federacji."
                         .to_string(),
                 );
             }
@@ -5088,6 +5089,7 @@ mod windows_reader {
     fn collect_national_wishlist_uids(
         process: &RemoteProcess,
         team: usize,
+        nation: usize,
         candidates: &HashMap<u32, PlayerCandidate>,
     ) -> HashSet<u32> {
         let active_roster = collect_team_roster_uids(process, team, candidates);
@@ -5099,30 +5101,44 @@ mod windows_reader {
             ])
             .collect::<HashMap<_, _>>();
         let resolve = |entry: usize| {
-            by_address.get(&entry).copied().or_else(|| {
-                (0..=0x80).step_by(8).find_map(|offset| {
-                    process.read_ptr(entry + offset)
-                        .and_then(|address| by_address.get(&address).copied())
-                })
-            })
+            let mut pending = VecDeque::from([(entry, 0usize)]);
+            let mut seen = HashSet::new();
+            while let Some((address, depth)) = pending.pop_front() {
+                if !seen.insert(address) || seen.len() > 96 { continue; }
+                if let Some(uid) = by_address.get(&address).copied() { return Some(uid); }
+                if depth >= 2 { continue; }
+                for offset in (0..=0x180).step_by(8) {
+                    if let Some(pointer) = process.read_ptr(address + offset)
+                        .filter(|pointer| *pointer >= 0x10_000 && *pointer < 0x0000_8000_0000_0000 && *pointer % 8 == 0) {
+                        pending.push_back((pointer, depth + 1));
+                    }
+                }
+            }
+            None
         };
+        let mut objects = VecDeque::from([(team, 0usize), (nation, 0usize)]);
+        let mut visited = HashSet::new();
         let mut matches = Vec::<HashSet<u32>>::new();
-        for offset in (0x10..=0x400).step_by(8) {
-            if offset == TEAM_PLAYERS_BEGIN { continue; }
-            let Some(begin) = process.read_ptr(team + offset) else { continue; };
-            let Some(end) = process.read_ptr(team + offset + 8) else { continue; };
-            let Some(capacity) = process.read_ptr(team + offset + 16) else { continue; };
-            if begin < 0x10_000 || end <= begin || capacity < end || begin % 8 != 0
-                || (end - begin) % 8 != 0 || (end - begin) / 8 > 2_000 { continue; }
-            let count = (end - begin) / 8;
-            if count <= active_roster.len() { continue; }
-            let Some(bytes) = process.read_exact(begin, end - begin) else { continue; };
-            let resolved = bytes.chunks_exact(8).filter_map(|chunk| {
-                let entry = u64::from_le_bytes(chunk.try_into().ok()?) as usize;
-                resolve(entry)
-            }).collect::<HashSet<_>>();
-            if resolved.len() > active_roster.len() && resolved.len() * 100 >= count * 70 {
-                matches.push(resolved);
+        while let Some((object, depth)) = objects.pop_front() {
+            if !visited.insert(object) || visited.len() > 128 { continue; }
+            for offset in (0x10..=0x600).step_by(8) {
+                let Some(pointer) = process.read_ptr(object + offset)
+                    .filter(|pointer| *pointer >= 0x10_000 && *pointer < 0x0000_8000_0000_0000 && *pointer % 8 == 0) else { continue; };
+                if depth < 2 { objects.push_back((pointer, depth + 1)); }
+                let Some(end) = process.read_ptr(object + offset + 8) else { continue; };
+                let Some(capacity) = process.read_ptr(object + offset + 16) else { continue; };
+                if end <= pointer || capacity < end || (end - pointer) % 8 != 0
+                    || (end - pointer) / 8 > 2_000 { continue; }
+                let count = (end - pointer) / 8;
+                if count <= active_roster.len() { continue; }
+                let Some(bytes) = process.read_exact(pointer, end - pointer) else { continue; };
+                let resolved = bytes.chunks_exact(8).filter_map(|chunk| {
+                    resolve(u64::from_le_bytes(chunk.try_into().ok()?) as usize)
+                }).collect::<HashSet<_>>();
+                if resolved.len() > active_roster.len() && resolved.len() * 100 >= count * 50
+                    && !matches.iter().any(|existing| existing == &resolved) {
+                    matches.push(resolved);
+                }
             }
         }
         matches.sort_by_key(|values| std::cmp::Reverse(values.len()));
