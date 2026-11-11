@@ -2341,6 +2341,7 @@ mod windows_reader {
             }
             resolve_bound_national_team(
                 &process,
+                &resolver,
                 binding,
                 active_human_team.team_address,
                 &uid_objects,
@@ -4276,6 +4277,7 @@ mod windows_reader {
 
     fn resolve_bound_national_team(
         process: &RemoteProcess,
+        resolver: &MetaResolver,
         binding: HumanBindingResolution,
         active_human_team: Option<usize>,
         uid_objects: &[UidObjectCandidate],
@@ -4347,6 +4349,10 @@ mod windows_reader {
                 addresses.push(object.address - object.dynamic_offset);
             }
             for address in addresses {
+                let native_type=process.read_ptr(address)
+                    .and_then(|vtable|resolver.native_type_name(vtable));
+                let exact_team_type=matches!(native_type.as_deref(),
+                    Some(".?AVTEAM@db@@")|Some(".?AVNATIONAL_TEAM@db@@")|Some(".?AVEXTERN_NATIONAL_TEAM@db@@"));
                 let index_match = binding.database_type == Some(DATABASE_TABLE_TEAM)
                     && binding
                         .database_index
@@ -4355,9 +4361,10 @@ mod windows_reader {
                 if uid_match || index_match {
                     team_addresses.insert(address);
                     uid_matches = uid_matches.saturating_add(if uid_match { 1 } else { 0 });
-                    if index_match && looks_like_team_record(process, address) {
+                    if (index_match && looks_like_team_record(process, address))
+                        || (uid_match && exact_team_type) {
                         trusted_team_addresses.insert(address);
-                        database_index_matches.insert(address);
+                        if index_match {database_index_matches.insert(address);}
                     }
                 }
             }
