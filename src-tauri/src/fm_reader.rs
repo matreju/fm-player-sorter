@@ -3884,12 +3884,13 @@ mod windows_reader {
             return None;
         }
         let database_reference = database_references.into_iter().next();
-        // Pair values belong to the InteropReference identifier tuple. They
-        // are not native Team UIDs. Keep UID decoding only as a fallback for
-        // older DynamicReference values without a concrete database record.
-        let human_team_uid = database_reference
-            .is_none()
-            .then(|| decoded_uids.into_iter().next())
+        // UID candidates have already been intersected with independently
+        // collected native Team UIDs. In this FM27 build humanTeam exposes
+        // both DatabaseRecordReference(type 24/index) and exactly one such
+        // native UID. Keep both as mutually confirming identities; older
+        // builds that expose only one of them continue to work unchanged.
+        let human_team_uid = (decoded_uids.len()==1)
+            .then(||decoded_uids.into_iter().next())
             .flatten();
         if database_reference.is_none() && human_team_uid.is_none() {
             return None;

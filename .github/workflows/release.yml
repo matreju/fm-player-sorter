@@ -72,7 +72,7 @@ jobs:
           releaseName: FM Player Sorter v__VERSION__
           releaseBody: |
             Aktualizacja obecnej aplikacji przez wbudowany aktualizator.
-            Poprawiono rozpoznawanie aktywnej reprezentacji z potwierdzonego humanTeam i rekordu właściciela NATION także wtedy, gdy FM nie wystawia bieżącej kadry na aktualnie otwartym ekranie. Zachowano obsługę zasad dla game_plugin.dll F79B0A34.
+            Poprawiono FM27 humanTeam: natywny UID zespołu i DatabaseRecordReference TEAM są zachowywane jako wzajemnie potwierdzające tożsamości także wtedy, gdy kontrakt aktywnego menedżera nie wystawia wskaźnika zespołu. Zachowano obsługę zasad dla game_plugin.dll F79B0A34.
             Statystyki klubowe mają awaryjne sumowanie z historii meczów, gdy FM27 nie zwraca zbiorczego rekordu sezonu. Kafelki pokazują mecze, minuty, gole, asysty oraz czyste konta zależnie od pozycji.
             Dodano panel Reprezentacja z informacjami o kraju, stadionie, federacji, aktywnych rozgrywkach i edytorem zasad. Limit powołań jest dostępny jako „Wielkość kadry — maksimum”. Kolejne połączenia korzystają z pamięci skrótów niezmienionych plików gry.
             Zmiany w pamięci trafiają do pliku kariery dopiero po zapisaniu gry w FM. Przed edycją wykonaj kopię zapisu.
