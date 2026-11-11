@@ -2443,7 +2443,6 @@ mod windows_reader {
             let mut wishlist = collect_national_wishlist_uids(
                 &process,
                 active_human_team.human_address,
-                managed.team_address,
                 managed.nation_address,
                 &player_candidates,
                 &active_national_roster,
@@ -5152,7 +5151,6 @@ mod windows_reader {
     fn collect_national_wishlist_uids(
         process: &RemoteProcess,
         human: Option<usize>,
-        team: usize,
         nation: usize,
         candidates: &HashMap<u32, PlayerCandidate>,
         active_roster: &HashSet<u32>,
@@ -5173,13 +5171,12 @@ mod windows_reader {
             if let Ok(lists) = pointer_vector(process, human + 0x230, 1024) {
                 let mut human_lists = Vec::<HashSet<u32>>::new();
                 for list in lists {
-                    if process.read_u8(list + 0x4C).is_some_and(|kind| kind > 1) { continue; }
                     let mut members = HashSet::new();
                     if let Ok(targets) = pointer_vector(process, list + 0x50, 200_000) {
                         for target in targets {
                             if let Some(address) = process.read_ptr(target + 0x60) {
                                 if let Some(uid) = by_address.get(&address).copied() {
-                                    members.insert(uid);
+                                    if candidates.get(&uid).is_some_and(|candidate|candidate.nation_address==nation) {members.insert(uid);}
                                 }
                             }
                         }
@@ -5188,7 +5185,7 @@ mod windows_reader {
                         for entry in entries {
                             if let Some(address) = process.read_ptr(entry) {
                                 if let Some(uid) = by_address.get(&address).copied() {
-                                    members.insert(uid);
+                                    if candidates.get(&uid).is_some_and(|candidate|candidate.nation_address==nation) {members.insert(uid);}
                                 }
                             }
                         }
@@ -5201,65 +5198,10 @@ mod windows_reader {
                 if let Some(members) = human_lists.into_iter().next() { return members; }
             }
         }
-        let resolve = |entry: usize| {
-            let mut pending = VecDeque::from([(entry, 0usize)]);
-            let mut seen = HashSet::new();
-            while let Some((address, depth)) = pending.pop_front() {
-                if !seen.insert(address) || seen.len() > 256 { continue; }
-                if let Some(uid) = by_address.get(&address).copied() { return Some(uid); }
-                // Wpisy Krajowej listy życzeń FM27 są rekordami shortlisty,
-                // a nie bezpośrednimi wskaźnikami PERSON/PLAYER. W aktualnym
-                // buildzie właściwy zawodnik może leżeć trzy ogniwa niżej.
-                if depth >= 3 { continue; }
-                for offset in (0..=0x300).step_by(8) {
-                    if let Some(pointer) = process.read_ptr(address + offset)
-                        .filter(|pointer| *pointer >= 0x10_000 && *pointer < 0x0000_8000_0000_0000 && *pointer % 8 == 0) {
-                        pending.push_back((pointer, depth + 1));
-                    }
-                }
-            }
-            None
-        };
-        let mut objects = VecDeque::from([(team, 0usize), (nation, 0usize)]);
-        let mut visited = HashSet::new();
-        let mut matches = Vec::<HashSet<u32>>::new();
-        while let Some((object, depth)) = objects.pop_front() {
-            if !visited.insert(object) || visited.len() > 768 { continue; }
-            for offset in (0x10..=0x900).step_by(8) {
-                let Some(pointer) = process.read_ptr(object + offset)
-                    .filter(|pointer| *pointer >= 0x10_000 && *pointer < 0x0000_8000_0000_0000 && *pointer % 8 == 0) else { continue; };
-                if depth < 3 { objects.push_back((pointer, depth + 1)); }
-                let Some(end) = process.read_ptr(object + offset + 8) else { continue; };
-                let Some(capacity) = process.read_ptr(object + offset + 16) else { continue; };
-                if end <= pointer || capacity < end || (end - pointer) % 8 != 0
-                    || (end - pointer) / 8 > 2_000 { continue; }
-                let count = (end - pointer) / 8;
-                // Krajowa lista życzeń ma rozmiar listy scoutingowej, nie całej
-                // populacji narodowości. Odrzuca to kolekcję 443 Polaków.
-                if count <= active_roster.len() || count > 200 { continue; }
-                let Some(bytes) = process.read_exact(pointer, end - pointer) else { continue; };
-                let resolved = bytes.chunks_exact(8).filter_map(|chunk| {
-                    resolve(u64::from_le_bytes(chunk.try_into().ok()?) as usize)
-                }).collect::<HashSet<_>>();
-                let roster_overlap = resolved.intersection(active_roster).count();
-                if resolved.len() > active_roster.len() && resolved.len() <= 200
-                    && roster_overlap > 0 && resolved.len() * 100 >= count * 50
-                    && !matches.iter().any(|existing| existing == &resolved) {
-                    matches.push(resolved);
-                }
-            }
-        }
-        // The wishlist is the largest bounded player collection; the active
-        // squad is a separate, smaller vector and is only a tie-breaker.
-        matches.sort_by_key(|values| std::cmp::Reverse((
-            values.len(),
-            values.intersection(active_roster).count(),
-        )));
-        let Some(best) = matches.first() else { return HashSet::new(); };
-        if matches.get(1).is_some_and(|next| next.len() == best.len() && next != best) {
-            return HashSet::new();
-        }
-        best.clone()
+        // Nie wykonuj kosztownego skanowania grafu TEAM/NATION. Jeśli natywna
+        // lista HUMAN nie jest dostępna, połączenie ma zakończyć się szybko z
+        // komunikatem, zamiast blokować okno na wiele minut.
+        HashSet::new()
     }
 
     fn looks_like_club(process: &RemoteProcess, address: usize) -> bool {
