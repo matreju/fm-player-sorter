@@ -4492,9 +4492,8 @@ mod windows_reader {
                 .flatten()
         });
 
-        let owner_labels = process
-            .read_ptr(team + TEAM_CLUB)
-            .filter(|value| *value != 0)
+        let owner = process.read_ptr(team + TEAM_CLUB).filter(|value| *value != 0);
+        let owner_labels = owner
             .map(|owner| {
                 [club_name(process, owner), nation_name(process, owner)]
                     .into_iter()
@@ -4507,7 +4506,17 @@ mod windows_reader {
             team,
             owner_labels.first().map(String::as_str),
             nation_counts,
-        );
+        ).or_else(|| {
+            // For a national TEAM the owner field is the NATION record, not a
+            // CLUB. humanTeam already proved this exact team belongs to the
+            // active human job; retain the independently validated owner
+            // relation instead of requiring the squad vector to be populated
+            // on the currently open FM screen.
+            let nation=owner?;
+            nation_counts.contains_key(&nation)
+                .then(||nation_name(process,nation).map(|name|(nation,name)))
+                .flatten()
+        });
         let (nation_address, nation_name, same_nation_players) =
             if let Some(resolution) = strong_squad_resolution {
                 resolution
