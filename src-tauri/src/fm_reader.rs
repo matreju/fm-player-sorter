@@ -4460,7 +4460,21 @@ mod windows_reader {
                     team,
                     &address_to_nation,
                     nation_counts,
-                )
+                ).or_else(|| {
+                    // The active manager registry plus a nation-manager UI
+                    // binding already prove this exact TEAM. During long FM
+                    // processing windows its squad vector can be temporarily
+                    // empty, so retain the independently validated TEAM ->
+                    // NATION owner relation instead of rejecting the job.
+                    if active_human_team!=Some(team)
+                        || binding.nation_manager_evidence==0
+                        || !trusted_team_addresses.contains(&team) {return None;}
+                    let nation=process.read_ptr(team+TEAM_CLUB)
+                        .filter(|nation|nation_counts.contains_key(nation))?;
+                    let name=nation_name(process,nation)
+                        .filter(|name|plausible_label(name,120))?;
+                    Some(ManagedTeamResolution{team_address:team,team_name:name.clone(),nation_address:nation,nation_name:name,score:7_000_000})
+                })
             })
             .collect::<Vec<_>>();
         diagnostics.national_resolution_count = matches.len();
