@@ -1918,8 +1918,12 @@ mod windows_reader {
         let (person,uid)=cache.manager_person.ok_or_else(||refresh_error("R01","Brak potwierdzonej tożsamości menedżera dla szybkiego odczytu. Użyj „Połącz ponownie”."))?;
         let actual_uid=record_uid(process,person).ok_or_else(||read("Menedżer jest chwilowo niedostępny w pamięci gry. Ponów odświeżanie."))?;
         if actual_uid!=uid { return Err(refresh_error("R03","Zmienił się menedżer lub zapis gry. Użyj „Połącz ponownie”.")); }
-        let team=contract_team(process,person).ok_or_else(||read("Kontrakt menedżera jest chwilowo niedostępny. Ponów odświeżanie po zakończeniu przetwarzania w FM."))?;
-        if team!=cache.team { return Err(refresh_error("R04","Menedżer prowadzi teraz inny zespół. Użyj „Połącz ponownie”.")); }
+        if cache.database.managed_mode=="club" {
+            let team=contract_team(process,person).ok_or_else(||read("Kontrakt menedżera jest chwilowo niedostępny. Ponów odświeżanie po zakończeniu przetwarzania w FM."))?;
+            if team!=cache.team { return Err(refresh_error("R04","Menedżer prowadzi teraz inny zespół. Użyj „Połącz ponownie”.")); }
+        } else if record_uid(process,cache.nation)!=cache.database.managed_nation_uid {
+            return Err(refresh_error("R04","Zmieniła się prowadzona reprezentacja. Użyj „Połącz ponownie”."));
+        }
         if let Some(club)=cache.club {
             let club_uid=record_uid(process,club).ok_or_else(||read("Nie można teraz odczytać klubu. Ponów odświeżanie."))?;
             let owner=process.read_ptr(cache.team+TEAM_CLUB).filter(|owner|*owner>=0x10_000).ok_or_else(||read("Powiązanie zespołu z klubem jest chwilowo niedostępne. Ponów odświeżanie."))?;
@@ -2595,7 +2599,11 @@ mod windows_reader {
             class_offsets,
         };
         if let Some(created)=process.creation_time() {
-            let manager_person=refresh_manager_person(&process,active_human_team.registry_slot,&human_managers,managed.team_address);
+            let manager_person=refresh_manager_person(&process,active_human_team.registry_slot,&human_managers,managed.team_address)
+                .or_else(||active_human_team.human_address.and_then(|human| {
+                    let person=human.checked_add(process.layout.human_manager_person)?;
+                    record_uid(&process,person).map(|uid|(person,uid))
+                }));
             let mut class_people=HashMap::new();
             for candidate in player_candidates.values() {
                 class_people.entry(candidate.person_address-candidate.player_address).or_insert(candidate.person_address);
@@ -5186,9 +5194,11 @@ mod windows_reader {
                 }
             }
         }
+        // The wishlist is the largest bounded player collection; the active
+        // squad is a separate, smaller vector and is only a tie-breaker.
         matches.sort_by_key(|values| std::cmp::Reverse((
-            values.intersection(active_roster).count(),
             values.len(),
+            values.intersection(active_roster).count(),
         )));
         let Some(best) = matches.first() else { return HashSet::new(); };
         if matches.get(1).is_some_and(|next| next.len() == best.len() && next != best) {

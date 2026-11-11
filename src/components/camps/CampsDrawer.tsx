@@ -73,6 +73,19 @@ function getPlayerSurnameSortKey(player: CampPlayerSnapshot): string {
   return parts.length > 1 ? parts[parts.length - 1] : name;
 }
 
+function automaticCampKey(players: CampPlayerSnapshot[], matches: CampMatch[]) {
+  const source = [
+    ...players.map((player) => player.uid ?? player.key).sort(),
+    ...matches.map((match) => `${match.date}:${match.opponent}`).sort(),
+  ].join("|");
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `fm-auto-national-${(hash >>> 0).toString(16)}`;
+}
+
 function compareCampPlayersBySurname(
   left: CampPlayerSnapshot,
   right: CampPlayerSnapshot
@@ -231,7 +244,7 @@ const [careerPlayerSortDirection, setCareerPlayerSortDirection] =
       }),
     }));
     const automaticCamp: Camp = {
-      id: "fm-auto-national-current",
+      id: automaticCampKey(players, matches),
       name: "Zgrupowanie z FM (automatyczne)",
       type: "other",
       dateFrom: dates[0] ?? "",
@@ -243,7 +256,9 @@ const [careerPlayerSortDirection, setCareerPlayerSortDirection] =
     setCamps((current) => {
       const existing = current.findIndex((camp) => camp.id === automaticCamp.id);
       if (existing < 0) return [automaticCamp, ...current];
-      return current.map((camp) => camp.id === automaticCamp.id ? automaticCamp : camp);
+      return current.map((camp) => camp.id === automaticCamp.id
+        ? { ...automaticCamp, createdAt: camp.createdAt }
+        : camp);
     });
   }, [importedMatches, rows]);
 
