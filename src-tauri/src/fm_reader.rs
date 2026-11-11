@@ -4469,10 +4469,8 @@ mod windows_reader {
                     if active_human_team!=Some(team)
                         || binding.nation_manager_evidence==0
                         || !trusted_team_addresses.contains(&team) {return None;}
-                    let nation=process.read_ptr(team+TEAM_CLUB)
-                        .filter(|nation|nation_counts.contains_key(nation))?;
-                    let name=nation_name(process,nation)
-                        .filter(|name|plausible_label(name,120))?;
+                    let (nation,name)=resolve_managed_nation(process,team,None,nation_counts)
+                        .or_else(||resolve_nation_from_team_labels(process,team,nation_counts))?;
                     Some(ManagedTeamResolution{team_address:team,team_name:name.clone(),nation_address:nation,nation_name:name,score:7_000_000})
                 })
             })
@@ -5401,6 +5399,30 @@ mod windows_reader {
                     .into_iter()
                     .find(|(_, name)| labels_match(managed_team, name))
             })
+    }
+
+    fn resolve_nation_from_team_labels(
+        process:&RemoteProcess,
+        team:usize,
+        nation_counts:&HashMap<usize,usize>,
+    )->Option<(usize,String)> {
+        let mut labels=HashSet::<String>::new();
+        let mut bases=vec![team];
+        if let Some(owner)=process.read_ptr(team+TEAM_CLUB).filter(|value|*value>=0x10_000) {bases.push(owner);}
+        for base in bases {
+            for offset in (0..=0x400).step_by(8) {
+                if let Some(label)=process.indirect_string(base+offset).filter(|label|plausible_label(label,120)) {
+                    labels.insert(label);
+                }
+            }
+        }
+        let mut matches=nation_counts.keys().filter_map(|nation|{
+            let name=nation_name(process,*nation)?;
+            labels.iter().any(|label|labels_match(label,&name)).then_some((*nation,name))
+        }).collect::<Vec<_>>();
+        matches.sort_by_key(|(nation,_)|*nation);
+        matches.dedup_by_key(|(nation,_)|*nation);
+        (matches.len()==1).then(||matches.remove(0))
     }
 
     fn resolve_managed_squad_gender(
