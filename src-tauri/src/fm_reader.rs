@@ -381,6 +381,11 @@ mod windows_reader {
     const FM27_PLUGIN_2486695: &str = fm_version::FM27_NATIVE_2486695_PROFILE_ID;
     const FM27_PLUGIN_2493426: &str = fm_version::FM27_NATIVE_2493426_PROFILE_ID;
     const FM27_PLUGIN_2026_11_10: &str = "f79b0a3413dd0e3f461b0afbc3ff397003f4a26d7525a30717428de6a8b91196";
+    const FM27_PLUGIN_2503222: &str = fm_version::FM27_NATIVE_2503222_PROFILE_ID;
+    // Native code, RTTI and every address used by the reader live before this
+    // boundary. The 27.0.1 DLL has a ~296 MiB .00cfg section after it which is
+    // not inspected by the resolver and must not be copied into application RAM.
+    const FM27_PLUGIN_RESOLVER_PREFIX: usize = 0x5A3A000;
 
     #[derive(Default)]
     struct GameCurrencyRates {
@@ -1048,7 +1053,7 @@ mod windows_reader {
 
     // Research report only. No write handle, inferred ownership or edit token.
     fn league_native_type(process:&RemoteProcess,base:usize,vtable:usize)->Option<String> {
-        let (data_start,data_end)=if process.native_plugin_profile_id.as_deref()==Some(FM27_PLUGIN_2026_11_10) {
+        let (data_start,data_end)=if dynamic_league_profile(process) {
             // Exact RTTI-bearing PE sections of the uploaded F79B... DLL.
             // Code and global addresses are not borrowed from an older build.
             (0x4BDD000usize,0x5885000usize)
@@ -1356,11 +1361,12 @@ mod windows_reader {
     }
 
     impl ModuleImage {
-        fn load(process: &RemoteProcess, base: usize, size: usize) -> Self {
-            let mut bytes = vec![0u8; size];
+        fn load(process: &RemoteProcess, base: usize, size: usize, loaded_size: usize) -> Self {
+            let loaded_size=loaded_size.min(size);
+            let mut bytes = vec![0u8; loaded_size];
             let mut offset = 0usize;
-            while offset < size {
-                let length = (size - offset).min(IMAGE_CHUNK_SIZE);
+            while offset < loaded_size {
+                let length = (loaded_size - offset).min(IMAGE_CHUNK_SIZE);
                 if let Some(chunk) = process.read(base.saturating_add(offset), length) {
                     let copied = chunk.len().min(length);
                     bytes[offset..offset + copied].copy_from_slice(&chunk[..copied]);
@@ -1375,7 +1381,7 @@ mod windows_reader {
         }
 
         fn contains(&self, address: usize, length: usize) -> bool {
-            address >= self.base && address.saturating_add(length) <= self.end
+            address >= self.base && address.saturating_add(length) <= self.base.saturating_add(self.bytes.len())
         }
 
         fn read_u64(&self, address: usize) -> Option<u64> {
@@ -1795,9 +1801,12 @@ mod windows_reader {
     fn verified_fm27(process: &RemoteProcess) -> bool {
         native_plugin_shift(process).is_some()
     }
+    fn dynamic_league_profile(process:&RemoteProcess)->bool {
+        matches!(process.native_plugin_profile_id.as_deref(),Some(FM27_PLUGIN_2026_11_10)|Some(FM27_PLUGIN_2503222))
+    }
     fn league_compatible_fm27(process: &RemoteProcess) -> bool {
         verified_fm27(process)
-            || process.native_plugin_profile_id.as_deref() == Some(FM27_PLUGIN_2026_11_10)
+            || dynamic_league_profile(process)
     }
     // FM27 native home-shirt palette: CLUB + B0 -> info + 78 pointer vector.
     // Verified against 1sbc/1scl in CLUB::get (110A55F/110665C), 114BC00,
@@ -2107,10 +2116,12 @@ mod windows_reader {
             &process,
             game_plugin_base,
             game_plugin_module.memory_size as usize,
+            (game_plugin_module.memory_size as usize).min(FM27_PLUGIN_RESOLVER_PREFIX),
         );
         let game_assembly = ModuleImage::load(
             &process,
             game_assembly_base,
+            game_assembly_module.memory_size as usize,
             game_assembly_module.memory_size as usize,
         );
         let resolver = MetaResolver {

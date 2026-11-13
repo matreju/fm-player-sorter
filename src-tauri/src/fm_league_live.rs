@@ -32,7 +32,7 @@ fn league_live_date(process:&RemoteProcess,cache:&RefreshSession)->Result<u32,St
     if let Some(shift)=native_plugin_shift(process) {
         return process.read_u32(cache.plugin_base+0x56AD378+shift).filter(|date|decode_fm_date(*date).is_some()).map(normalize_fm_date).ok_or_else(||"Nie potwierdzono aktualnej daty FM.".into());
     }
-    if process.native_plugin_profile_id.as_deref()==Some(FM27_PLUGIN_2026_11_10) {
+    if dynamic_league_profile(process) {
         let schedule=process.read_ptr(cache.team+TEAM_SCHEDULE).ok_or("Nie odczytano terminarza prowadzonej drużyny.")?;
         for offset in SCHEDULE_DATE {
             if let Some(raw)=process.read_u32(schedule+offset).filter(|raw|decode_fm_date(*raw).is_some()) {
@@ -338,7 +338,7 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
     // FM27 uses a guarded engine default of 23 when ACTUAL_COMP has no
     // explicit max_squad_size property. Competitions such as Nations League
     // carry their own value (eg. 26) and are deliberately unaffected.
-    if process.native_plugin_profile_id.as_deref()==Some(FM27_PLUGIN_2026_11_10) {
+    if dynamic_league_profile(process) {
         let property_header=league_capture(&process,&mut guards,actual+0x38,16)?;
         let begin=read_u64(&property_header,0).unwrap_or(0) as usize;
         let end=read_u64(&property_header,8).unwrap_or(0) as usize;
