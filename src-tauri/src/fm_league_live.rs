@@ -338,7 +338,7 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
     // FM27 uses a guarded engine default of 23 when ACTUAL_COMP has no
     // explicit max_squad_size property. Competitions such as Nations League
     // carry their own value (eg. 26) and are deliberately unaffected.
-    if dynamic_league_profile(process) {
+    if dynamic_league_profile(&process) {
         let property_header=league_capture(&process,&mut guards,actual+0x38,16)?;
         let begin=read_u64(&property_header,0).unwrap_or(0) as usize;
         let end=read_u64(&property_header,8).unwrap_or(0) as usize;
