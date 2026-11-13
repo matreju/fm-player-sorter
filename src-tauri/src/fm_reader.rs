@@ -383,6 +383,7 @@ mod windows_reader {
     const FM27_PLUGIN_2026_11_10: &str = "f79b0a3413dd0e3f461b0afbc3ff397003f4a26d7525a30717428de6a8b91196";
     const FM27_PLUGIN_2503222: &str = fm_version::FM27_NATIVE_2503222_PROFILE_ID;
     const FM27_2503222_RETIREMENT_MANAGER: usize = 0x5812D50;
+    const FM27_2503222_PLAYERS: usize = 0x5820810;
     // Native code, RTTI and every address used by the reader live before this
     // boundary. The 27.0.1 DLL has a ~296 MiB .00cfg section after it which is
     // not inspected by the resolver and must not be copied into application RAM.
@@ -1935,9 +1936,11 @@ mod windows_reader {
         Some(colors.clone())
     }
     fn native_player_vector(process: &RemoteProcess, base: usize) -> Option<(usize,usize)> {
-        let shift=native_plugin_shift(process)?;
-        let begin=process.read_ptr(base+0x57037D0+shift)?;
-        let end=process.read_ptr(base+0x57037D8+shift)?;
+        let rva=if process.native_plugin_profile_id.as_deref()==Some(FM27_PLUGIN_2503222) {
+            FM27_2503222_PLAYERS
+        } else {0x57037D0+native_plugin_shift(process)?};
+        let begin=process.read_ptr(base+rva)?;
+        let end=process.read_ptr(base+rva+8)?;
         let length=end.checked_sub(begin)?;
         (begin>=0x10_000 && length%8==0 && (500..=2_000_000).contains(&(length/8))).then_some((begin,end))
     }
@@ -2097,9 +2100,7 @@ mod windows_reader {
         process.layout=source.layout;
         process.native_plugin_profile_id=cache.native_plugin_profile_id.clone();
         refresh_identity_check(&process,&cache)?;
-        let current_registry=if verified_fm27(&process) {
-            Some(native_player_vector(&process,cache.plugin_base).ok_or_else(||refresh_error("R10","Rejestr zawodników jest aktualizowany przez grę. Ponów odświeżanie."))?)
-        } else { None };
+        let current_registry=native_player_vector(&process,cache.plugin_base);
         let mut reindex=force_reindex || current_registry!=cache.registry_signature;
         let mut current_pointer_hash=None;
         if let Some((begin,end))=current_registry {
@@ -2107,7 +2108,7 @@ mod windows_reader {
             current_pointer_hash=Some(registry_pointer_hash(&pointers));
             reindex |= current_pointer_hash!=cache.registry_pointer_hash;
         }
-        if reindex && verified_fm27(&process) { source.candidates=rebind_native_player_index(&process,&cache)?; }
+        if reindex && current_registry.is_some() { source.candidates=rebind_native_player_index(&process,&cache)?; }
         let candidates=source.candidates.iter().cloned().map(|p|(p.uid,p)).collect::<HashMap<_,_>>();
         let (groups,own_clubs)=if let Some(club)=cache.club {
             collect_managed_club_players(&process,club,cache.team,&candidates,Some(&source.own_uids))?
