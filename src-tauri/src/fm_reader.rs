@@ -4577,6 +4577,24 @@ mod windows_reader {
                     let (nation,name)=resolve_managed_nation(process,team,None,nation_counts)
                         .or_else(||resolve_nation_from_team_labels(process,team,nation_counts))?;
                     Some(ManagedTeamResolution{team_address:team,team_name:name.clone(),nation_address:nation,nation_name:name,score:7_000_000})
+                }).or_else(|| {
+                    // In current FM27 national careers humanTeam can identify
+                    // one exact TEAM database record while the federation
+                    // label differs from the country's translated name and
+                    // the squad vector uses an unloaded wrapper. Accept that
+                    // record only when the database index match is unique and
+                    // the TEAM itself contains one unambiguous pointer to a
+                    // known NATION record. This is identity evidence, not a
+                    // nationality-count guess.
+                    if binding.nation_manager_evidence==0
+                        || binding.database_type!=Some(DATABASE_TABLE_TEAM)
+                        || database_index_matches.len()!=1
+                        || !database_index_matches.contains(&team)
+                        || !trusted_team_addresses.contains(&team)
+                        || !looks_like_team_record(process,team) {return None;}
+                    let (nation,name)=direct_team_nation(process,team,nation_counts)?;
+                    Some(ManagedTeamResolution {team_address:team,team_name:name.clone(),
+                        nation_address:nation,nation_name:name,score:6_500_000})
                 })
             })
             .collect::<Vec<_>>();
@@ -4596,6 +4614,23 @@ mod windows_reader {
                 && candidate.score.saturating_add(50_000) >= best.score
         });
         (!has_conflict).then(|| matches.remove(0))
+    }
+
+    fn direct_team_nation(
+        process:&RemoteProcess,
+        team:usize,
+        nation_counts:&HashMap<usize,usize>,
+    )->Option<(usize,String)> {
+        let bytes=process.read(team,0xB8)?;
+        let mut nations=(0..bytes.len().saturating_sub(7)).step_by(8)
+            .filter_map(|offset|read_u64(&bytes,offset).map(|value|value as usize))
+            .filter(|address|nation_counts.contains_key(address))
+            .collect::<HashSet<_>>();
+        if let Some(owner)=process.read_ptr(team+TEAM_CLUB)
+            .filter(|address|nation_counts.contains_key(address)) {nations.insert(owner);}
+        if nations.len()!=1 {return None;}
+        let nation=nations.into_iter().next()?;
+        nation_name(process,nation).map(|name|(nation,name))
     }
 
     fn native_record_index_matches(
