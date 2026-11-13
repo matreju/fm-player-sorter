@@ -5994,6 +5994,10 @@ pub(crate) fn undo_player_edit(token:String)->Result<crate::fm_editor::PlayerEdi
 #[cfg(not(target_os="windows"))]
 pub(crate) fn undo_player_edit(_token:String)->Result<crate::fm_editor::PlayerEditResult,String> {Err("Edytor jest dostępny w aplikacji Windows.".into())}
 #[cfg(target_os="windows")]
+pub(crate) fn cancel_player_retirement(session_id:u64,uid:u32)->Result<crate::fm_editor::PlayerEditResult,String> {windows_reader::cancel_player_retirement(session_id,uid)}
+#[cfg(not(target_os="windows"))]
+pub(crate) fn cancel_player_retirement(_session_id:u64,_uid:u32)->Result<crate::fm_editor::PlayerEditResult,String> {Err("Anulowanie emerytury jest dostępne w aplikacji Windows.".into())}
+#[cfg(target_os="windows")]
 pub(crate) fn set_first_team_morale(session_id:u64,value:u8)->Result<crate::fm_editor::TeamMoraleResult,String> {windows_reader::set_first_team_morale(session_id,value)}
 #[cfg(not(target_os="windows"))]
 pub(crate) fn set_first_team_morale(_session_id:u64,_value:u8)->Result<crate::fm_editor::TeamMoraleResult,String> {Err("Edycja morale drużyny jest dostępna w aplikacji Windows.".into())}
