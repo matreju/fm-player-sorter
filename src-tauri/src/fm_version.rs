@@ -123,8 +123,29 @@ pub(crate) const FM27_2026_11_10: FmLayout = FmLayout {
     static_methods: [("GameRecordSerialisation.get_Instance", 0x339B70), ("GamePlugin.get_ChannelDataPool", 0x334630)],
 };
 
+// 2026-11-13 hotfix changed GameAssembly.dll while retaining the same format-39
+// metadata generation. Keep a distinct identity so later checks do not reject
+// the live module after the profile has been selected.
+pub(crate) const FM27_2026_11_13: FmLayout = FmLayout {
+    id: "fm27-6000.3.18.9883062-2026-11-13",
+    name: "FM27 2026-11-13 national-team reader (experimental)",
+    unity_version: "6000.3.18f1-custom (96cdb67fb884)",
+    edition: 27,
+    experimental: true,
+    exe_hash: "2a7318c6984bcb3a19ff3304432b63462581cee33ba203f9a0a118f11c69e27e",
+    assembly_hash: "1152df80de0ae35bff4945cb9196c58e5ec5b53de2138a006c0597522b558303",
+    metadata_hash: "774da150861300aa49ffc462f40b7798a82da1aa664b647babf32faab649d0ed",
+    human_manager_person: 0x440,
+    binding_root: 0x50,
+    binding_nodes: 0x58,
+    binding_data: 0xA0,
+    human_contexts: [(0x308, 0x378), (0xB0, 0x94), (0x398, 0x3C0)],
+    probe_rva: 0x336490,
+    static_methods: [("GameRecordSerialisation.get_Instance", 0x339B70), ("GamePlugin.get_ChannelDataPool", 0x334630)],
+};
+
 pub(crate) fn profile_for_hashes(assembly: &str, metadata: &str) -> Option<FmLayout> {
-    [FM26, FM27, FM27_2026_11_10].into_iter().find(|profile| {
+    [FM26, FM27, FM27_2026_11_10, FM27_2026_11_13].into_iter().find(|profile| {
         profile.assembly_hash.eq_ignore_ascii_case(assembly)
             && profile.metadata_hash.eq_ignore_ascii_case(metadata)
     })
@@ -132,7 +153,7 @@ pub(crate) fn profile_for_hashes(assembly: &str, metadata: &str) -> Option<FmLay
 
 pub(crate) fn profile_for_files(path:&Path,assembly:&str,metadata:&str)->Result<Option<FmLayout>,String> {
     if let Some(profile)=profile_for_hashes(assembly,metadata){return Ok(Some(profile));}
-    for profile in [FM27, FM27_2026_11_10] {
+    for profile in [FM27, FM27_2026_11_10, FM27_2026_11_13] {
         if metadata.eq_ignore_ascii_case(profile.metadata_hash)&&assembly_matches(path,assembly,profile)? {return Ok(Some(profile));}
     }
     Ok(None)
@@ -171,6 +192,7 @@ mod tests {
     fn profiles_require_a_matching_pair_of_files() {
         assert_eq!(profile_for_hashes(FM27.assembly_hash, FM27.metadata_hash).unwrap().edition, 27);
         assert_eq!(profile_for_hashes(FM27_2026_11_10.assembly_hash, FM27_2026_11_10.metadata_hash).unwrap().id, FM27_2026_11_10.id);
+        assert_eq!(profile_for_hashes(FM27_2026_11_13.assembly_hash, FM27_2026_11_13.metadata_hash).unwrap().id, FM27_2026_11_13.id);
         assert_eq!(profile_for_hashes(FM26.assembly_hash, FM26.metadata_hash).unwrap().edition, 26);
         assert!(profile_for_hashes(FM27.assembly_hash, FM26.metadata_hash).is_none());
         assert!(profile_for_hashes("unknown", FM27.metadata_hash).is_none());
