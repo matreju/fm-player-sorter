@@ -4487,7 +4487,8 @@ mod windows_reader {
                 if uid_match || index_match {
                     team_addresses.insert(address);
                     uid_matches = uid_matches.saturating_add(if uid_match { 1 } else { 0 });
-                    if (index_match && looks_like_team_record(process, address))
+                    if (index_match && (exact_team_type || looks_like_team_record(process, address)
+                        || looks_like_empty_team_record(process,address)))
                         || (uid_match && exact_team_type) {
                         trusted_team_addresses.insert(address);
                         if index_match {database_index_matches.insert(address);}
@@ -4590,8 +4591,7 @@ mod windows_reader {
                         || binding.database_type!=Some(DATABASE_TABLE_TEAM)
                         || database_index_matches.len()!=1
                         || !database_index_matches.contains(&team)
-                        || !trusted_team_addresses.contains(&team)
-                        || !looks_like_team_record(process,team) {return None;}
+                        || !trusted_team_addresses.contains(&team) {return None;}
                     let (nation,name)=direct_team_nation(process,team,nation_counts)?;
                     Some(ManagedTeamResolution {team_address:team,team_name:name.clone(),
                         nation_address:nation,nation_name:name,score:6_500_000})
@@ -4653,6 +4653,13 @@ mod windows_reader {
             && end > begin
             && (end - begin) % 8 == 0
             && (end - begin) / 8 <= 200
+    }
+
+    fn looks_like_empty_team_record(process:&RemoteProcess,team:usize)->bool {
+        let team_type=process.read_u8(team+TEAM_TYPE).unwrap_or(u8::MAX);
+        let begin=process.read_ptr(team+TEAM_PLAYERS_BEGIN).unwrap_or(usize::MAX);
+        let end=process.read_ptr(team+TEAM_PLAYERS_END).unwrap_or(0);
+        team_type<=32 && begin==end && (begin==0 || begin>=0x10_000)
     }
 
     fn build_bound_national_team_candidate(
