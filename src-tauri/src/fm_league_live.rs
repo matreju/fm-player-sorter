@@ -356,14 +356,41 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
             // trailing bytes immutable and edit only the serialized scalar.
             let value=process.read_u32(property+8).filter(|value|*value<=99).ok_or("Nie odczytano własnego limitu powołań tych rozgrywek.")?;
             let patch=LeagueQuotaPatch{address:property+8,before:value.to_le_bytes().to_vec(),after:value.to_le_bytes().to_vec()};
-            let mut protected=guards.clone();
-            protected.push(LeagueGuard{address:property,bytes:process.read_exact(property,8).ok_or("Nie potwierdzono typu własnego limitu powołań.")?});
-            protected.push(LeagueGuard{address:property+12,bytes:process.read_exact(property+12,4).ok_or("Nie potwierdzono rekordu własnego limitu powołań.")?});
-            let owner_uid=cache.database.managed_club_uid.or(cache.database.managed_team_uid).ok_or("Nie potwierdzono prowadzonej drużyny.")?;
-            let draft=LeagueQuotaDraft{session_id,pid:cache.database.pid,created:process.creation_time().ok_or("Nie potwierdzono procesu FM.")?,team:cache.team,owner_uid,base,game_date:date,shared_default:false,persistent:true,code_patch:false,competition_uid,phase_id:phase_id.clone(),guards:protected,patches:vec![patch],opened:Instant::now()};
-            league_verify_quota(&process,&cache,&draft,date)?;
-            let token=editor_token();drafts.push((token.clone(),draft));
-            rules.push(LeagueRuleView{id:"competition-max-squad".into(),label:"Limit powołań tych rozgrywek".into(),copies:1,value,mode:"Maksimum".into(),token:Some(token),persistent:true,note:Some(format!("Własny limit rozgrywek: {value}. Zmiana dotyczy tylko {} w bieżącym cyklu i nie zmienia limitów pozostałych turniejów.",name))});
+            let property_guards=[
+                LeagueGuard{address:property,bytes:process.read_exact(property,8).ok_or("Nie potwierdzono typu własnego limitu powołań.")?},
+                LeagueGuard{address:property+12,bytes:process.read_exact(property+12,4).ok_or("Nie potwierdzono rekordu własnego limitu powołań.")?},
+            ];
+            let mut merged=false;
+            if let Some(view)=rules.iter_mut().find(|rule|rule.label=="Wielkość kadry — maksimum") {
+                if let Some(token)=view.token.as_ref() {
+                    if let Some((_,draft))=drafts.iter_mut().find(|(candidate,_)|candidate==token) {
+                        // The phase rule drives the rules screen, while this
+                        // ACTUAL_COMP scalar drives the live 26/26 registration
+                        // gate. Write and undo both as one guarded operation.
+                        draft.guards.extend(property_guards.iter().cloned());
+                        draft.guards.retain(|guard|guard.address!=patch.address);
+                        draft.patches.insert(0,patch.clone());
+                        league_verify_quota(&process,&cache,draft,date)?;
+                        let phase_value=view.value;
+                        view.value=value;view.copies+=1;
+                        view.label="Maksymalna wielkość składu i rejestracji".into();
+                        view.note=Some(if phase_value==value {
+                            format!("Zapis zmienia razem regułę fazy i aktywny limit rejestracji {value}/{value} dla {name}.")
+                        }else{
+                            format!("Limity są rozbieżne: reguła fazy ma {phase_value}, a rejestracja {value}. Wpisz docelową wartość, aby wyrównać oba.")
+                        });
+                        merged=true;
+                    }
+                }
+            }
+            if !merged {
+                let mut protected=guards.clone();protected.extend(property_guards);
+                let owner_uid=cache.database.managed_club_uid.or(cache.database.managed_team_uid).ok_or("Nie potwierdzono prowadzonej drużyny.")?;
+                let draft=LeagueQuotaDraft{session_id,pid:cache.database.pid,created:process.creation_time().ok_or("Nie potwierdzono procesu FM.")?,team:cache.team,owner_uid,base,game_date:date,shared_default:false,persistent:true,code_patch:false,competition_uid,phase_id:phase_id.clone(),guards:protected,patches:vec![patch],opened:Instant::now()};
+                league_verify_quota(&process,&cache,&draft,date)?;
+                let token=editor_token();drafts.push((token.clone(),draft));
+                rules.push(LeagueRuleView{id:"competition-max-squad".into(),label:"Limit powołań tych rozgrywek".into(),copies:1,value,mode:"Maksimum".into(),token:Some(token),persistent:true,note:Some(format!("Własny limit rozgrywek: {value}. Zmiana dotyczy tylko {} w bieżącym cyklu i nie zmienia limitów pozostałych turniejów.",name))});
+            }
         }else{
             shared_default=true;
             let addresses=[base+0x129E293,base+0x129E29B];
