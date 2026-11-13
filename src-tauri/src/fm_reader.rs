@@ -382,6 +382,7 @@ mod windows_reader {
     const FM27_PLUGIN_2493426: &str = fm_version::FM27_NATIVE_2493426_PROFILE_ID;
     const FM27_PLUGIN_2026_11_10: &str = "f79b0a3413dd0e3f461b0afbc3ff397003f4a26d7525a30717428de6a8b91196";
     const FM27_PLUGIN_2503222: &str = fm_version::FM27_NATIVE_2503222_PROFILE_ID;
+    const FM27_2503222_RETIREMENT_MANAGER: usize = 0x5812D50;
     // Native code, RTTI and every address used by the reader live before this
     // boundary. The 27.0.1 DLL has a ~296 MiB .00cfg section after it which is
     // not inspected by the resolver and must not be copied into application RAM.
@@ -603,6 +604,70 @@ mod windows_reader {
     fn editor_state()->&'static Mutex<EditorState> {EDITOR_STATE.get_or_init(||Mutex::new(EditorState::default()))}
     fn editor_token()->String {format!("edit-{}",EDITOR_SEQUENCE.fetch_add(1,Ordering::Relaxed))}
 
+    fn retirement_supported(process:&RemoteProcess)->bool {
+        process.native_plugin_profile_id.as_deref()==Some(FM27_PLUGIN_2503222)
+    }
+    fn retirement_header(process:&RemoteProcess,address:usize,element:usize,limit:usize)->Result<(usize,usize,usize),String> {
+        let begin=process.read_ptr(address).ok_or("Nie można odczytać listy emerytur.")?;
+        let end=process.read_ptr(address+8).ok_or("Nie można odczytać listy emerytur.")?;
+        let capacity=process.read_ptr(address+16).ok_or("Nie można odczytać listy emerytur.")?;
+        if begin==0&&end==0&&capacity==0 {return Ok((0,0,0));}
+        if begin<0x10_000||begin>end||end>capacity||(end-begin)%element!=0||(end-begin)/element>limit {
+            return Err("FM udostępnił niespójną listę emerytur. Niczego nie zmieniono.".into());
+        }
+        Ok((begin,end,capacity))
+    }
+    fn retirement_patch(patches:&mut Vec<EditorPatch>,address:usize,before:Vec<u8>,after:Vec<u8>,label:&str,before_label:&str,after_label:&str) {
+        if before!=after {patches.push(EditorPatch {address,before,after,change:AppliedChange {label:label.into(),before:before_label.into(),after:after_label.into()}});}
+    }
+    fn retirement_state(process:&RemoteProcess,cache:&RefreshSession,candidate:&PlayerCandidate,with_patches:bool)->Result<(Option<String>,Vec<EditorPatch>),String> {
+        if !retirement_supported(process) {return Ok((None,Vec::new()));}
+        let manager=process.read_ptr(cache.plugin_base+FM27_2503222_RETIREMENT_MANAGER)
+            .filter(|address|*address>=0x10_000).ok_or("Nie znaleziono menedżera emerytur FM.")?;
+        let vtable=process.read_ptr(manager).ok_or("Nie potwierdzono menedżera emerytur FM.")?;
+        if league_native_type(process,cache.plugin_base,vtable).as_deref()!=Some(".?AVRETIREMENT_MANAGER@@") {
+            return Err("Nie potwierdzono typu menedżera emerytur FM. Zapis zablokowany.".into());
+        }
+        let (list_begin,list_end,_)=retirement_header(process,manager+0x30,8,1<<17)?;
+        let (index_begin,index_end,_)=retirement_header(process,manager+0x90,16,1<<17)?;
+        let list_count=if list_begin==0 {0}else{(list_end-list_begin)/8};
+        let index_count=if index_begin==0 {0}else{(index_end-index_begin)/16};
+        if list_count!=index_count {return Err("Listy planowanych emerytur w FM nie są zsynchronizowane. Niczego nie zmieniono.".into());}
+        let list_bytes=if list_count==0 {Vec::new()} else {process.read_exact(list_begin,list_count*8).ok_or("Nie można odczytać planowanych emerytur.")?};
+        let entries=list_bytes.chunks_exact(8).filter_map(|bytes|read_u64(bytes,0).map(|value|value as usize)).collect::<Vec<_>>();
+        if entries.len()!=list_count||entries.iter().any(|entry|*entry<0x10_000) {return Err("Nieprawidłowe wpisy planowanych emerytur w FM.".into());}
+        let index_bytes=if index_count==0 {Vec::new()} else {process.read_exact(index_begin,index_count*16).ok_or("Nie można odczytać indeksu emerytur.")?};
+        let person_id=process.read_u32(candidate.player_address+0x290).filter(|id|*id!=0&&*id!=u32::MAX).ok_or("Nie potwierdzono identyfikatora osoby zawodnika.")?;
+        let mut previous=0u32;let mut found=None;
+        for (at,item) in index_bytes.chunks_exact(16).enumerate() {
+            let id=read_u32(item,0).ok_or("Nieprawidłowy indeks emerytur.")?;
+            let entry=read_u64(item,8).ok_or("Nieprawidłowy indeks emerytur.")? as usize;
+            if (at>0&&id<=previous)||!entries.contains(&entry)||process.read_u32(entry)!=Some(id) {return Err("Indeks emerytur FM nie przeszedł kontroli spójności.".into());}
+            previous=id;if id==person_id {found=Some((at,entry));}
+        }
+        let Some((index_at,entry))=found else {return Ok((None,Vec::new()));};
+        let raw_date=process.read_u32(entry+0x0C).ok_or("Nie można odczytać daty emerytury.")?;
+        let date=format_fm_date(raw_date).ok_or("FM zwrócił nieprawidłową datę emerytury.")?;
+        if !with_patches {return Ok((Some(date),Vec::new()));}
+        let list_at=entries.iter().position(|candidate|*candidate==entry).ok_or("Nie znaleziono wpisu emerytury na liście.")?;
+        let mut patches=Vec::new();
+        let index_last=index_count-1;
+        if index_at<index_last {retirement_patch(&mut patches,index_begin+index_at*16,index_bytes[index_at*16..index_last*16].to_vec(),index_bytes[(index_at+1)*16..].to_vec(),"Indeks emerytur","zaplanowana","usunięta");}
+        retirement_patch(&mut patches,manager+0x98,(index_end as u64).to_le_bytes().to_vec(),((index_end-16) as u64).to_le_bytes().to_vec(),"Indeks emerytur","aktywny","zaktualizowany");
+        retirement_patch(&mut patches,index_begin+index_last*16,index_bytes[index_last*16..].to_vec(),vec![0;16],"Indeks emerytur","zajęty wpis","wyczyszczony wpis");
+        let list_last=list_count-1;
+        if list_at<list_last {retirement_patch(&mut patches,list_begin+list_at*8,list_bytes[list_at*8..list_last*8].to_vec(),list_bytes[(list_at+1)*8..].to_vec(),"Plan emerytury","zaplanowany","usunięty");}
+        retirement_patch(&mut patches,manager+0x38,(list_end as u64).to_le_bytes().to_vec(),((list_end-8) as u64).to_le_bytes().to_vec(),"Plan emerytury","aktywny","zaktualizowany");
+        retirement_patch(&mut patches,list_begin+list_last*8,list_bytes[list_last*8..].to_vec(),vec![0;8],"Plan emerytury","zajęty wpis","wyczyszczony wpis");
+        let person_shift=candidate.person_address.checked_sub(candidate.player_address+PLAYER_OFFSET as usize)
+            .filter(|shift|*shift==0||*shift==0xF8).ok_or("Niepotwierdzony wariant rekordu zawodnika.")?;
+        let trait_address=candidate.player_address+0x348+person_shift+6;
+        let old=process.read_u8(trait_address).ok_or("Nie można odczytać planów kariery zawodnika.")?;
+        let new=(old&!1)|2;
+        retirement_patch(&mut patches,trait_address,vec![old],vec![new],"Plan dalszej gry","odejście na szczycie","gra jak najdłużej");
+        Ok((Some(date),patches))
+    }
+
     fn editable_contract_term(entry_type:u8)->Option<&'static str> {
         Some(match entry_type {
             0=>"Pozostały bonus lojalnościowy / za podpis",
@@ -659,7 +724,7 @@ mod windows_reader {
         if detect_football_manager().pid!=Some(source.pid) {return Err("Zmienił się proces gry. Połącz aplikację ponownie.".into());}
         let mut process=if write {RemoteProcess::open_editor(source.pid)?} else {RemoteProcess::open(source.pid)?};
         process.layout=source.layout;process.native_plugin_profile_id=cache.native_plugin_profile_id.clone();
-        if !verified_fm27(&process) {return Err(native_compatibility_error(&process));}
+        if !player_editor_compatible(&process) {return Err(native_compatibility_error(&process));}
         refresh_identity_check(&process,&cache)?;
         let cached=source.candidates.iter().find(|candidate|candidate.uid==uid).ok_or("Nie znaleziono zawodnika w bieżącej bazie.")?;
         let candidate=live_candidate(&process,cached).ok_or("Rekord zawodnika zmienił się. Odśwież dane i otwórz edytor ponownie.")?;
@@ -759,8 +824,8 @@ mod windows_reader {
                 address,bytes:vec![raw],encoding:EditEncoding::ScaledAttribute});
         }
         // Only confirmed full contracts: no guessed layout for trials or loans.
-        let native_shift=native_plugin_shift(&process).ok_or("Nie rozpoznano natywnego profilu FM27.")?;
-        if let Some((contract,vtable,_))=identity.contract.filter(|(_,vtable,_)|*vtable==cache.plugin_base+0x4B00AE8+native_shift) {
+        let native_shift=native_plugin_shift(&process);
+        if let Some((contract,vtable,_))=identity.contract.filter(|(_,vtable,_)|native_shift.is_some_and(|shift|*vtable==cache.plugin_base+0x4B00AE8+shift)) {
             if league_native_type(&process,cache.plugin_base,vtable).as_deref()==Some(".?AVFULL_CONTRACT@db@@") {
                 let contract_rate=read_fm27_euro_rate(&process,cache.plugin_base).filter(|rate|rate.is_finite()&&*rate>0.0);
                 if let Some(rate)=contract_rate {
@@ -821,7 +886,9 @@ mod windows_reader {
         state.drafts.retain(|_,draft|draft.opened.elapsed().as_secs()<300);
         if state.drafts.len()>=8 {state.drafts.clear();}
         state.drafts.insert(token.clone(),EditorDraft {identity,fields,opened:Instant::now()});
-        Ok(PlayerEditSnapshot {token,session_id,uid,name:row.get("Nazwisko").cloned().unwrap_or_else(||uid.to_string()),fields:ui_fields})
+        let retirement_supported=retirement_supported(&process);
+        let retirement_date=if retirement_supported {retirement_state(&process,&cache,&candidate,false)?.0}else{None};
+        Ok(PlayerEditSnapshot {token,session_id,uid,name:row.get("Nazwisko").cloned().unwrap_or_else(||uid.to_string()),fields:ui_fields,retirement_supported,retirement_date})
     }
     fn encode_editor_date(value:&str,previous:u32)->Result<Vec<u8>,String> {
         if value.len()!=10 || !value.is_ascii() || &value[4..5]!="-" || &value[7..8]!="-" {return Err("Podaj datę w formacie RRRR-MM-DD.".into());}
@@ -971,6 +1038,30 @@ mod windows_reader {
         if state.undos.len()>=8 {state.undos.clear();}
         state.undos.insert(token.clone(),EditorUndo {identity:draft.identity,patches:patches.clone()});drop(state);
         finish_player_edit(&process,&cache,&source,&candidate,patches,Some(token))
+    }
+
+    pub(super) fn cancel_player_retirement(session_id:u64,uid:u32)->Result<PlayerEditResult,String> {
+        let _guard=SCOUTING_QUERY_LOCK.lock().map_err(|_|"Czytnik FM jest zajęty.")?;
+        let (process,cache,source,candidate)=editor_context(session_id,uid,true)?;
+        if !retirement_supported(&process) {return Err("Anulowanie emerytury nie jest jeszcze potwierdzone dla tej wersji FM.".into());}
+        let identity=editor_identity(&process,&source,&candidate)?;
+        let (date,patches)=retirement_state(&process,&cache,&candidate,true)?;
+        let date=date.ok_or("FM nie ma już zaplanowanej emerytury tego zawodnika.")?;
+        if patches.is_empty() {return Err("Nie znaleziono zmian potrzebnych do anulowania emerytury.".into());}
+        refresh_identity_check(&process,&cache)?;
+        apply_editor_patches(&process,&identity,&patches)?;
+        if !matches!(retirement_state(&process,&cache,&candidate,false),Ok((None,_))) {
+            let rollback=patches.iter().map(|patch|EditorPatch {address:patch.address,before:patch.after.clone(),after:patch.before.clone(),change:patch.change.clone()}).collect::<Vec<_>>();
+            let restored=apply_editor_patches(&process,&identity,&rollback).is_ok();
+            return Err(if restored {"FM nie zaakceptował anulowania emerytury. Przywrócono wcześniejszy stan.".into()} else {"FM nie zaakceptował anulowania emerytury i nie potwierdzono przywrócenia. Nie zapisuj kariery; wczytaj wcześniejszy zapis gry.".into()});
+        }
+        let token=editor_token();
+        let mut state=editor_state().lock().map_err(|_|"Emeryturę anulowano, ale nie można przygotować cofnięcia.")?;
+        if state.undos.len()>=8 {state.undos.clear();}
+        state.undos.insert(token.clone(),EditorUndo {identity,patches:patches.clone()});drop(state);
+        let mut result=finish_player_edit(&process,&cache,&source,&candidate,patches,Some(token))?;
+        result.message=Some(format!("Usunięto plan emerytury z {date}. Zapisz teraz karierę w FM."));
+        Ok(result)
     }
 
     pub(super) fn set_first_team_morale(session_id:u64,value:u8)->Result<TeamMoraleResult,String> {
@@ -1800,6 +1891,9 @@ mod windows_reader {
     }
     fn verified_fm27(process: &RemoteProcess) -> bool {
         native_plugin_shift(process).is_some()
+    }
+    fn player_editor_compatible(process:&RemoteProcess)->bool {
+        verified_fm27(process)||retirement_supported(process)
     }
     fn dynamic_league_profile(process:&RemoteProcess)->bool {
         matches!(process.native_plugin_profile_id.as_deref(),Some(FM27_PLUGIN_2026_11_10)|Some(FM27_PLUGIN_2503222))

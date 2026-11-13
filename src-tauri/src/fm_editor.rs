@@ -12,6 +12,8 @@ pub struct EditorField {
 pub struct PlayerEditSnapshot {
     pub token:String, pub session_id:u64, pub uid:u32, pub name:String,
     pub fields:Vec<EditorField>,
+    pub retirement_supported:bool,
+    pub retirement_date:Option<String>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all="camelCase", deny_unknown_fields)]
@@ -43,6 +45,11 @@ pub async fn apply_fm_player_edit(request:PlayerEditRequest)->Result<PlayerEditR
 #[tauri::command]
 pub async fn undo_fm_player_edit(token:String)->Result<PlayerEditResult,String> {
     tauri::async_runtime::spawn_blocking(move||crate::fm_reader::undo_player_edit(token)).await.map_err(|e|e.to_string())?
+}
+
+#[tauri::command]
+pub async fn cancel_fm_player_retirement(session_id:u64,uid:u32)->Result<PlayerEditResult,String> {
+    tauri::async_runtime::spawn_blocking(move||crate::fm_reader::cancel_player_retirement(session_id,uid)).await.map_err(|e|e.to_string())?
 }
 
 #[tauri::command]

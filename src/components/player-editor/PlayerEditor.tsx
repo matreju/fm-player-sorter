@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AppButton, AppTextField } from "../ui";
-import { applyPlayerEdit, getPlayerEditor, setFirstTeamMorale, undoPlayerEdit, type PlayerEditResult, type PlayerEditSnapshot } from "../../services/fmEditor";
+import { applyPlayerEdit, cancelPlayerRetirement, getPlayerEditor, setFirstTeamMorale, undoPlayerEdit, type PlayerEditResult, type PlayerEditSnapshot } from "../../services/fmEditor";
 import { PriceCapture } from "./PriceCapture";
 import "./PlayerEditor.css";
 
@@ -50,6 +50,13 @@ export function PlayerEditor({sessionId,uid,onClose,onApplied,priceCapture=false
     catch(reason){setError(String(reason));}
     finally{setBusy(false);}
   }
+  async function preventRetirement(){
+    if(!snapshot?.retirementDate||busy||priceActive||!window.confirm(`Anulować emeryturę zaplanowaną na ${snapshot.retirementDate}? Wstrzymaj wcześniej grę.`))return;
+    setBusy(true);setError("");setReceipt(null);
+    try {const result=await cancelPlayerRetirement(sessionId,uid);setReceipt(result);onApplied(result);reload();}
+    catch(reason){setError(String(reason));}
+    finally{setBusy(false);}
+  }
   return <div className="player-editor__overlay" onKeyDown={event=>{
     if(event.key==="Escape"){event.stopPropagation();if(!busy)onClose();}
     if(event.key==="Tab"&&dialogRef.current){const items=Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),[tabindex="0"]'));const first=items[0],last=items.at(-1);if(event.shiftKey&&(document.activeElement===first||document.activeElement===dialogRef.current)){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}}
@@ -63,6 +70,7 @@ export function PlayerEditor({sessionId,uid,onClose,onApplied,priceCapture=false
     {snapshot&&<form onSubmit={save}><fieldset disabled={priceActive}>
       <div className="player-editor__identity">{snapshot.fields.filter(field=>!["attribute:","contract:","foot:","position:"].some(prefix=>field.key.startsWith(prefix))).map(field=><AppTextField key={field.key} label={field.label} type={field.kind} min={field.min??undefined} max={field.max??undefined} value={values[field.key]??""} disabled={busy} onChange={value=>setValues(current=>({...current,[field.key]:value}))}/>)}</div>
       <section className="player-editor__team-actions"><h3>Drużyna</h3><p>Zmienia morale wyłącznie zawodników aktualnej pierwszej drużyny prowadzonego klubu. Nie obejmuje rezerw ani juniorów.</p><AppButton type="button" disabled={busy||priceActive} onClick={()=>void maxTeamMorale()}>Ustaw morale pierwszej drużyny na 20</AppButton></section>
+      {snapshot.retirementSupported&&<section className="player-editor__team-actions"><h3>Kariera zawodnika</h3>{snapshot.retirementDate?<><p>FM zaplanował emeryturę na {snapshot.retirementDate}. Anulowanie usuwa plan z gry i ustawia cechę „będzie grał tak długo, jak to możliwe”.</p><AppButton type="button" disabled={busy||priceActive} onClick={()=>void preventRetirement()}>Anuluj emeryturę</AppButton></>:<p>FM nie ma obecnie zaplanowanej emerytury tego zawodnika.</p>}</section>}
       {snapshot.fields.some(field=>field.key.startsWith("contract:"))&&<section className="player-editor__contract"><h3>Kontrakt</h3><p>Płaca roczna oraz kwoty premii i klauzul są pokazane w euro według aktualnego kursu z gry. FM przechowuje je w pełnych GBP, dlatego zapisana kwota może być lekko zaokrąglona. Usuwaj po jednym warunku na zapis.</p><div className="player-editor__identity">{snapshot.fields.filter(field=>field.key.startsWith("contract:")).map(field=>{const term=field.key.startsWith("contract:term:"),removed=values[field.key]==="__delete__";return <label key={field.key} data-removed={removed||undefined}><span>{field.label}</span><input type={field.kind} min={field.min??undefined} max={field.max??undefined} step={field.kind==="number"?"0.01":undefined} required disabled={busy||removed} value={removed?"":values[field.key]??""} onChange={event=>setValues(current=>({...current,[field.key]:event.target.value}))}/>{term&&<AppButton type="button" disabled={busy} onClick={()=>setValues(current=>({...current,[field.key]:removed?field.value:"__delete__"}))}>{removed?"Przywróć":"Usuń"}</AppButton>}</label>})}</div></section>}
       <section className="player-editor__positions"><h3>Nogi i pozycje</h3><p>Sprawność nóg: 1–20. Każdą pozycję ustawiasz osobno: 0 — nie gra na niej, 20 — pozycja naturalna. Co najmniej jedna pozycja musi mieć 20.</p>
         <div className="player-editor__attributes">{snapshot.fields.filter(field=>field.key.startsWith("foot:")||field.key.startsWith("position:")).map(field=><label key={field.key} data-changed={values[field.key]!==field.value||undefined}><span>{field.label}</span><small>{field.value}</small><input type="number" min={field.min??0} max={20} step="1" required disabled={busy} value={values[field.key]??""} onChange={event=>setValues(current=>({...current,[field.key]:event.target.value}))}/></label>)}</div>
