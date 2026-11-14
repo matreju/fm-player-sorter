@@ -58,6 +58,23 @@ fn league_type(process:&RemoteProcess,guards:&mut Vec<LeagueGuard>,base:usize,ad
 fn league_vector(process:&RemoteProcess,guards:&mut Vec<LeagueGuard>,address:usize,limit:usize)->Result<Vec<usize>,String> {
     league_vector_entries(process,guards,address,limit,false)
 }
+// Stage vectors can temporarily keep empty or stale slots while FM rebuilds a
+// competition cycle. They are safe to ignore, but must retain their original
+// index because that index is part of the phase route used by the editor.
+fn league_vector_slots(process:&RemoteProcess,guards:&mut Vec<LeagueGuard>,address:usize,limit:usize)->Result<Vec<Option<usize>>,String> {
+    let bytes=league_capture(process,guards,address,24)?;
+    let begin=read_u64(&bytes,0).unwrap_or(0) as usize;
+    let end=read_u64(&bytes,8).unwrap_or(0) as usize;
+    let capacity=read_u64(&bytes,16).unwrap_or(0) as usize;
+    if begin==0&&end==0&&capacity==0 {return Ok(Vec::new());}
+    if begin<0x10_000||begin%8!=0||end<begin||(end-begin)%8!=0||end-begin>limit*8||capacity<end {return Err("Nie potwierdzono listy faz rozgrywek.".into());}
+    if end==begin {return Ok(Vec::new());}
+    let pointers=league_capture(process,guards,begin,end-begin)?;
+    Ok(pointers.chunks_exact(8).map(|chunk|{
+        let pointer=u64::from_le_bytes(chunk.try_into().unwrap_or([0;8])) as usize;
+        (pointer>=0x10_000&&pointer<0x0000_8000_0000_0000&&pointer%8==0).then_some(pointer)
+    }).collect())
+}
 fn league_vector_entries(process:&RemoteProcess,guards:&mut Vec<LeagueGuard>,address:usize,limit:usize,allow_null:bool)->Result<Vec<usize>,String> {
     let bytes=league_capture(process,guards,address,24)?;
     let begin=read_u64(&bytes,0).unwrap_or(0) as usize;
@@ -141,11 +158,14 @@ fn league_actual(process:&RemoteProcess,base:usize,competition:usize,guards:&mut
     if league_pointer(process,guards,actual+0x120)?!=competition {return Err("Nie potwierdzono bieżącego sezonu rozgrywek.".into());}Ok(actual)
 }
 fn league_phase_routes(process:&RemoteProcess,base:usize,competition:usize,actual:usize,guards:&mut Vec<LeagueGuard>)->Result<Vec<LeaguePhaseRoute>,String> {
-    let stages=league_vector(process,guards,actual+0x1C0,64)?;let mut routes=Vec::new();
+    let stages=league_vector_slots(process,guards,actual+0x1C0,64)?;let mut routes=Vec::new();
     for (i,stage) in stages.into_iter().enumerate() {
+        let Some(stage)=stage else {continue;};
         let kind=league_object_type(process,base,stage).unwrap_or_default();
+        if !matches!(kind.as_str(),".?AVLEAGUE_STAGE@sicomps@@"|".?AVSUB_LEAGUE_STAGE@sicomps@@"|".?AVCUP_STAGE@sicomps@@"|".?AVGROUP_STAGE@sicomps@@"|".?AVCUP_GROUP_STAGE@sicomps@@"){continue;}
         league_capture(process,guards,stage,8)?;
-        if league_pointer(process,guards,stage+0x70)?!=competition {return Err("Nie potwierdzono powiązania fazy z rozgrywkami.".into());}
+        let Ok(stage_competition)=league_pointer(process,guards,stage+0x70) else {continue;};
+        if stage_competition!=competition {continue;}
         match kind.as_str() {
             ".?AVLEAGUE_STAGE@sicomps@@"|".?AVSUB_LEAGUE_STAGE@sicomps@@"=>{
                 let settings=league_pointer(process,guards,stage+0xF0)?;
@@ -157,14 +177,16 @@ fn league_phase_routes(process:&RemoteProcess,base:usize,competition:usize,actua
                 // then 0x1273366 reads the round's fixture-rule index +137.
                 let settings=league_pointer(process,guards,stage+0x90)?;
                 league_type(process,guards,base,settings,".?AVCUP_SETTINGS@sicomps@@")?;
-                for (r,round) in league_vector(process,guards,settings+0x58,64)?.into_iter().enumerate() {
+                for (r,round) in league_vector_slots(process,guards,settings+0x58,64)?.into_iter().enumerate() {
+                    let Some(round)=round else {continue;};
                     routes.push(LeaguePhaseRoute{id:format!("s{i}r{r}"),label:format!("Faza pucharowa {} · runda {}",i+1,r+1),stage,index_address:Some(round+0x137)});
                 }
             },
             ".?AVGROUP_STAGE@sicomps@@"=>{
                 // GROUP_STAGE's native +378 is the +D0 vector size. Each child
                 // is validated separately; never substitute the first group's rules.
-                for (g,group) in league_vector(process,guards,stage+0xD0,64)?.into_iter().enumerate() {
+                for (g,group) in league_vector_slots(process,guards,stage+0xD0,64)?.into_iter().enumerate() {
+                    let Some(group)=group else {continue;};
                     if !matches!(league_object_type(process,base,group).as_deref(),Some(".?AVLEAGUE_STAGE@sicomps@@")|Some(".?AVSUB_LEAGUE_STAGE@sicomps@@")){continue;}
                     league_capture(process,guards,group,8)?;
                     if league_pointer(process,guards,group+0x70)?!=competition {continue;}
