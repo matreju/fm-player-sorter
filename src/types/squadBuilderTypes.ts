@@ -94,11 +94,6 @@ export type SlotCandidate = {
    * OU / Obecne umiejętności z odczytu FM, zakres zwykle 0–200.
    */
   overallAbility?: number | null;
-  campaignCallUps?: number;
-campaignPositionCallUps?: number;
-campaignMatches?: number;
-campaignMinutes?: number;
-campaignAvgRating?: number | null;
   positionPenalty?: number;
   positionScore?: number;
   mobilityScore?: number;
@@ -141,8 +136,7 @@ export type SquadPlan = {
 };
 export type SquadBuilderScoreMode =
   | "role-score"
-  | "overall-ability"
-  | "campaign-callups";
+  | "overall-ability";
   export type PlayerMark = "selected" | "rejected";
 
 export type SquadBuilderProps = {

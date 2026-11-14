@@ -740,27 +740,6 @@ export function SquadBuilderActiveSlotPanel({
                     {formatClubSeasonStats(candidate)}
                   </div>
 
-                  {scoreMode === "campaign-callups" && (
-                    <>
-                      <div style={styles.miniCandidateMeta}>
-                        Powołany na tę pozycję:{" "}
-                        {candidate.campaignPositionCallUps ?? 0} · razem:{" "}
-                        {candidate.campaignCallUps ?? 0}
-                      </div>
-
-                      <div style={styles.miniCandidateMeta}>
-                        Mecze: {candidate.campaignMatches ?? 0} · minuty:{" "}
-                        {candidate.campaignMinutes ?? 0}
-                        {candidate.campaignAvgRating !== null &&
-                        candidate.campaignAvgRating !== undefined
-                          ? ` · ocena: ${candidate.campaignAvgRating.toFixed(
-                              2
-                            )}`
-                          : ""}
-                      </div>
-                    </>
-                  )}
-
                   <div style={styles.miniCandidateMeta}>
                     {candidate.roleResult.role.name} ·{" "}
                     {candidate.candidateKindLabel}

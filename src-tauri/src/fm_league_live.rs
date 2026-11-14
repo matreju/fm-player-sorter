@@ -363,8 +363,7 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
     // definition is what changes the R1..Rn slots shown by the match UI.
     if dynamic_league_profile(&process) {
         let bench_result=(||->Result<(),String>{
-        let substitutions=league_pointer(&process,&mut guards,owner+0x60)?;
-        let definitions=league_vector(&process,&mut guards,substitutions,128)?;
+        let definitions=league_vector(&process,&mut guards,owner+0x60,128)?;
         let mut selected=Vec::<(usize,&str,u8,u8)>::new();
         for &(fixture,variant) in &candidates {
             let rule_index=league_capture(&process,&mut guards,fixture+0x146,1)?[0];

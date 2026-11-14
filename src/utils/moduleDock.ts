@@ -1,8 +1,6 @@
 export type AppModuleId =
   | "compare"
   | "squad"
-  | "core"
-  | "camps"
   | "club"
   | "transfers";
 
@@ -11,7 +9,6 @@ export type ManagedAppMode = "club" | "nation" | "unknown";
 export function isAppModuleAvailable(module: AppModuleId, mode: ManagedAppMode): boolean {
   if (module === "transfers") return mode === "club";
   if (module === "club") return mode === "club" || mode === "nation";
-  if (module === "core" || module === "camps") return mode === "nation";
   return true;
 }
 export const MODULE_DOCK_OPEN_EVENT = "fm-player-sorter-open-module";
@@ -20,8 +17,6 @@ export const MODULE_DOCK_CLOSE_EVENT = "fm-player-sorter-close-module";
 const APP_MODULE_IDS: AppModuleId[] = [
   "compare",
   "squad",
-  "core",
-  "camps",
   "club",
   "transfers",
 ];

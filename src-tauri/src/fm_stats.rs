@@ -30,33 +30,9 @@ pub const SEASON_STATS_HEADERS: &[&str] = &[
 
 pub type SeasonStatsRows = BTreeMap<String, BTreeMap<String, String>>;
 
-#[derive(Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NationalMatchAppearance {
-    pub uid: u32,
-    pub minutes: Option<u16>,
-    pub goals: Option<u8>,
-    pub assists: Option<u8>,
-    pub rating: Option<f32>,
-}
-
-#[derive(Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NationalMatchRecord {
-    pub id: String,
-    pub date: String,
-    pub opponent: String,
-    pub competition: String,
-    pub team_goals: Option<u8>,
-    pub opponent_goals: Option<u8>,
-    pub appearances: Vec<NationalMatchAppearance>,
-}
-
 #[derive(Debug, Default, Deserialize)]
 pub struct SeasonStatsData {
     pub rows: SeasonStatsRows,
-    #[serde(default, rename = "nationalMatches")]
-    pub national_matches: Vec<NationalMatchRecord>,
 }
 
 #[cfg(target_os = "windows")]

@@ -5,7 +5,7 @@ use crate::{
     fm_reader::{
         read_fm_date_status, read_fm_native_database, refresh_fm_native_database, FmClassOffsetStat, FmDateStatus, FmTableRow,
     },
-    fm_stats::{load_latest_save_stats, NationalMatchRecord, SeasonStatsRows, SEASON_STATS_HEADERS},
+    fm_stats::{load_latest_save_stats, SeasonStatsRows, SEASON_STATS_HEADERS},
     fm_process::detect_football_manager,
 };
 
@@ -52,7 +52,6 @@ pub struct FmSeasonStatsResult {
     pub headers: Vec<String>,
     pub rows: SeasonStatsRows,
     pub player_count: usize,
-    pub national_matches: Vec<NationalMatchRecord>,
 }
 
 impl FmDatabaseLoadResult {
@@ -188,7 +187,6 @@ pub async fn load_fm_season_stats(uids: Vec<u32>) -> Result<FmSeasonStatsResult,
                 .collect(),
             player_count: data.rows.len(),
             rows: data.rows,
-            national_matches: data.national_matches,
         }
     })
     .await

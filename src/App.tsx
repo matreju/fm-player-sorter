@@ -51,7 +51,6 @@ import {
   loadFootballManagerSeasonStats,
   loadFootballManagerTeamLogo,
   type FmDatabaseLoadResult,
-  type FmNationalMatch,
   type FmSeasonStatsResult,
 } from "./services/fmConnection";
 import type {
@@ -116,17 +115,6 @@ const SquadBuilder = lazy(() =>
     default: module.SquadBuilder,
   })),
 );
-const CampsDrawer = lazy(() =>
-  import("./components/camps").then((module) => ({
-    default: module.CampsDrawer,
-  })),
-);
-const NationalCoreDrawer = lazy(() =>
-  import("./components/national-core").then((module) => ({
-    default: module.NationalCoreDrawer,
-  })),
-);
-
 type PlayerViewMode = "table" | "cards";
 type PlayerCardSortMode =
   | "current"
@@ -316,7 +304,6 @@ export default function App() {
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<TableRow[]>([]);
   const [snapshot, setSnapshot] = useState<StoredFmSnapshot | null>(null);
-  const [nationalMatches, setNationalMatches] = useState<FmNationalMatch[]>([]);
   const managedMode = snapshot?.managedMode ?? "unknown";
   useEffect(() => {
     // Close drawers when the managed context changes or FM disconnects.
@@ -760,7 +747,6 @@ export default function App() {
       lastManagedScope.current = nextScope;
       if (result.managedMode === "nation") syncSelectedPlayers(result.rows);
       setSnapshot(createFmSnapshot(result));
-      setNationalMatches([]);
       setSupplementaryDataLoading(true);
 
       startTransition(() => {
@@ -791,7 +777,6 @@ export default function App() {
         headers: [],
         rows: {},
         playerCount: 0,
-        nationalMatches: [],
       } satisfies FmSeasonStatsResult));
       const logoPromise = loadFootballManagerTeamLogo(
         result.managedMode === "club" ? null : result.managedNationUid,
@@ -830,7 +815,6 @@ export default function App() {
             setHeaders(enrichedHeaders);
           });
           setSnapshot(createFmSnapshot(enrichedResult));
-          setNationalMatches(stats.nationalMatches);
           setSupplementaryDataLoading(false);
         },
       );
@@ -1189,13 +1173,6 @@ export default function App() {
             onClose={() => setSelectedPlayerKey(null)}
           />
         )}
-        {managedMode === "nation" && <CampsDrawer
-          rows={rows}
-          importedMatches={nationalMatches}
-          getPlayerMark={getPlayerMark}
-          getPlayerSelectionPosition={getPlayerSelectionPosition}
-        />}
-        {managedMode === "nation" && <NationalCoreDrawer rows={rows} />}
       </Suspense>
 
     </main>
