@@ -249,7 +249,7 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
         candidates.push((child,"Wariant meczu"));
     }
     let date=league_live_date(&process,&cache)?;let mut rules=Vec::new();let mut rule_keys=Vec::new();let mut drafts=Vec::new();let mut shared_default=false;
-    for (fixture,variant) in candidates {
+    for &(fixture,variant) in &candidates {
         let uid=read_u32(&league_capture(&process,&mut guards,fixture+0x108,4)?,0).ok_or("Nie odczytano właściciela zasad.")?;
         if uid!=competition_uid&&uid!=u32::MAX {warnings.push(format!("{variant}: właściciel {} nie odpowiada wybranym rozgrywkom. Ten wariant pominięto.",uid as i32));continue;}
         let shared=uid==u32::MAX;shared_default|=shared;
@@ -334,6 +334,59 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
             }else{view.note=Some("Odczytano więcej kopii niż obsługuje pojedynczy zapis. Zmiana zablokowana.".into());}
         }
         rules.push(view);
+    }
+    // FIXTURE_RULES stores only an index at +146. The indexed definition lives
+    // in RULE_GROUP_RULES +60 and contains the native two-byte substitution
+    // header: max_subs at +0 and subs_allowed (bench places) at +1. Editing the
+    // definition is what changes the R1..Rn slots shown by the match UI.
+    if dynamic_league_profile(&process) {
+        let bench_result=(||->Result<(),String>{
+        let substitutions=league_pointer(&process,&mut guards,owner+0x60)?;
+        let definitions=league_vector(&process,&mut guards,substitutions,128)?;
+        let mut selected=Vec::<(usize,&str,u8,u8)>::new();
+        for &(fixture,variant) in &candidates {
+            let rule_index=league_capture(&process,&mut guards,fixture+0x146,1)?[0];
+            if rule_index==u8::MAX {continue;}
+            let Some(&definition)=definitions.get(rule_index as usize) else {
+                warnings.push(format!("{variant}: indeks reguły ławki ({rule_index}) wykracza poza odczytaną listę. Limit rezerwowych pominięto."));
+                continue;
+            };
+            let header=league_capture(&process,&mut guards,definition,0x28)?;
+            let max_subs=header[0];let bench=header[1];
+            if max_subs>99||bench>99 {
+                warnings.push(format!("{variant}: nierozpoznany wariant reguły zmian. Limit rezerwowych pominięto."));
+                continue;
+            }
+            selected.push((definition,variant,max_subs,bench));
+        }
+        let mut by_value=HashMap::<u8,Vec<(usize,&str,u8)>>::new();
+        for (definition,variant,max_subs,bench) in selected {
+            let rows=by_value.entry(bench).or_default();
+            if !rows.iter().any(|(address,_,_)|*address==definition) {rows.push((definition,variant,max_subs));}
+        }
+        for (bench,entries) in by_value {
+            if entries.len()>8 {warnings.push("FM powiązał z fazą zbyt wiele definicji ławki. Zapis został zablokowany.".into());continue;}
+            let mut protected=guards.clone();let mut patches=Vec::new();let mut variants=Vec::new();let mut max_values=Vec::new();
+            for (definition,variant,max_subs) in &entries {
+                let value_address=*definition+1;
+                protected.retain(|guard|value_address<guard.address||value_address>=guard.address+guard.bytes.len());
+                protected.push(LeagueGuard{address:*definition,bytes:process.read_exact(*definition,1).ok_or("Nie potwierdzono limitu zmian.")?});
+                protected.push(LeagueGuard{address:*definition+2,bytes:process.read_exact(*definition+2,0x26).ok_or("Nie potwierdzono definicji ławki.")?});
+                patches.push(LeagueQuotaPatch{address:value_address,before:vec![bench],after:vec![bench]});
+                variants.push(*variant);max_values.push(*max_subs);
+            }
+            variants.sort_unstable();variants.dedup();max_values.sort_unstable();max_values.dedup();
+            let owner_uid=cache.database.managed_club_uid.or(cache.database.managed_team_uid).ok_or("Nie potwierdzono prowadzonej drużyny.")?;
+            let draft=LeagueQuotaDraft{session_id,pid:cache.database.pid,created:process.creation_time().ok_or("Nie potwierdzono procesu FM.")?,team:cache.team,owner_uid,base,game_date:date,shared_default:true,persistent:true,code_patch:false,competition_uid,phase_id:phase_id.clone(),guards:protected,patches,opened:Instant::now()};
+            league_verify_quota(&process,&cache,&draft,date)?;
+            let token=editor_token();drafts.push((token.clone(),draft));shared_default=true;
+            rules.push(LeagueRuleView{
+                id:format!("bench-slots-{bench}"),label:"Miejsca dla rezerwowych na ławce".into(),copies:entries.len(),value:bench as u32,mode:"Maksimum".into(),token:Some(token),persistent:true,
+                note:Some(format!("Aktywne warianty: {}. Limit zmian w tej definicji: {}. Reguła ławki może być współdzielona przez inne rozgrywki korzystające z tej samej definicji.",variants.join(", "),max_values.iter().map(u8::to_string).collect::<Vec<_>>().join("/"))),
+            });
+        }
+        Ok(())})();
+        if let Err(error)=bench_result {warnings.push(format!("Nie udało się potwierdzić definicji ławki: {error}"));}
     }
     // FM27 uses a guarded engine default of 23 when ACTUAL_COMP has no
     // explicit max_squad_size property. Competitions such as Nations League
