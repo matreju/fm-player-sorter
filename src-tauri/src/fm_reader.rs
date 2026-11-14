@@ -4622,16 +4622,31 @@ mod windows_reader {
         team:usize,
         nation_counts:&HashMap<usize,usize>,
     )->Option<(usize,String)> {
-        let bytes=process.read(team,0xB8)?;
-        let mut nations=(0..bytes.len().saturating_sub(7)).step_by(8)
+        let direct=unique_known_nation_in_record(process,team,0xB8,nation_counts);
+        if let Some(nation)=direct {return nation_name(process,nation).map(|name|(nation,name));}
+        // NATIONAL_TEAM +0x30 may point to a federation/association record,
+        // not straight to NATION. The federation keeps its country pointer in
+        // its own bounded header. This route remains valid when TEAM::players
+        // is the canonical empty vector and supplies no nationality votes.
+        let owner=process.read_ptr(team+TEAM_CLUB).filter(|address|*address>=0x10_000)?;
+        if nation_counts.contains_key(&owner) {return nation_name(process,owner).map(|name|(owner,name));}
+        let nation=unique_known_nation_in_record(process,owner,0x300,nation_counts)?;
+        nation_name(process,nation).map(|name|(nation,name))
+    }
+
+    fn unique_known_nation_in_record(
+        process:&RemoteProcess,
+        record:usize,
+        length:usize,
+        nation_counts:&HashMap<usize,usize>,
+    )->Option<usize> {
+        let bytes=process.read(record,length)?;
+        let nations=(0..bytes.len().saturating_sub(7)).step_by(8)
             .filter_map(|offset|read_u64(&bytes,offset).map(|value|value as usize))
             .filter(|address|nation_counts.contains_key(address))
             .collect::<HashSet<_>>();
-        if let Some(owner)=process.read_ptr(team+TEAM_CLUB)
-            .filter(|address|nation_counts.contains_key(address)) {nations.insert(owner);}
         if nations.len()!=1 {return None;}
-        let nation=nations.into_iter().next()?;
-        nation_name(process,nation).map(|name|(nation,name))
+        nations.into_iter().next()
     }
 
     fn native_record_index_matches(
