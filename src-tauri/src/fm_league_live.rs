@@ -14,6 +14,8 @@ struct LeagueQuotaDraft {
 #[derive(Default)]
 struct LeagueQuotaState {drafts:HashMap<String,LeagueQuotaDraft>,undos:HashMap<String,LeagueQuotaDraft>}
 static LEAGUE_QUOTA_STATE:OnceLock<Mutex<LeagueQuotaState>>=OnceLock::new();
+const FRIENDLY_COMPETITION_UID:u32=u32::MAX-1;
+const FRIENDLY_PHASE_ID:&str="national-friendlies";
 fn league_quota_state()->&'static Mutex<LeagueQuotaState> {LEAGUE_QUOTA_STATE.get_or_init(||Mutex::new(LeagueQuotaState::default()))}
 
 fn league_quota_context(session_id:u64,write:bool)->Result<(RemoteProcess,RefreshSession),String> {
@@ -215,6 +217,14 @@ pub(super) fn get_league_competitions(session_id:u64)->Result<LeagueCompetitionL
         };
         competitions.push(LeagueCompetitionView{uid,name,phases,message});
     }
+    if cache.database.managed_nation_uid.is_some() {
+        competitions.push(LeagueCompetitionView{
+            uid:FRIENDLY_COMPETITION_UID,
+            name:"Mecze towarzyskie".into(),
+            phases:vec![LeaguePhaseView{id:FRIENDLY_PHASE_ID.into(),label:"Mecze towarzyskie reprezentacji".into()}],
+            message:None,
+        });
+    }
     Ok(LeagueCompetitionList{session_id,club:cache.database.managed_team.clone().unwrap_or_default(),competitions,warnings})
 }
 fn league_rule_label(kind:u16)->Option<&'static str> {
@@ -251,6 +261,27 @@ fn league_source_match(process:&RemoteProcess,guards:&mut Vec<LeagueGuard>,fixtu
 pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:String)->Result<LeagueU22Snapshot,String> {
     let _lock=SCOUTING_QUERY_LOCK.lock().map_err(|_|"Czytnik FM jest zajęty.")?;
     let (process,cache)=league_quota_context(session_id,false)?;let base=cache.plugin_base;let mut guards=Vec::new();
+    if competition_uid==FRIENDLY_COMPETITION_UID {
+        if phase_id!=FRIENDLY_PHASE_ID||cache.database.managed_nation_uid.is_none() {return Err("Mecze towarzyskie nie są dostępne w bieżącym trybie drużyny.".into());}
+        let date=league_live_date(&process,&cache)?;
+        let addresses=[base+0x129E293,base+0x129E29B];
+        let values=addresses.iter().filter_map(|address|process.read_u8(*address)).collect::<Vec<_>>();
+        if values.len()!=2||values[0]!=values[1]||values[0]>99 {return Err("Nie potwierdzono domyślnego limitu powołań FM dla meczów towarzyskich.".into());}
+        let value=values[0] as u32;
+        let patches=addresses.iter().map(|address|LeagueQuotaPatch{address:*address,before:vec![value as u8],after:vec![value as u8]}).collect::<Vec<_>>();
+        for address in addresses {guards.push(LeagueGuard{address:address-2,bytes:process.read_exact(address-2,2).ok_or("Nie potwierdzono kodu limitu meczów towarzyskich.")?});}
+        guards.retain(|guard|!patches.iter().any(|patch|guard.address==patch.address));
+        let owner_uid=cache.database.managed_team_uid.ok_or("Nie potwierdzono prowadzonej reprezentacji.")?;
+        let draft=LeagueQuotaDraft{session_id,pid:cache.database.pid,created:process.creation_time().ok_or("Nie potwierdzono procesu FM.")?,team:cache.team,owner_uid,base,game_date:date,shared_default:true,persistent:false,code_patch:true,competition_uid,phase_id:phase_id.clone(),guards,patches,opened:Instant::now()};
+        league_verify_quota(&process,&cache,&draft,date)?;
+        let token=editor_token();
+        let mut state=league_quota_state().lock().map_err(|_|"Edytor zasad jest zajęty.")?;
+        state.drafts.retain(|_,stored|stored.session_id!=session_id&&stored.opened.elapsed().as_secs()<300);
+        let undo_token=state.undos.iter().filter(|(_,saved)|saved.session_id==session_id&&saved.competition_uid==competition_uid&&saved.phase_id==phase_id&&saved.patches.iter().all(|patch|process.read_exact(patch.address,patch.after.len()).as_ref()==Some(&patch.after))&&league_verify_quota(&process,&cache,saved,date).is_ok()).max_by_key(|(_,saved)|saved.opened).map(|(token,_)|token.clone());
+        state.drafts.insert(token.clone(),draft);
+        let rules=vec![LeagueRuleView{id:"friendly-callup-limit".into(),label:"Limit powołanych na mecze towarzyskie".into(),copies:2,value,mode:"Maksimum".into(),token:Some(token),persistent:false,note:Some("Mecze towarzyskie korzystają z domyślnego limitu silnika FM. Zmiana obejmie również inne rozgrywki, które nie mają własnego limitu powołań, i obowiązuje do zamknięcia gry.".into())}];
+        return Ok(LeagueU22Snapshot{session_id,club:cache.database.managed_team.clone().unwrap_or_default(),competition:"Mecze towarzyskie".into(),competition_uid,phase_id,game_date:format_fm_date(date).ok_or("Nie odczytano daty gry.")?,shared_default:true,rules,undo_token,warnings:Vec::new()});
+    }
     let (memberships,mut warnings)=league_memberships(&process,&cache,&mut guards)?;
     let (_,competition,name)=memberships.into_iter().find(|(uid,_,_)|*uid==competition_uid).ok_or("Te rozgrywki nie znajdują się już na liście prowadzonej drużyny. Odśwież listę.")?;
     let actual=league_actual(&process,base,competition,&mut guards)?;
