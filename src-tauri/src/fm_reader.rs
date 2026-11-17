@@ -4418,16 +4418,16 @@ mod windows_reader {
         let mut trusted_team_addresses = HashSet::<usize>::new();
         let mut uid_matches = 0usize;
         let mut database_index_matches = HashSet::<usize>::new();
-        // Current FM27 humanTeam exposes both the native Team UID and a
-        // DatabaseRecordReference(type 24/index). When both are present they
-        // form one compound identity: accepting the union admits unrelated
-        // records which happen to share only an index or a scanned UID view.
+        // The native Team UID is the stable identity. Database table indices
+        // are build-local lookup slots and changed semantics in the 2026-11-17
+        // update, so never require an index match when humanTeam already
+        // supplied one UID that was intersected with known native Team UIDs.
+        // Use the index only on older bindings which expose no native UID.
         let identity_matches=|uid_match:bool,index_match:bool| match (
             binding.human_team_uid.is_some(),
             binding.database_type==Some(DATABASE_TABLE_TEAM)&&binding.database_index.is_some(),
         ) {
-            (true,true)=>uid_match&&index_match,
-            (true,false)=>uid_match,
+            (true,_)=>uid_match,
             (false,true)=>index_match,
             (false,false)=>false,
         };
