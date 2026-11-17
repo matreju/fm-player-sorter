@@ -447,13 +447,15 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
         let property_header=league_capture(&process,&mut guards,actual+0x38,16)?;
         let begin=read_u64(&property_header,0).unwrap_or(0) as usize;
         let end=read_u64(&property_header,8).unwrap_or(0) as usize;
-        let explicit_max=if begin>=0x10_000&&end>=begin&&(end-begin)%16==0&&end-begin<=4096 {
+        let properties=if begin>=0x10_000&&end>=begin&&(end-begin)%16==0&&end-begin<=4096 {
             let bytes=league_capture(&process,&mut guards,begin,end-begin)?;
-            bytes.chunks_exact(16).find_map(|entry|{
-                (read_u32(entry,0)==Some(0x6D78_7373)).then(||read_u64(entry,8).unwrap_or(0) as usize)
-                    .filter(|pointer|*pointer>=0x10_000&&*pointer<0x0000_8000_0000_0000&&*pointer%8==0)
-            })
-        }else{None};
+            bytes.chunks_exact(16).filter_map(|entry|{
+                let key=read_u32(entry,0)?;let pointer=read_u64(entry,8)? as usize;
+                (pointer>=0x10_000&&pointer<0x0000_8000_0000_0000&&pointer%8==0).then_some((key,pointer))
+            }).collect::<Vec<_>>()
+        }else{Vec::new()};
+        let explicit_max=properties.iter().find_map(|(key,pointer)|(*key==0x6D78_7373).then_some(*pointer));
+        let explicit_min=properties.iter().find_map(|(key,pointer)|(*key==0x6D69_7373).then_some(*pointer));
         if let Some(property)=explicit_max {
             // Native max_squad_size is an integer si::variant. Its constructor
             // stores the integer at +8; ACTUAL_COMP::get_max_squad_size reads
@@ -512,6 +514,46 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
                 let token=editor_token();
                 drafts.push((token.clone(),draft));
                 rules.push(LeagueRuleView{id:"engine-default-max".into(),label:"Domyślny limit powołań (rozgrywki bez własnego limitu)".into(),copies:2,value,mode:"Maksimum".into(),token:Some(token),persistent:false,note:Some("Eliminacje korzystają z domyślnej wartości 23. Zmiana obejmie wszystkie rozgrywki bez własnego limitu; Nations League z własnym limitem 26 pozostanie bez zmian.".into())});
+            }
+        }
+        if let Some(property)=explicit_min {
+            // min_squad_size uses the native property key 0x6D697373
+            // (confirmed from the current game_plugin serializer). It is a
+            // separate registration gate from max_squad_size and must be
+            // edited together with the phase minimum when both are present.
+            let value=process.read_u32(property+8).filter(|value|*value<=99).ok_or("Nie odczytano minimalnej liczby powołanych tych rozgrywek.")?;
+            let patch=LeagueQuotaPatch{address:property+8,before:value.to_le_bytes().to_vec(),after:value.to_le_bytes().to_vec()};
+            let property_guards=[
+                LeagueGuard{address:property,bytes:process.read_exact(property,8).ok_or("Nie potwierdzono typu minimalnego limitu powołań.")?},
+                LeagueGuard{address:property+12,bytes:process.read_exact(property+12,4).ok_or("Nie potwierdzono rekordu minimalnego limitu powołań.")?},
+            ];
+            let mut merged=false;
+            if let Some(view)=rules.iter_mut().find(|rule|rule.label=="Wielkość kadry — minimum") {
+                if let Some(token)=view.token.as_ref() {
+                    if let Some((_,draft))=drafts.iter_mut().find(|(candidate,_)|candidate==token) {
+                        draft.guards.extend(property_guards.iter().cloned());
+                        draft.guards.retain(|guard|guard.address!=patch.address);
+                        draft.patches.insert(0,patch.clone());
+                        league_verify_quota(&process,&cache,draft,date)?;
+                        let phase_value=view.value;
+                        view.value=value;view.copies+=1;
+                        view.label="Minimalna wielkość składu i rejestracji".into();
+                        view.note=Some(if phase_value==value {
+                            format!("Zapis zmienia razem minimalną regułę fazy i aktywny próg rejestracji {value} dla {name}. Ustaw 0, aby wyłączyć wymagane minimum.")
+                        }else{
+                            format!("Minimalne limity są rozbieżne: reguła fazy ma {phase_value}, a rejestracja wymaga {value}. Wpisz 0 lub docelowe minimum, aby wyrównać oba.")
+                        });
+                        merged=true;
+                    }
+                }
+            }
+            if !merged {
+                let mut protected=guards.clone();protected.extend(property_guards);
+                let owner_uid=cache.database.managed_club_uid.or(cache.database.managed_team_uid).ok_or("Nie potwierdzono prowadzonej drużyny.")?;
+                let draft=LeagueQuotaDraft{session_id,pid:cache.database.pid,created:process.creation_time().ok_or("Nie potwierdzono procesu FM.")?,team:cache.team,owner_uid,base,game_date:date,shared_default:false,persistent:true,code_patch:false,competition_uid,phase_id:phase_id.clone(),guards:protected,patches:vec![patch],opened:Instant::now()};
+                league_verify_quota(&process,&cache,&draft,date)?;
+                let token=editor_token();drafts.push((token.clone(),draft));
+                rules.push(LeagueRuleView{id:"competition-min-squad".into(),label:"Minimalna liczba powołanych do rejestracji".into(),copies:1,value,mode:"Minimum".into(),token:Some(token),persistent:true,note:Some(format!("Aktywny minimalny próg wynosi {value}. Ustaw 0, aby zatwierdzać kadrę z dowolną liczbą zawodników nieprzekraczającą maksimum."))});
             }
         }
     }
