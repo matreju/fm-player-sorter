@@ -388,13 +388,15 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
         }
         rules.push(view);
     }
-    // FIXTURE_RULES stores only an index at +146. The indexed definition lives
-    // in RULE_GROUP_RULES +60 and contains the native two-byte substitution
-    // header: max_subs at +0 and subs_allowed (bench places) at +1. Editing the
-    // definition is what changes the R1..Rn slots shown by the match UI.
+    // FIXTURE_RULES stores only an index at +146. RULE_GROUP_RULES +60 points
+    // to a definition store whose pointer vector starts at +8. Each indexed
+    // definition contains the native two-byte substitution header: max_subs at
+    // +0 and subs_allowed (bench places) at +1. Editing that definition changes
+    // the R1..Rn slots shown by the match UI.
     if dynamic_league_profile(&process) {
         let bench_result=(||->Result<(),String>{
-        let definitions=league_vector(&process,&mut guards,owner+0x60,128)?;
+        let definition_store=league_pointer(&process,&mut guards,owner+0x60)?;
+        let definitions=league_vector(&process,&mut guards,definition_store+8,128)?;
         let mut selected=Vec::<(usize,&str,u8,u8)>::new();
         for &(fixture,variant) in &candidates {
             let rule_index=league_capture(&process,&mut guards,fixture+0x146,1)?[0];
