@@ -4418,6 +4418,19 @@ mod windows_reader {
         let mut trusted_team_addresses = HashSet::<usize>::new();
         let mut uid_matches = 0usize;
         let mut database_index_matches = HashSet::<usize>::new();
+        // Current FM27 humanTeam exposes both the native Team UID and a
+        // DatabaseRecordReference(type 24/index). When both are present they
+        // form one compound identity: accepting the union admits unrelated
+        // records which happen to share only an index or a scanned UID view.
+        let identity_matches=|uid_match:bool,index_match:bool| match (
+            binding.human_team_uid.is_some(),
+            binding.database_type==Some(DATABASE_TABLE_TEAM)&&binding.database_index.is_some(),
+        ) {
+            (true,true)=>uid_match&&index_match,
+            (true,false)=>uid_match,
+            (false,true)=>index_match,
+            (false,false)=>false,
+        };
 
         // The global manager registry contains exactly one active human. Its
         // inline Person -> Contract -> Team chain is the authoritative native
@@ -4456,7 +4469,7 @@ mod windows_reader {
                     .database_index
                     .map(|index| native_record_index_matches(process, team, index))
                     .unwrap_or(false);
-            if uid_match || index_match {
+            if identity_matches(uid_match,index_match) {
                 trusted_team_addresses.insert(team);
                 team_addresses.insert(team);
                 uid_matches = uid_matches.saturating_add(if uid_match { 1 } else { 0 });
@@ -4485,7 +4498,7 @@ mod windows_reader {
                         .database_index
                         .map(|index| native_record_index_matches(process, address, index))
                         .unwrap_or(false);
-                if uid_match || index_match {
+                if identity_matches(uid_match,index_match) {
                     team_addresses.insert(address);
                     uid_matches = uid_matches.saturating_add(if uid_match { 1 } else { 0 });
                     if (index_match && (exact_team_type || looks_like_team_record(process, address)
@@ -4522,7 +4535,7 @@ mod windows_reader {
                             native_record_index_matches(process, team, record_index)
                         })
                         .unwrap_or(false);
-                if uid_match || index_match {
+                if identity_matches(uid_match,index_match) {
                     // A pointer read from a validated Club::teams vector is an
                     // exact Team record. Do not reject it using the legacy
                     // TEAM_TYPE byte heuristic; that byte is not stable across
