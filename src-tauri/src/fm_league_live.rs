@@ -456,6 +456,7 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
         }else{Vec::new()};
         let explicit_max=properties.iter().find_map(|(key,pointer)|(*key==0x6D78_7373).then_some(*pointer));
         let explicit_min=properties.iter().find_map(|(key,pointer)|(*key==0x6D69_7373).then_some(*pointer));
+        let explicit_preliminary_max=properties.iter().find_map(|(key,pointer)|(*key==0x6D78_7073).then_some(*pointer));
         let selection_result=(||->Result<(),String>{
             let Some(collection)=properties.iter().find_map(|(key,pointer)|(*key==0x7371_7372).then_some(*pointer)) else {return Ok(());};
             // squad_selection_rules is itself the native vector object. These
@@ -548,6 +549,68 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
                 drafts.push((token.clone(),draft));
                 rules.push(LeagueRuleView{id:"engine-default-max".into(),label:"Domyślny limit powołań (rozgrywki bez własnego limitu)".into(),copies:2,value,mode:"Maksimum".into(),token:Some(token),persistent:false,note:Some("Eliminacje korzystają z domyślnej wartości 23. Zmiana obejmie wszystkie rozgrywki bez własnego limitu; Nations League z własnym limitem 26 pozostanie bez zmian.".into())});
             }
+        }
+        if let Some(property)=explicit_preliminary_max {
+            // max_prelim_squad_size is the final confirmation gate used by
+            // the national call-up screen. The visible registration counter
+            // can be valid while this independent value still blocks 24+.
+            let preliminary_value=process.read_u32(property+8).filter(|value|*value<=99).ok_or("Nie odczytano limitu zatwierdzania powołań.")?;
+            let patch=LeagueQuotaPatch{address:property+8,before:preliminary_value.to_le_bytes().to_vec(),after:preliminary_value.to_le_bytes().to_vec()};
+            let property_guards=[
+                LeagueGuard{address:property,bytes:process.read_exact(property,8).ok_or("Nie potwierdzono typu limitu zatwierdzania powołań.")?},
+                LeagueGuard{address:property+12,bytes:process.read_exact(property+12,4).ok_or("Nie potwierdzono rekordu limitu zatwierdzania powołań.")?},
+            ];
+            let maximum_view=rules.iter_mut().find(|rule|rule.label=="Maksymalna wielkość składu i rejestracji"||rule.label=="Wielkość kadry — maksimum"||rule.id=="competition-max-squad");
+            if let Some(view)=maximum_view {
+                if let Some(token)=view.token.as_ref() {
+                    if let Some((_,draft))=drafts.iter_mut().find(|(candidate,_)|candidate==token) {
+                        draft.guards.extend(property_guards.iter().cloned());
+                        draft.guards.retain(|guard|guard.address!=patch.address);
+                        draft.patches.insert(0,patch);
+                        league_verify_quota(&process,&cache,draft,date)?;
+                        let displayed_value=view.value;view.copies+=1;
+                        view.label="Maksymalna liczba powołanych i zatwierdzanych".into();
+                        view.note=Some(if displayed_value==preliminary_value {
+                            format!("Zapis zmienia razem limit reguły, rejestracji i przycisku Potwierdź: {displayed_value}.")
+                        }else{
+                            format!("Ukryty limit przycisku Potwierdź wynosi {preliminary_value}, a widoczny limit {displayed_value}. Zapis wyrówna wszystkie wartości do wpisanej liczby.")
+                        });
+                    }
+                }
+            }else{
+                let mut protected=guards.clone();protected.extend(property_guards);protected.retain(|guard|guard.address!=patch.address);
+                let owner_uid=cache.database.managed_club_uid.or(cache.database.managed_team_uid).ok_or("Nie potwierdzono prowadzonej drużyny.")?;
+                let draft=LeagueQuotaDraft{session_id,pid:cache.database.pid,created:process.creation_time().ok_or("Nie potwierdzono procesu FM.")?,team:cache.team,owner_uid,base,game_date:date,shared_default:false,persistent:true,code_patch:false,competition_uid,phase_id:phase_id.clone(),guards:protected,patches:vec![patch],opened:Instant::now()};
+                league_verify_quota(&process,&cache,&draft,date)?;
+                let token=editor_token();drafts.push((token.clone(),draft));
+                rules.push(LeagueRuleView{id:"preliminary-max-squad".into(),label:"Limit zatwierdzania powołań".into(),copies:1,value:preliminary_value,mode:"Maksimum".into(),token:Some(token),persistent:true,note:Some("Ten ukryty limit steruje aktywnością przycisku Potwierdź.".into())});
+            }
+        }else{
+            // Some international competitions inherit max_prelim_squad_size
+            // directly from the database and therefore have no writable
+            // ACTUAL_COMP property. Redirect its getter to max_squad_size so
+            // the confirmation button uses the same edited maximum.
+            let entry=base+0x129E530;let target=base+0x129E240;
+            let before=process.read_exact(entry,5).ok_or("Nie potwierdzono kodu limitu przycisku Potwierdź.")?;
+            if before==[0x56,0x57,0x48,0x83,0xEC] {
+                let relative=(target as i64-(entry+5) as i64) as i32;
+                let mut after=vec![0xE9];after.extend(relative.to_le_bytes());
+                let patch=LeagueQuotaPatch{address:entry,before,after};
+                let maximum_view=rules.iter_mut().find(|rule|rule.label=="Maksymalna wielkość składu i rejestracji"||rule.label=="Wielkość kadry — maksimum"||rule.id=="competition-max-squad");
+                if let Some(view)=maximum_view {
+                    if let Some(token)=view.token.as_ref() {
+                        if let Some((_,draft))=drafts.iter_mut().find(|(candidate,_)|candidate==token) {
+                            draft.guards.push(LeagueGuard{address:entry+5,bytes:process.read_exact(entry+5,3).ok_or("Nie potwierdzono otoczenia kodu limitu zatwierdzania.")?});
+                            draft.guards.push(LeagueGuard{address:target,bytes:process.read_exact(target,8).ok_or("Nie potwierdzono funkcji maksymalnej wielkości kadry.")?});
+                            draft.guards.retain(|guard|guard.address!=patch.address);
+                            draft.patches.insert(0,patch);draft.code_patch=true;draft.persistent=false;draft.shared_default=true;
+                            league_verify_quota(&process,&cache,draft,date)?;
+                            view.label="Maksymalna liczba powołanych i zatwierdzanych".into();view.persistent=false;view.copies+=1;shared_default=true;
+                            view.note=Some("FM dziedziczy ukryty limit 23 z bazy rozgrywek. Zapis połączy przycisk Potwierdź z edytowanym maksimum; zmiana obowiązuje do zamknięcia gry.".into());
+                        }
+                    }
+                }
+            }else if before.first()!=Some(&0xE9) {warnings.push("Nie potwierdzono kodu ukrytego limitu zatwierdzania; nie dołączono synchronizacji przycisku Potwierdź.".into());}
         }
         if let Some(property)=explicit_min {
             // min_squad_size uses the native property key 0x6D697373
