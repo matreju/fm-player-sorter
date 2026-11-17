@@ -8,9 +8,11 @@ use std::path::Path;
 const FM27_ASSEMBLY_LAYOUT_SHA256:&str="01e6803b280359dc3300cc1599c7211463243fafce229671dc045232b8a67837";
 const FM27_NATIVE_2486695_LAYOUT_SHA256:&str="499016330f23753163aab6c220cb76ac413a2038fa86b37954b5833720eddd61";
 const FM27_NATIVE_2493426_LAYOUT_SHA256:&str="f5ae562d4735f65575e71fc71304bffa62a8ccf3f125e25d45ac1ed2182c6a39";
+const FM27_NATIVE_2026_11_17_LAYOUT_SHA256:&str="554a5c76aaf11a6442fc7fe9c8194da8fdc22628d0a45d6a8ce268b48832349f";
 pub(crate) const FM27_NATIVE_2486695_PROFILE_ID:&str="bc940e472418fc5c214208d7cf30fecf600f689b6f9d71c11ba19a2df0fe057f";
 pub(crate) const FM27_NATIVE_2493426_PROFILE_ID:&str="252ff8fb5b7a4a5a5464db6ba632e309eef9b6e65ffa992ae20575a189e66c6a";
 pub(crate) const FM27_NATIVE_2503222_PROFILE_ID:&str="8c6971ce0b1c8afe6529ea3f46205a5175aea988a97d7421a980da42e23fe340";
+pub(crate) const FM27_NATIVE_2026_11_17_PROFILE_ID:&str="d12202dd01c3911d4c4e55e778f37b2251ffb10f9cf8cecc3b9ec08ece622c6b";
 
 fn pe_layout_matches(path:&Path,raw_hash:&str,expected:&str)->Result<bool,String> {
     use std::{collections::BTreeMap,sync::{Mutex,OnceLock}};
@@ -42,10 +44,15 @@ pub(crate) fn native_profile_id(path:&Path,raw_hash:Option<&str>)->Result<Option
     if raw.eq_ignore_ascii_case(FM27_NATIVE_2503222_PROFILE_ID) {
         return Ok(Some(FM27_NATIVE_2503222_PROFILE_ID.into()));
     }
+    if raw.eq_ignore_ascii_case(FM27_NATIVE_2026_11_17_PROFILE_ID) {
+        return Ok(Some(FM27_NATIVE_2026_11_17_PROFILE_ID.into()));
+    }
     if pe_layout_matches(path,raw,FM27_NATIVE_2486695_LAYOUT_SHA256)? {
         Ok(Some(FM27_NATIVE_2486695_PROFILE_ID.into()))
     }else if pe_layout_matches(path,raw,FM27_NATIVE_2493426_LAYOUT_SHA256)? {
         Ok(Some(FM27_NATIVE_2493426_PROFILE_ID.into()))
+    }else if pe_layout_matches(path,raw,FM27_NATIVE_2026_11_17_LAYOUT_SHA256)? {
+        Ok(Some(FM27_NATIVE_2026_11_17_PROFILE_ID.into()))
     }else{Ok(Some(raw.into()))}
 }
 
@@ -148,8 +155,30 @@ pub(crate) const FM27_2026_11_13: FmLayout = FmLayout {
     static_methods: [("GameRecordSerialisation.get_Instance", 0x339B70), ("GamePlugin.get_ChannelDataPool", 0x334630)],
 };
 
+// 2026-11-17 update changed the metadata generation as well as native code.
+// Cpp2IL rebuilt 143,695 method pointers from the supplied files. Bindings
+// stayed stable; GameWorldTabsAndBookmarksModule gained one pointer-sized
+// field before its active human-job state.
+pub(crate) const FM27_2026_11_17: FmLayout = FmLayout {
+    id: "fm27-6000.3.18.9883062-2026-11-17",
+    name: "FM27 2026-11-17 national-team reader (experimental)",
+    unity_version: "6000.3.18f1-custom (96cdb67fb884)",
+    edition: 27,
+    experimental: true,
+    exe_hash: "a8247abcb57f409b4b45daf28234f09aca335a34e93b753004f1d438efb02349",
+    assembly_hash: "3f4a26c4869d6429d2e73c276adc64bdfaf6f3c86ce44fe0de93d14683a5d7e9",
+    metadata_hash: "d6d7158370979a67dbc94db87ccfd7d624bb6d9ea7fba87b929ebd250ab02069",
+    human_manager_person: 0x440,
+    binding_root: 0x50,
+    binding_nodes: 0x58,
+    binding_data: 0xA0,
+    human_contexts: [(0x310, 0x380), (0xB0, 0x94), (0x398, 0x3C0)],
+    probe_rva: 0x33C8D0,
+    static_methods: [("GameRecordSerialisation.get_Instance", 0x33FFB0), ("GamePlugin.get_ChannelDataPool", 0x33AA50)],
+};
+
 pub(crate) fn profile_for_hashes(assembly: &str, metadata: &str) -> Option<FmLayout> {
-    [FM26, FM27, FM27_2026_11_10, FM27_2026_11_13].into_iter().find(|profile| {
+    [FM26, FM27, FM27_2026_11_10, FM27_2026_11_13, FM27_2026_11_17].into_iter().find(|profile| {
         profile.assembly_hash.eq_ignore_ascii_case(assembly)
             && profile.metadata_hash.eq_ignore_ascii_case(metadata)
     })
@@ -157,7 +186,7 @@ pub(crate) fn profile_for_hashes(assembly: &str, metadata: &str) -> Option<FmLay
 
 pub(crate) fn profile_for_files(path:&Path,assembly:&str,metadata:&str)->Result<Option<FmLayout>,String> {
     if let Some(profile)=profile_for_hashes(assembly,metadata){return Ok(Some(profile));}
-    for profile in [FM27, FM27_2026_11_10, FM27_2026_11_13] {
+    for profile in [FM27, FM27_2026_11_10, FM27_2026_11_13, FM27_2026_11_17] {
         if metadata.eq_ignore_ascii_case(profile.metadata_hash)&&assembly_matches(path,assembly,profile)? {return Ok(Some(profile));}
     }
     Ok(None)
@@ -197,6 +226,7 @@ mod tests {
         assert_eq!(profile_for_hashes(FM27.assembly_hash, FM27.metadata_hash).unwrap().edition, 27);
         assert_eq!(profile_for_hashes(FM27_2026_11_10.assembly_hash, FM27_2026_11_10.metadata_hash).unwrap().id, FM27_2026_11_10.id);
         assert_eq!(profile_for_hashes(FM27_2026_11_13.assembly_hash, FM27_2026_11_13.metadata_hash).unwrap().id, FM27_2026_11_13.id);
+        assert_eq!(profile_for_hashes(FM27_2026_11_17.assembly_hash, FM27_2026_11_17.metadata_hash).unwrap().id, FM27_2026_11_17.id);
         assert_eq!(profile_for_hashes(FM26.assembly_hash, FM26.metadata_hash).unwrap().edition, 26);
         assert!(profile_for_hashes(FM27.assembly_hash, FM26.metadata_hash).is_none());
         assert!(profile_for_hashes("unknown", FM27.metadata_hash).is_none());

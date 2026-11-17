@@ -382,6 +382,7 @@ mod windows_reader {
     const FM27_PLUGIN_2493426: &str = fm_version::FM27_NATIVE_2493426_PROFILE_ID;
     const FM27_PLUGIN_2026_11_10: &str = "f79b0a3413dd0e3f461b0afbc3ff397003f4a26d7525a30717428de6a8b91196";
     const FM27_PLUGIN_2503222: &str = fm_version::FM27_NATIVE_2503222_PROFILE_ID;
+    const FM27_PLUGIN_2026_11_17: &str = fm_version::FM27_NATIVE_2026_11_17_PROFILE_ID;
     const FM27_2503222_RETIREMENT_MANAGER: usize = 0x5812D50;
     const FM27_2503222_PLAYERS: usize = 0x5820810;
     // Native code, RTTI and every address used by the reader live before this
@@ -1148,7 +1149,7 @@ mod windows_reader {
         let (data_start,data_end)=if dynamic_league_profile(process) {
             // Exact RTTI-bearing PE sections of the uploaded F79B... DLL.
             // Code and global addresses are not borrowed from an older build.
-            (0x4BDD000usize,0x5885000usize)
+            (0x4BDD000usize,0x58F0000usize)
         } else {
             let shift=native_plugin_shift(process)?;
             (0x4AD9000usize+shift,0x5768000usize+shift)
@@ -1894,10 +1895,10 @@ mod windows_reader {
         native_plugin_shift(process).is_some()
     }
     fn player_editor_compatible(process:&RemoteProcess)->bool {
-        verified_fm27(process)||retirement_supported(process)
+        verified_fm27(process)||dynamic_league_profile(process)
     }
     fn dynamic_league_profile(process:&RemoteProcess)->bool {
-        matches!(process.native_plugin_profile_id.as_deref(),Some(FM27_PLUGIN_2026_11_10)|Some(FM27_PLUGIN_2503222))
+        matches!(process.native_plugin_profile_id.as_deref(),Some(FM27_PLUGIN_2026_11_10)|Some(FM27_PLUGIN_2503222)|Some(FM27_PLUGIN_2026_11_17))
     }
     fn league_compatible_fm27(process: &RemoteProcess) -> bool {
         verified_fm27(process)
