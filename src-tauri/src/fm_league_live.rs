@@ -456,6 +456,39 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
         }else{Vec::new()};
         let explicit_max=properties.iter().find_map(|(key,pointer)|(*key==0x6D78_7373).then_some(*pointer));
         let explicit_min=properties.iter().find_map(|(key,pointer)|(*key==0x6D69_7373).then_some(*pointer));
+        let selection_result=(||->Result<(),String>{
+            let Some(collection)=properties.iter().find_map(|(key,pointer)|(*key==0x7371_7372).then_some(*pointer)) else {return Ok(());};
+            // squad_selection_rules is itself the native vector object. These
+            // are the rules used by the call-up confirmation dialog (GK min,
+            // player max and player min), independently from registration.
+            for (n,(pointer,bytes)) in league_rule_records(&process,&mut guards,collection)?.into_iter().enumerate() {
+                let kind=read_u16(&bytes,0x1C).unwrap_or(u16::MAX);let mode=bytes[0x1E];let value=read_u32(&bytes,0x18).unwrap_or(u32::MAX);
+                if !matches!(kind,0x9|0xA5|0x5A)||!matches!(mode,1|2|255)||value>99 {continue;}
+                let Some(label)=league_rule_label(kind) else {continue;};
+                let patch=LeagueQuotaPatch{address:pointer+0x18,before:bytes[0x18..0x1C].to_vec(),after:bytes[0x18..0x1C].to_vec()};
+                let mut merged=false;
+                if let Some(view)=rules.iter_mut().find(|rule|rule.label==label&&rule.value==value) {
+                    if let Some(token)=view.token.as_ref() {
+                        if let Some((_,draft))=drafts.iter_mut().find(|(candidate,_)|candidate==token) {
+                            if !draft.patches.iter().any(|existing|existing.address==patch.address) {draft.patches.push(patch.clone());}
+                            draft.guards.extend(guards.clone());
+                            draft.guards.retain(|guard|!draft.patches.iter().any(|candidate|candidate.address==guard.address&&guard.bytes.len()==candidate.before.len()));
+                            draft.persistent=true;view.persistent=true;view.copies+=1;merged=true;
+                        }
+                    }
+                }
+                if !merged {
+                    let mut protected=guards.clone();protected.retain(|guard|guard.address!=patch.address||guard.bytes.len()!=patch.before.len());
+                    let owner_uid=cache.database.managed_club_uid.or(cache.database.managed_team_uid).ok_or("Nie potwierdzono prowadzonej drużyny.")?;
+                    let draft=LeagueQuotaDraft{session_id,pid:cache.database.pid,created:process.creation_time().ok_or("Nie potwierdzono procesu FM.")?,team:cache.team,owner_uid,base,game_date:date,shared_default:false,persistent:true,code_patch:false,competition_uid,phase_id:phase_id.clone(),guards:protected,patches:vec![patch],opened:Instant::now()};
+                    league_verify_quota(&process,&cache,&draft,date)?;
+                    let token=editor_token();drafts.push((token.clone(),draft));
+                    rules.push(LeagueRuleView{id:format!("selection-{kind}-{n}"),label:label.into(),copies:1,value,mode:match mode {1|2=>"Minimum",255=>"Maksimum",_=>"Inny wariant"}.into(),token:Some(token),persistent:true,note:Some("Aktywna reguła używana podczas zatwierdzania powołań.".into())});
+                }
+            }
+            Ok(())
+        })();
+        if let Err(error)=selection_result {warnings.push(format!("Nie udało się odczytać aktywnych reguł powołań: {error}"));}
         if let Some(property)=explicit_max {
             // Native max_squad_size is an integer si::variant. Its constructor
             // stores the integer at +8; ACTUAL_COMP::get_max_squad_size reads
