@@ -70,6 +70,7 @@ pub(crate) struct FmLayout {
     pub binding_root: usize,
     pub binding_nodes: usize,
     pub binding_data: usize,
+    pub binding_node_data_key: usize,
     pub human_contexts: [(usize, usize); 3],
     pub probe_rva: usize,
     pub static_methods: [(&'static str, usize); 2],
@@ -88,6 +89,7 @@ pub(crate) const FM26: FmLayout = FmLayout {
     binding_root: 0x40,
     binding_nodes: 0x48,
     binding_data: 0x78,
+    binding_node_data_key: 0x70,
     human_contexts: [(0x208, 0x230), (0x90, 0x74), (0x5B0, 0x5C0)],
     probe_rva: 0x2AA6E0,
     static_methods: [("GameRecordSerialisation.get_Instance", 0x2AE010), ("GamePlugin.get_ChannelDataPool", 0x2A8D50)],
@@ -106,6 +108,7 @@ pub(crate) const FM27: FmLayout = FmLayout {
     binding_root: 0x50,
     binding_nodes: 0x58,
     binding_data: 0xA0,
+    binding_node_data_key: 0x70,
     human_contexts: [(0x308, 0x370), (0xB0, 0x94), (0x398, 0x3C0)],
     probe_rva: 0x3343B0,
     static_methods: [("GameRecordSerialisation.get_Instance", 0x337960), ("GamePlugin.get_ChannelDataPool", 0x332630)],
@@ -129,6 +132,7 @@ pub(crate) const FM27_2026_11_10: FmLayout = FmLayout {
     binding_root: 0x50,
     binding_nodes: 0x58,
     binding_data: 0xA0,
+    binding_node_data_key: 0x70,
     human_contexts: [(0x308, 0x378), (0xB0, 0x94), (0x398, 0x3C0)],
     probe_rva: 0x336490,
     static_methods: [("GameRecordSerialisation.get_Instance", 0x339B70), ("GamePlugin.get_ChannelDataPool", 0x334630)],
@@ -150,15 +154,16 @@ pub(crate) const FM27_2026_11_13: FmLayout = FmLayout {
     binding_root: 0x50,
     binding_nodes: 0x58,
     binding_data: 0xA0,
+    binding_node_data_key: 0x70,
     human_contexts: [(0x308, 0x378), (0xB0, 0x94), (0x398, 0x3C0)],
     probe_rva: 0x336490,
     static_methods: [("GameRecordSerialisation.get_Instance", 0x339B70), ("GamePlugin.get_ChannelDataPool", 0x334630)],
 };
 
 // 2026-11-17 update changed the metadata generation as well as native code.
-// Cpp2IL rebuilt 143,695 method pointers from the supplied files. Bindings
-// stayed stable; GameWorldTabsAndBookmarksModule gained one pointer-sized
-// field before its active human-job state.
+// Cpp2IL rebuilt 143,695 method pointers from the supplied files. Bindings::Node
+// gained two pointer-sized fields before m_dataKey (0x70 -> 0x80), while
+// GameWorldTabsAndBookmarksModule gained one field before its human-job state.
 pub(crate) const FM27_2026_11_17: FmLayout = FmLayout {
     id: "fm27-6000.3.18.9883062-2026-11-17",
     name: "FM27 2026-11-17 national-team reader (experimental)",
@@ -172,6 +177,7 @@ pub(crate) const FM27_2026_11_17: FmLayout = FmLayout {
     binding_root: 0x50,
     binding_nodes: 0x58,
     binding_data: 0xA0,
+    binding_node_data_key: 0x80,
     human_contexts: [(0x310, 0x380), (0xB0, 0x94), (0x398, 0x3C0)],
     probe_rva: 0x33C8D0,
     static_methods: [("GameRecordSerialisation.get_Instance", 0x33FFB0), ("GamePlugin.get_ChannelDataPool", 0x33AA50)],
@@ -227,6 +233,8 @@ mod tests {
         assert_eq!(profile_for_hashes(FM27_2026_11_10.assembly_hash, FM27_2026_11_10.metadata_hash).unwrap().id, FM27_2026_11_10.id);
         assert_eq!(profile_for_hashes(FM27_2026_11_13.assembly_hash, FM27_2026_11_13.metadata_hash).unwrap().id, FM27_2026_11_13.id);
         assert_eq!(profile_for_hashes(FM27_2026_11_17.assembly_hash, FM27_2026_11_17.metadata_hash).unwrap().id, FM27_2026_11_17.id);
+        assert_eq!(FM27_2026_11_17.binding_node_data_key, 0x80);
+        assert_eq!(FM27_2026_11_13.binding_node_data_key, 0x70);
         assert_eq!(profile_for_hashes(FM26.assembly_hash, FM26.metadata_hash).unwrap().edition, 26);
         assert!(profile_for_hashes(FM27.assembly_hash, FM26.metadata_hash).is_none());
         assert!(profile_for_hashes("unknown", FM27.metadata_hash).is_none());

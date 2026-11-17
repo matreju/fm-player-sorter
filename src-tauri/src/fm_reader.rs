@@ -165,7 +165,6 @@ mod windows_reader {
     const BINDING_NODE_NAME: usize = 0x18;
     const BINDING_NODE_FIRST_CHILD: usize = 0x28;
     const BINDING_NODE_NEXT_SIBLING: usize = 0x30;
-    const BINDING_NODE_DATA_KEY: usize = 0x70;
     const BINDING_DATA_VALUE: usize = 0x30;
     const MANAGED_LIST_ITEMS: usize = 0x10;
     const MANAGED_LIST_SIZE: usize = 0x18;
@@ -3908,7 +3907,7 @@ mod windows_reader {
         known_team_uids: &HashSet<u32>,
         diagnostics: &mut HumanBindingDiagnostics,
     ) -> Option<HumanTeamReference> {
-        let data_key = process.read_u64(node + BINDING_NODE_DATA_KEY)?;
+        let data_key = process.read_u64(node + process.layout.binding_node_data_key)?;
         let raw_index = (data_key & u64::from(u32::MAX)) as usize;
         let data_list = process.read_ptr(binding + process.layout.binding_data)?;
         let data_size = process.read_u32(data_list + MANAGED_LIST_SIZE)? as usize;
