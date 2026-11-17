@@ -4012,12 +4012,15 @@ mod windows_reader {
             return None;
         }
         let database_reference = database_references.into_iter().next();
-        // UID candidates have already been intersected with independently
-        // collected native Team UIDs. In this FM27 build humanTeam exposes
-        // both DatabaseRecordReference(type 24/index) and exactly one such
-        // native UID. Keep both as mutually confirming identities; older
-        // builds that expose only one of them continue to work unchanged.
-        let human_team_uid = (decoded_uids.len()==1)
+        let authoritative_database_reference=database_reference
+            .is_some_and(|(record_type,_)|matches!(record_type,DATABASE_TABLE_TEAM|DATABASE_TABLE_CLUB));
+        // InteropReference::m_id contains property ID/value pairs. A value can
+        // numerically collide with an unrelated native Team UID (for example
+        // Poland's current humanTeam key contains 28, which is Libya's UID).
+        // DatabaseRecordReference(type/index) is the canonical identity when
+        // present; retain the legacy UID fallback only for older layouts that
+        // do not expose a database reference at all.
+        let human_team_uid = (!authoritative_database_reference && decoded_uids.len()==1)
             .then(||decoded_uids.into_iter().next())
             .flatten();
         if database_reference.is_none() && human_team_uid.is_none() {
@@ -4331,6 +4334,20 @@ mod windows_reader {
             nation_address:0,nation_name:String::new(),score:0})
     }
 
+    fn bound_identity_matches(
+        binding: HumanBindingResolution,
+        uid_match: bool,
+        database_index_match: bool,
+    ) -> bool {
+        // A concrete DatabaseRecordReference is authoritative. Interop pair
+        // values are not record UIDs and may collide with an unrelated Team.
+        if matches!(binding.database_type,Some(DATABASE_TABLE_TEAM)|Some(DATABASE_TABLE_CLUB))
+            && binding.database_index.is_some() {
+            return database_index_match;
+        }
+        binding.human_team_uid.is_some() && uid_match
+    }
+
     fn resolve_bound_club_team(
         process: &RemoteProcess, binding: HumanBindingResolution,
         active: Option<usize>, managers: &HashSet<HumanManagerCandidate>,
@@ -4347,7 +4364,7 @@ mod windows_reader {
                 Some(DATABASE_TABLE_CLUB) => native_record_index_matches(process,club,index),
                 _ => false,
             }).unwrap_or(false);
-            if !uid_match && !index_match { continue; }
+            if !bound_identity_matches(binding,uid_match,index_match) { continue; }
             if pointer_vector(process,club+CLUB_TEAMS_BEGIN,64).ok()?.contains(&team) {
                 matches.insert(team,ManagedTeamResolution {team_address:team,team_name:name,nation_address:0,nation_name:String::new(),score:0});
             }
@@ -4418,20 +4435,6 @@ mod windows_reader {
         let mut trusted_team_addresses = HashSet::<usize>::new();
         let mut uid_matches = 0usize;
         let mut database_index_matches = HashSet::<usize>::new();
-        // The native Team UID is the stable identity. Database table indices
-        // are build-local lookup slots and changed semantics in the 2026-11-17
-        // update, so never require an index match when humanTeam already
-        // supplied one UID that was intersected with known native Team UIDs.
-        // Use the index only on older bindings which expose no native UID.
-        let identity_matches=|uid_match:bool,index_match:bool| match (
-            binding.human_team_uid.is_some(),
-            binding.database_type==Some(DATABASE_TABLE_TEAM)&&binding.database_index.is_some(),
-        ) {
-            (true,_)=>uid_match,
-            (false,true)=>index_match,
-            (false,false)=>false,
-        };
-
         // The global manager registry contains exactly one active human. Its
         // inline Person -> Contract -> Team chain is the authoritative native
         // answer to "which team does this player manage?". The selected
@@ -4469,7 +4472,7 @@ mod windows_reader {
                     .database_index
                     .map(|index| native_record_index_matches(process, team, index))
                     .unwrap_or(false);
-            if identity_matches(uid_match,index_match) {
+            if bound_identity_matches(binding,uid_match,index_match) {
                 trusted_team_addresses.insert(team);
                 team_addresses.insert(team);
                 uid_matches = uid_matches.saturating_add(if uid_match { 1 } else { 0 });
@@ -4498,7 +4501,7 @@ mod windows_reader {
                         .database_index
                         .map(|index| native_record_index_matches(process, address, index))
                         .unwrap_or(false);
-                if identity_matches(uid_match,index_match) {
+                if bound_identity_matches(binding,uid_match,index_match) {
                     team_addresses.insert(address);
                     uid_matches = uid_matches.saturating_add(if uid_match { 1 } else { 0 });
                     if (index_match && (exact_team_type || looks_like_team_record(process, address)
@@ -4535,7 +4538,7 @@ mod windows_reader {
                             native_record_index_matches(process, team, record_index)
                         })
                         .unwrap_or(false);
-                if identity_matches(uid_match,index_match) {
+                if bound_identity_matches(binding,uid_match,index_match) {
                     // A pointer read from a validated Club::teams vector is an
                     // exact Team record. Do not reject it using the legacy
                     // TEAM_TYPE byte heuristic; that byte is not stable across
@@ -5965,6 +5968,35 @@ mod windows_reader {
     #[cfg(test)]
     mod native_job_tests {
         use super::*;
+
+        #[test]
+        fn database_reference_wins_over_colliding_interop_pair_value() {
+            let binding=HumanBindingResolution {
+                human_team_uid:Some(28),
+                database_index:Some(662),
+                database_type:Some(DATABASE_TABLE_TEAM),
+                nation_manager_evidence:1,
+                club_manager_evidence:0,
+            };
+            // FM27 2026-11-17: the humanTeam Interop pair contains 28, the
+            // native UID of Libya, while Team table index 662 is Poland.
+            assert!(!bound_identity_matches(binding,true,false));
+            assert!(bound_identity_matches(binding,false,true));
+        }
+
+        #[test]
+        fn uid_remains_a_fallback_without_database_reference() {
+            let binding=HumanBindingResolution {
+                human_team_uid:Some(787),
+                database_index:None,
+                database_type:None,
+                nation_manager_evidence:1,
+                club_manager_evidence:0,
+            };
+            assert!(bound_identity_matches(binding,true,false));
+            assert!(!bound_identity_matches(binding,false,true));
+        }
+
         fn resolver() -> MetaResolver {
             let base=0x180000000usize;
             let mut bytes=vec![0u8;0x500];
