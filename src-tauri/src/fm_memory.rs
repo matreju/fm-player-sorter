@@ -111,6 +111,7 @@ fn probe_fm_memory_windows(
 ) -> FmMemoryStatus {
     use std::ffi::c_void;
     use std::mem::size_of;
+    use std::{thread, time::Duration};
 
     use windows::Win32::Foundation::{CloseHandle, HANDLE};
 
@@ -149,19 +150,36 @@ fn probe_fm_memory_windows(
             }
         };
 
-    let module_snapshot =
-        match unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid) } {
-            Ok(handle) => HandleGuard(handle),
+    let mut module_snapshot = None;
+    let mut snapshot_error = None;
 
-            Err(error) => {
-                return FmMemoryStatus::failed(
-                    pid,
-                    process_name,
-                    executable_path,
-                    format!("Nie udało się pobrać listy modułów procesu FM: {error}"),
-                );
+    for attempt in 0..5_u64 {
+        match unsafe {
+            CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid)
+        } {
+            Ok(handle) => {
+                module_snapshot = Some(HandleGuard(handle));
+                break;
             }
-        };
+            Err(error) => snapshot_error = Some(error),
+        }
+
+        if attempt < 4 {
+            thread::sleep(Duration::from_millis(40 * (attempt + 1)));
+        }
+    }
+
+    let Some(module_snapshot) = module_snapshot else {
+        let error = snapshot_error
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "nieznany błąd Windows".to_string());
+        return FmMemoryStatus::failed(
+            pid,
+            process_name,
+            executable_path,
+            format!("Nie udało się pobrać listy modułów procesu FM po kilku próbach: {error}"),
+        );
+    };
 
     let mut module_entry = MODULEENTRY32W::default();
 

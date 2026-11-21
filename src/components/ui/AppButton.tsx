@@ -84,7 +84,7 @@ const variantStyles: Record<AppButtonVariant, CSSProperties> = {
   primary: {
     borderColor: uiColors.accentStrong,
     background: uiColors.accentSoft,
-    color: "#bae6fd",
+    color: uiColors.accent,
   },
 
   secondary: {
@@ -114,10 +114,10 @@ const variantStyles: Record<AppButtonVariant, CSSProperties> = {
 
 const hoverStyles: Record<AppButtonVariant, CSSProperties> = {
   primary: {
-    borderColor: "#7dd3fc",
-    background: "rgba(56, 189, 248, 0.24)",
+    borderColor: uiColors.accent,
+    background: uiColors.accentSoft,
     color: "#ffffff",
-    boxShadow: "0 0 0 3px rgba(56, 189, 248, 0.10)",
+    boxShadow: "0 0 0 3px var(--team-accent-faint, rgba(56, 189, 248, 0.10))",
   },
 
   secondary: {

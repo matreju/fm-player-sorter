@@ -26,10 +26,6 @@ import {
   compareCandidatesForMode,
   getCandidateScoreForMode,
 } from "../../utils/squadBuilderScoreMode";
-import {
-  getCampaignPositionCallUpsForSlot,
-  type CampaignCallUpsByPlayerKey,
-} from "../../utils/squadBuilderCampaignCallups";
 import { getPlayerKey } from "../../utils/playerIdentity";
 import {
   createSquadBuilderScoringContext,
@@ -46,7 +42,6 @@ type UseSquadBuilderSuggestionsParams = {
   rows: TableRow[];
   playerMarks?: Record<string, PlayerMark>;
   selectedPositionByPlayerKey?: Record<string, string>;
-  campaignCallUpsByPlayerKey?: CampaignCallUpsByPlayerKey;
   withBallSlots: FormationSlot[];
   withoutBallSlots: FormationSlot[];
   tacticalView: TacticalView;
@@ -291,26 +286,6 @@ function withScoreModeSelectionScore(
     rankingBreakdown
   );
 }
-function withCampaignCallUps(
-  candidate: SlotCandidate,
-  slot: FormationSlot,
-  campaignCallUpsByPlayerKey: CampaignCallUpsByPlayerKey
-): SlotCandidate {
-  const summary = campaignCallUpsByPlayerKey[candidate.key];
-
-  return {
-    ...candidate,
-    campaignCallUps: summary?.total ?? 0,
-    campaignPositionCallUps: getCampaignPositionCallUpsForSlot(
-      summary,
-      slot.positionGroup
-    ),
-    campaignMatches: summary?.matches ?? 0,
-    campaignMinutes: summary?.minutes ?? 0,
-    campaignAvgRating: summary?.avgRating ?? null,
-  };
-}
-
 function sortCandidatesForLineup(
   candidates: SlotCandidate[],
   scoreMode: SquadBuilderScoreMode
@@ -846,7 +821,6 @@ export function useSquadBuilderSuggestions({
   rows,
   playerMarks = {},
   selectedPositionByPlayerKey = {},
-  campaignCallUpsByPlayerKey = {},
   withBallSlots,
   withoutBallSlots,
   tacticalView,
@@ -943,9 +917,7 @@ const scoringContext = useMemo(() => {
     for (const slot of withBallSlots) {
       const visibleCandidates = filterOnlyNaturalIfNeeded(
         filterHiddenForSlot(
-          (baseCandidates[slot.id] ?? []).map((candidate) =>
-            withCampaignCallUps(candidate, slot, campaignCallUpsByPlayerKey)
-          ),
+          baseCandidates[slot.id] ?? [],
           hiddenTopCandidateKeys,
           "with-ball",
           slot.id
@@ -977,7 +949,6 @@ const scoringContext = useMemo(() => {
   scoringContext,
   hiddenTopCandidateKeys,
   scoreMode,
-  campaignCallUpsByPlayerKey,
   topOnlyNatural,
   ]);
 
@@ -1081,9 +1052,7 @@ useEffect(() => {
     for (const slot of withoutBallSlots) {
       const visibleForSlot = filterOnlyNaturalIfNeeded(
         filterHiddenForSlot(
-          (baseCandidates[slot.id] ?? []).map((candidate) =>
-            withCampaignCallUps(candidate, slot, campaignCallUpsByPlayerKey)
-          ),
+          baseCandidates[slot.id] ?? [],
           hiddenTopCandidateKeys,
           "without-ball",
           slot.id
@@ -1131,7 +1100,6 @@ useEffect(() => {
   hiddenTopCandidateKeys,
   withBallProfileByPlayerKey,
   scoreMode,
-  campaignCallUpsByPlayerKey,
   topOnlyNatural,
   ]);
 

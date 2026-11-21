@@ -20,9 +20,9 @@ const colors = {
   muted: "#9aa7bb",
   mutedDark: "#64748b",
 
-  accent: "#38bdf8",
-  accentSoft: "rgba(56, 189, 248, 0.14)",
-  accentStrong: "#0ea5e9",
+  accent: "var(--team-accent, #38bdf8)",
+  accentSoft: "var(--team-accent-soft, rgba(56, 189, 248, 0.14))",
+  accentStrong: "var(--team-primary, #0ea5e9)",
 
   success: "#22c55e",
   successSoft: "rgba(34, 197, 94, 0.16)",
@@ -61,6 +61,13 @@ appShell: {
   gridTemplateColumns: "320px minmax(0, 1fr)",
   gap: 12,
   alignItems: "start",
+},
+
+rightColumn: {
+  display: "grid",
+  minWidth: 0,
+  gap: 12,
+  alignContent: "start",
 },
 
 leftSidebar: {
@@ -105,6 +112,37 @@ workspaceTop: {
 
 tableArea: {
   marginTop: 6,
+},
+
+tablePagination: {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+  padding: "8px 10px",
+  border: `1px solid ${colors.border}`,
+  borderBottom: "none",
+  borderRadius: `${radii.lg}px ${radii.lg}px 0 0`,
+  background: colors.panelSoft,
+  color: colors.textSoft,
+},
+
+tablePaginationActions: {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+},
+
+tablePaginationButton: {
+  minHeight: 28,
+  padding: "4px 9px",
+  border: `1px solid ${colors.borderStrong}`,
+  borderRadius: radii.sm,
+  background: colors.panelStrong,
+  color: colors.text,
+  font: "inherit",
+  fontWeight: 800,
+  cursor: "pointer",
 },
   header: {
     marginBottom: 20,
@@ -208,7 +246,7 @@ tableWrapper: {
   maxHeight: "calc(100vh - 192px)",
   overflow: "auto",
   border: `1px solid ${colors.border}`,
-  borderRadius: radii.lg,
+  borderRadius: `0 0 ${radii.lg}px ${radii.lg}px`,
   background: colors.table,
   boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.03)",
 },
@@ -657,6 +695,10 @@ indexTd: {
   textAlign: "center",
 },
 markTh: {
+  position: "sticky",
+  left: 0,
+  top: 0,
+  zIndex: 7,
   width: 116,
   minWidth: 116,
   maxWidth: 116,
@@ -670,6 +712,9 @@ markTh: {
 },
 
 markTd: {
+  position: "sticky",
+  left: 0,
+  zIndex: 5,
   width: 116,
   minWidth: 116,
   maxWidth: 116,
@@ -716,7 +761,7 @@ selectionPositionSelect: {
 
 nameStickyTh: {
   position: "sticky",
-  left: 38,
+  left: 170,
   top: 0,
   zIndex: 5,
   minWidth: 180,
@@ -734,7 +779,7 @@ nameStickyTh: {
 
 nameStickyTd: {
   position: "sticky",
-  left: 38,
+  left: 170,
   zIndex: 3,
   minWidth: 180,
   padding: "5px 8px",

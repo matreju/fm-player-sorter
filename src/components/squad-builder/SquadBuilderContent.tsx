@@ -6,9 +6,6 @@ import { SquadBuilderActiveSlotPanel } from "./SquadBuilderActiveSlotPanel";
 import { SquadBuilderPlanSuggestionsModal } from "./SquadBuilderPlanSuggestionsModal";
 import { useSquadBuilderSlotDrag } from "./useSquadBuilderSlotDrag";
 import { useSquadBuilderSuggestions } from "./useSquadBuilderSuggestions";
-import { loadCamps } from "../../utils/campStorage";
-import { loadCampaigns } from "../../utils/campaignStorage";
-import { buildCampaignCallUpsByPlayerKey } from "../../utils/squadBuilderCampaignCallups";
 import {
   loadLocalStorageValue,
   saveLocalStorageValue,
@@ -53,7 +50,6 @@ type PersistedSquadBuilderState = {
   onlySelected?: boolean;
   topOnlyNatural?: boolean;
   scoreMode?: SquadBuilderScoreMode;
-  campaignCallUpsCampaignId?: string;
   slots?: FormationSlot[];
   withoutBallSlotOverrides?: Record<string, Partial<FormationSlot>>;
 };
@@ -189,31 +185,12 @@ const initialFormation = getFormationById(initialFormationId, formationPresets);
   );
 
   const [scoreMode, setScoreMode] = useState<SquadBuilderScoreMode>(
-    persistedState.scoreMode ?? "role-score"
+    persistedState.scoreMode === "overall-ability"
+      ? "overall-ability"
+      : "role-score"
   );
 
   const [isPlanSuggestionsOpen, setIsPlanSuggestionsOpen] = useState(false);
-  const [campaigns] = useState(() => loadCampaigns());
-  const [storedCamps] = useState(() => loadCamps());
-
-  const campaignOptions = useMemo(() => {
-    return campaigns.filter((campaign) =>
-      storedCamps.some((camp) => camp.campaignId === campaign.id)
-    );
-  }, [campaigns, storedCamps]);
-
-  const [campaignCallUpsCampaignId, setCampaignCallUpsCampaignId] = useState(
-    persistedState.campaignCallUpsCampaignId ??
-      campaignOptions[0]?.id ??
-      ""
-  );
-
-  const selectedCampaignId =
-    campaignCallUpsCampaignId || campaignOptions[0]?.id || "";
-
-  const selectedCampaignName =
-    campaignOptions.find((campaign) => campaign.id === selectedCampaignId)
-      ?.name ?? "brak kampanii";
 const formation = getFormationById(formationId, formationPresets);
 const withoutBallFormation = getFormationById(
   withoutBallFormationId,
@@ -250,7 +227,6 @@ const withoutBallFormation = getFormationById(
     onlySelected,
     topOnlyNatural,
     scoreMode,
-    campaignCallUpsCampaignId,
     slots,
     withoutBallSlotOverrides,
   }
@@ -263,21 +239,9 @@ const withoutBallFormation = getFormationById(
     onlySelected,
     topOnlyNatural,
     scoreMode,
-    campaignCallUpsCampaignId,
     slots,
     withoutBallSlotOverrides,
   ]);
-  const campaignCallUpsByPlayerKey = useMemo(() => {
-    if (scoreMode !== "campaign-callups") {
-      return {};
-    }
-
-    return buildCampaignCallUpsByPlayerKey(
-      rows,
-      storedCamps,
-      selectedCampaignId
-    );
-  }, [rows, storedCamps, selectedCampaignId, scoreMode]);
  const {
   availableRows,
   suggestedSquadWithBall,
@@ -292,7 +256,6 @@ const withoutBallFormation = getFormationById(
   rows,
   playerMarks,
   selectedPositionByPlayerKey,
-  campaignCallUpsByPlayerKey,
   withBallSlots,
   withoutBallSlots,
   tacticalView,
@@ -728,42 +691,15 @@ planSuggestionsCount={6}
               >
                 <option value="role-score">Dopasowanie do roli</option>
                 <option value="overall-ability">Obecne umiejętności / OU</option>
-                <option value="campaign-callups">Powołania w kampanii</option>
               </select>
             </label>
-
-            {scoreMode === "campaign-callups" && (
-              <label style={styles.compactField}>
-                <span style={styles.compactLabel}>Kampania</span>
-
-                <select
-                  value={selectedCampaignId}
-                  onChange={(event) =>
-                    setCampaignCallUpsCampaignId(event.target.value)
-                  }
-                  style={styles.compactSelect}
-                >
-                  {campaignOptions.length === 0 && (
-                    <option value="">Brak kampanii</option>
-                  )}
-
-                  {campaignOptions.map((campaign) => (
-                    <option key={campaign.id} value={campaign.id}>
-                      {campaign.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
 
             <div style={styles.pitchActiveInfo}>
               Tryb składu:{" "}
               <strong>
                 {scoreMode === "overall-ability"
                   ? "obecne umiejętności"
-                  : scoreMode === "campaign-callups"
-                    ? `powołania w kampanii · ${selectedCampaignName}`
-                    : "dopasowanie do roli"}
+                  : "dopasowanie do roli"}
               </strong>
             </div>
           </div>

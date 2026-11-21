@@ -1,6 +1,8 @@
 use std::{
+    collections::HashMap,
     fs::{self, File},
     io::{BufReader, Read},
+    sync::{Mutex, OnceLock},
     time::UNIX_EPOCH,
 };
 
@@ -10,6 +12,7 @@ use sha2::{Digest, Sha256};
 use crate::fm_process::detect_football_manager;
 
 const HASH_BUFFER_SIZE: usize = 1024 * 1024;
+static HASH_CACHE: OnceLock<Mutex<HashMap<String, (u64, Option<u64>, String)>>> = OnceLock::new();
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -88,6 +91,17 @@ fn inspect_fm_build_blocking() -> Result<FmBuildInfo, String> {
 }
 
 pub(crate) fn calculate_sha256(path: &str) -> Result<String, String> {
+    let metadata = fs::metadata(path)
+        .map_err(|error| format!("Nie udało się odczytać pliku do obliczenia SHA-256: {error}"))?;
+    let modified = metadata.modified().ok()
+        .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+        .and_then(|value| u64::try_from(value.as_millis()).ok());
+    let cache = HASH_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Ok(values) = cache.lock() {
+        if let Some((length, timestamp, hash)) = values.get(path) {
+            if *length == metadata.len() && *timestamp == modified { return Ok(hash.clone()); }
+        }
+    }
     let file = File::open(path)
         .map_err(|error| format!("Nie udało się otworzyć pliku do obliczenia SHA-256: {error}"))?;
 
@@ -110,5 +124,10 @@ pub(crate) fn calculate_sha256(path: &str) -> Result<String, String> {
 
     let digest = hasher.finalize();
 
-    Ok(format!("{digest:x}"))
+    let hash = format!("{digest:x}");
+    if let Ok(mut values) = cache.lock() {
+        if values.len() >= 32 { values.clear(); }
+        values.insert(path.to_string(), (metadata.len(), modified, hash.clone()));
+    }
+    Ok(hash)
 }
