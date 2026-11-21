@@ -799,6 +799,32 @@ pub(super) fn disable_league_u22(token:String,value:u32,accept_shared_default:bo
     if state.undos.len()>=8 {state.undos.clear();}
     if let Some(token)=&result.undo_token {state.undos.insert(token.clone(),draft);}Ok(result)
 }
+pub(super) fn restore_national_callup_limit(session_id:u64,value:u32)->Result<LeagueU22Result,String> {
+    if value>99 {return Err("Limit liczby zawodników musi mieścić się w zakresie 0–99.".into());}
+    let _lock=SCOUTING_QUERY_LOCK.lock().map_err(|_|"Czytnik FM jest zajęty.")?;
+    let (process,cache)=league_quota_context(session_id,true)?;
+    if cache.database.managed_nation_uid.is_none() {return Err("Automatyczny limit dotyczy prowadzonej reprezentacji.".into());}
+    let code=league_code_rvas(process.native_plugin_profile_id.as_deref());
+    let preliminary=code.preliminary_default.ok_or("Ten profil FM nie ma potwierdzonego automatycznego przywracania limitu powołań.")?;
+    let mut addresses=code.default_max.iter().map(|rva|cache.plugin_base+*rva).collect::<Vec<_>>();
+    addresses.push(cache.plugin_base+preliminary);
+    let before=addresses.iter().map(|address|process.read_u8(*address).filter(|current|*current<=99).ok_or("Nie odczytano bieżącego limitu powołań FM.")).collect::<Result<Vec<_>,_>>()?;
+    let preliminary_address=*addresses.last().unwrap_or(&0);
+    if process.read_exact(preliminary_address-1,3).as_deref().map(|bytes|bytes[0]==0xB0&&bytes[2]==0xC3)!=Some(true) {return Err("Nie potwierdzono ukrytego limitu przycisku Potwierdź.".into());}
+    if before.iter().all(|current|*current==value as u8) {
+        return Ok(LeagueU22Result{session_id,shared_default:true,before:value,after:value,record_count:0,undo_token:None,persistent:false});
+    }
+    let mut guards=Vec::new();
+    for address in &addresses[..2] {guards.push(LeagueGuard{address:*address-2,bytes:process.read_exact(*address-2,2).ok_or("Nie potwierdzono kodu limitu powołań.")?});}
+    guards.push(LeagueGuard{address:preliminary_address-1,bytes:vec![0xB0]});
+    guards.push(LeagueGuard{address:preliminary_address+1,bytes:vec![0xC3]});
+    let patches=addresses.iter().zip(before.iter()).map(|(address,current)|LeagueQuotaPatch{address:*address,before:vec![*current],after:vec![value as u8]}).collect::<Vec<_>>();
+    let date=league_live_date(&process,&cache)?;
+    let owner_uid=cache.database.managed_team_uid.ok_or("Nie potwierdzono prowadzonej reprezentacji.")?;
+    let draft=LeagueQuotaDraft{session_id,pid:cache.database.pid,created:process.creation_time().ok_or("Nie potwierdzono procesu FM.")?,team:cache.team,owner_uid,base:cache.plugin_base,game_date:date,shared_default:true,persistent:false,code_patch:true,competition_uid:u32::MAX,phase_id:"auto-restore".into(),guards,patches,opened:Instant::now()};
+    league_write_quota(&process,&cache,&draft,date)?;
+    Ok(LeagueU22Result{session_id,shared_default:true,before:before[0] as u32,after:value,record_count:draft.patches.len(),undo_token:None,persistent:false})
+}
 pub(super) fn undo_league_u22(token:String)->Result<LeagueU22Result,String> {
     let _lock=SCOUTING_QUERY_LOCK.lock().map_err(|_|"Czytnik FM jest zajęty.")?;
     let mut draft=league_quota_state().lock().map_err(|_|"Edytor zasad jest zajęty.")?.undos.remove(&token).ok_or("Nie zachowano tej zmiany do cofnięcia w bieżącej sesji aplikacji.")?;

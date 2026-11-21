@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { AppButton } from "../ui";
+import { rememberNationalCallupLimit } from "../../utils/nationalCallupLimit";
 import "./LeagueU22Editor.css";
 
 type Phase={id:string;label:string};
@@ -11,12 +12,13 @@ type Rule={id:string;label:string;copies:number;value:number;mode:string;token:s
 type Snapshot={sessionId:number;club:string;competition:string;competitionUid:number;phaseId:string;gameDate:string;sharedDefault:boolean;rules:Rule[];undoToken:string|null;warnings:string[]};
 type Receipt={sessionId:number;before:number;after:number;sharedDefault:boolean;recordCount:number;undoToken:string|null;persistent:boolean};
 
-export function LeagueU22Editor({sessionId}:{sessionId:number}){
+export function LeagueU22Editor({sessionId,nationUid}:{sessionId:number;nationUid?:number|null}){
   const [open,setOpen]=useState(false),[catalogBusy,setCatalogBusy]=useState(false),[busy,setBusy]=useState(false);
   const [catalog,setCatalog]=useState<Catalog|null>(null),[uid,setUid]=useState(0),[phaseId,setPhaseId]=useState("");
   const [catalogRevision,setCatalogRevision]=useState(0),[revision,setRevision]=useState(0);
   const [snapshot,setSnapshot]=useState<Snapshot|null>(null),[receipt,setReceipt]=useState<Receipt|null>(null);
   const [error,setError]=useState(""),[writeError,setWriteError]=useState(false),[copied,setCopied]=useState(false);
+  const [rememberedLimit,setRememberedLimit]=useState(false);
   const [values,setValues]=useState<Record<string,string>>({}),[sharedAccepted,setSharedAccepted]=useState(false);
   const generation=useRef(0),catalogGeneration=useRef(0),dialog=useRef<HTMLElement>(null),trigger=useRef<HTMLSpanElement>(null);
   const competition=catalog?.competitions.find(item=>item.uid===uid);
@@ -40,7 +42,7 @@ export function LeagueU22Editor({sessionId}:{sessionId:number}){
   useEffect(()=>{
     setPhaseId(previous=>competition?.phases.some(item=>item.id===previous)?previous:(competition?.phases[0]?.id??""));
   },[competition]);
-  useEffect(()=>{setReceipt(null);setSharedAccepted(false);},[open,sessionId,uid,phaseId]);
+  useEffect(()=>{setReceipt(null);setSharedAccepted(false);setRememberedLimit(false);},[open,sessionId,uid,phaseId]);
   useEffect(()=>{
     const request=++generation.current;
     setSnapshot(null);setValues({});setCopied(false);setBusy(false);
@@ -55,14 +57,18 @@ export function LeagueU22Editor({sessionId}:{sessionId:number}){
   async function save(rule:Rule){
     const text=values[rule.id]??"";
     if(waiting||!rule.token||!/^\d{1,2}$/.test(text)||(snapshot?.sharedDefault&&!sharedAccepted))return;
-    await change(false,rule.token,Number(text));
+    await change(false,rule.token,Number(text),rule);
   }
-  async function change(undo:boolean,token:string,value?:number){
+  async function change(undo:boolean,token:string,value?:number,rule?:Rule){
     if(waiting)return;
     const request=generation.current;setBusy(true);setError("");setWriteError(true);setCopied(false);
     try{
       const result=await invoke<Receipt>(undo?"undo_fm_league_u22":"disable_fm_league_u22",{token,value,acceptSharedDefault:sharedAccepted});
       if(request!==generation.current||result.sessionId!==sessionId)return;
+      if(!undo&&!result.persistent&&rule&&(rule.id==="engine-default-max"||rule.id==="friendly-callup-limit")) {
+        rememberNationalCallupLimit(nationUid,result.after);
+        setRememberedLimit(Boolean(nationUid));
+      }
       setReceipt(result);setSnapshot(null);setRevision(previous=>previous+1);
     }catch(reason){if(request===generation.current){setError(String(reason));setSnapshot(null);}}
     finally{if(request===generation.current)setBusy(false);}
@@ -88,7 +94,7 @@ export function LeagueU22Editor({sessionId}:{sessionId:number}){
       {[...(catalog?.warnings??[]),...(snapshot?.warnings??[])].map((message,i)=><p className="league-rules__notice" key={`${i}-${message}`}>{message}</p>)}
       {shared&&<div className="league-rules__scope"><strong>Domyślne zasady mogą być współdzielone</strong><p>Zmiana może objąć także inne rozgrywki korzystające z tej samej listy lub definicji.</p>{snapshot?.rules.some(rule=>rule.token)&&<label><input type="checkbox" checked={sharedAccepted} disabled={waiting} onChange={event=>setSharedAccepted(event.target.checked)}/>Chcę zmienić reguły także wtedy, gdy korzystają z nich inne rozgrywki.</label>}</div>}
       {error&&<div role="alert" className="league-rules__error"><strong>{writeError?"Zapis nie został potwierdzony":"Nie udało się odczytać zasad"}</strong><p>{error}</p><AppButton onClick={()=>{void navigator.clipboard.writeText(error).then(()=>setCopied(true)).catch(()=>setCopied(false));}}>{copied?"Skopiowano":"Kopiuj komunikat"}</AppButton></div>}
-      {receipt&&<div className="league-rules__receipt" role="status"><strong>Potwierdzono odczytem: {receipt.before} → {receipt.after}</strong><p>{receipt.persistent?"Zapis objął aktywną regułę i dopasowaną definicję źródłową. Zapisz karierę w FM; trwałość trzeba potwierdzić po ponownym wczytaniu tego zapisu.":"Zmieniono tylko aktywne kopie. FM może przywrócić limit przy przebudowie zasad lub wczytaniu zapisu."} Sprawdź efekt po ponownym otwarciu zasad i wyboru składu w FM.</p></div>}
+      {receipt&&<div className="league-rules__receipt" role="status"><strong>Potwierdzono odczytem: {receipt.before} → {receipt.after}</strong><p>{receipt.persistent?"Zapis objął aktywną regułę i dopasowaną definicję źródłową. Zapisz karierę w FM; trwałość trzeba potwierdzić po ponownym wczytaniu tego zapisu.":rememberedLimit?"Aplikacja zapamiętała ten limit dla prowadzonej reprezentacji i przywróci go automatycznie po każdym ponownym połączeniu z FM.":"Zmieniono tylko aktywne kopie. FM może przywrócić limit przy przebudowie zasad lub wczytaniu zapisu."} Sprawdź efekt po ponownym otwarciu zasad i wyboru składu w FM.</p></div>}
       {waiting&&<p role="status">{catalogBusy?"Odczytywanie rozgrywek drużyny…":"Odczytywanie lub zapisywanie zasad…"}</p>}
       {snapshot&&<>
         <div className="league-rules__table-heading"><h3>Limity zawodników i kadry</h3><span>Data gry: {snapshot.gameDate}</span></div>

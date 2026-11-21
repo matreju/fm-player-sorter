@@ -6129,6 +6129,11 @@ pub(crate) fn undo_league_u22(token:String)->Result<crate::fm_league::LeagueU22R
 pub(crate) fn undo_league_u22(_token:String)->Result<crate::fm_league::LeagueU22Result,String> {Err("Edycja zasad ligi jest dostępna w aplikacji Windows.".into())}
 
 #[cfg(windows)]
+pub(crate) fn restore_national_callup_limit(session_id:u64,value:u32)->Result<crate::fm_league::LeagueU22Result,String> {windows_reader::restore_national_callup_limit(session_id,value)}
+#[cfg(not(windows))]
+pub(crate) fn restore_national_callup_limit(_session_id:u64,_value:u32)->Result<crate::fm_league::LeagueU22Result,String> {Err("Przywracanie limitu powołań jest dostępne w aplikacji Windows.".into())}
+
+#[cfg(windows)]
 pub(crate) fn get_league_competitions(session_id:u64)->Result<crate::fm_league::LeagueCompetitionList,String> {windows_reader::get_league_competitions(session_id)}
 #[cfg(not(windows))]
 pub(crate) fn get_league_competitions(_session_id:u64)->Result<crate::fm_league::LeagueCompetitionList,String> {Err("Zasady rozgrywek są dostępne w aplikacji Windows.".into())}

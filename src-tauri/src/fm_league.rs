@@ -60,3 +60,7 @@ pub async fn disable_fm_league_u22(token:String,value:u32,accept_shared_default:
 pub async fn undo_fm_league_u22(token:String)->Result<LeagueU22Result,String> {
     tauri::async_runtime::spawn_blocking(move||crate::fm_reader::undo_league_u22(token)).await.map_err(|e|e.to_string())?
 }
+#[tauri::command]
+pub async fn restore_fm_national_callup_limit(session_id:u64,value:u32)->Result<LeagueU22Result,String> {
+    tauri::async_runtime::spawn_blocking(move||crate::fm_reader::restore_national_callup_limit(session_id,value)).await.map_err(|e|e.to_string())?
+}

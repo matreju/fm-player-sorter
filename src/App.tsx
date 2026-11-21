@@ -73,6 +73,7 @@ import {
 } from "./utils/moneyball";
 import { getPlayerKey } from "./utils/playerIdentity";
 import { isGoalkeeper } from "./utils/playerPositionType";
+import { restoreNationalCallupLimit } from "./utils/nationalCallupLimit";
 import { getPlayerRoleAttributeInsights } from "./utils/playerRoleInsights";
 import {
   calculatePositionFit,
@@ -738,6 +739,12 @@ export default function App() {
           teamLogoDataUrl:current?.teamLogoDataUrl??null}));
         setSupplementaryDataLoading(false);
         return;
+      }
+
+      if (result.success && result.managedMode === "nation" && result.managedNationUid) {
+        void restoreNationalCallupLimit(result.sessionId, result.managedNationUid).catch(() => {
+          // Restoring an optional preference must not block loading the team.
+        });
       }
 
       // Metadane reprezentacji (w tym motyw) pokazujemy od razu. Statystyki

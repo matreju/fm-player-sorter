@@ -44,6 +44,7 @@ pub fn run() {
             fm_league::get_fm_league_u22_editor,
             fm_league::disable_fm_league_u22,
             fm_league::undo_fm_league_u22,
+            fm_league::restore_fm_national_callup_limit,
             fm_editor::get_fm_player_editor,
             fm_editor::apply_fm_player_edit,
             fm_editor::undo_fm_player_edit,
