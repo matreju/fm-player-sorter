@@ -18,6 +18,56 @@ const FRIENDLY_COMPETITION_UID:u32=u32::MAX-1;
 const FRIENDLY_PHASE_ID:&str="national-friendlies";
 fn league_quota_state()->&'static Mutex<LeagueQuotaState> {LEAGUE_QUOTA_STATE.get_or_init(||Mutex::new(LeagueQuotaState::default()))}
 
+#[derive(Clone,Copy)]
+struct LeagueCodeRvas {
+    default_max:[usize;2],
+    preliminary_default:Option<usize>,
+    preliminary_redirect:Option<(usize,usize)>,
+}
+fn league_code_rvas(profile:Option<&str>)->LeagueCodeRvas {
+    if profile==Some(FM27_PLUGIN_2026_11_17) {
+        // 2026-11-17 moved the two inherited max-squad immediates and changed
+        // get_max_prelim_squad_size into a small property lookup with an inline
+        // fallback. Patch the three one-byte defaults together.
+        LeagueCodeRvas {
+            default_max:[0x12E6BC3,0x12E6BCB],
+            preliminary_default:Some(0x45EB564),
+            preliminary_redirect:None,
+        }
+    }else{
+        LeagueCodeRvas {
+            default_max:[0x129E293,0x129E29B],
+            preliminary_default:None,
+            preliminary_redirect:Some((0x129E530,0x129E240)),
+        }
+    }
+}
+fn league_default_max_addresses(process:&RemoteProcess,base:usize)->[usize;2] {
+    let rvas=league_code_rvas(process.native_plugin_profile_id.as_deref()).default_max;
+    [base+rvas[0],base+rvas[1]]
+}
+
+#[cfg(test)]
+mod league_code_tests {
+    use super::*;
+
+    #[test]
+    fn november_17_profile_uses_relocated_callup_defaults() {
+        let code=league_code_rvas(Some(FM27_PLUGIN_2026_11_17));
+        assert_eq!(code.default_max,[0x12E6BC3,0x12E6BCB]);
+        assert_eq!(code.preliminary_default,Some(0x45EB564));
+        assert!(code.preliminary_redirect.is_none());
+    }
+
+    #[test]
+    fn earlier_profiles_keep_the_validated_redirect_layout() {
+        let code=league_code_rvas(Some(FM27_PLUGIN_2503222));
+        assert_eq!(code.default_max,[0x129E293,0x129E29B]);
+        assert_eq!(code.preliminary_redirect,Some((0x129E530,0x129E240)));
+        assert!(code.preliminary_default.is_none());
+    }
+}
+
 fn league_quota_context(session_id:u64,write:bool)->Result<(RemoteProcess,RefreshSession),String> {
     let cache=refresh_slot().lock().map_err(|_|"Czytnik FM jest zajęty.")?.as_ref().cloned().ok_or("Najpierw połącz aplikację z grą.")?;
     if cache.database.session_id!=session_id {return Err("Połącz aplikację z prowadzoną drużyną i otwórz zasady rozgrywek ponownie.".into());}
@@ -264,7 +314,7 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
     if competition_uid==FRIENDLY_COMPETITION_UID {
         if phase_id!=FRIENDLY_PHASE_ID||cache.database.managed_nation_uid.is_none() {return Err("Mecze towarzyskie nie są dostępne w bieżącym trybie drużyny.".into());}
         let date=league_live_date(&process,&cache)?;
-        let addresses=[base+0x129E293,base+0x129E29B];
+        let addresses=league_default_max_addresses(&process,base);
         let values=addresses.iter().filter_map(|address|process.read_u8(*address)).collect::<Vec<_>>();
         if values.len()!=2||values[0]!=values[1]||values[0]>99 {return Err("Nie potwierdzono domyślnego limitu powołań FM dla meczów towarzyskich.".into());}
         let value=values[0] as u32;
@@ -536,7 +586,7 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
             }
         }else{
             shared_default=true;
-            let addresses=[base+0x129E293,base+0x129E29B];
+            let addresses=league_default_max_addresses(&process,base);
             let values=addresses.iter().filter_map(|address|process.read_u8(*address)).collect::<Vec<_>>();
             if values.len()==2&&values[0]==values[1]&&values[0]<=99 {
                 let value=values[0] as u32;
@@ -587,12 +637,42 @@ pub(super) fn get_league_u22_editor(session_id:u64,competition_uid:u32,phase_id:
                 let token=editor_token();drafts.push((token.clone(),draft));
                 rules.push(LeagueRuleView{id:"preliminary-max-squad".into(),label:"Limit zatwierdzania powołań".into(),copies:1,value:preliminary_value,mode:"Maksimum".into(),token:Some(token),persistent:true,note:Some("Ten ukryty limit steruje aktywnością przycisku Potwierdź.".into())});
             }
-        }else{
+        }else if let Some(rva)=league_code_rvas(process.native_plugin_profile_id.as_deref()).preliminary_default {
+            // Current FM27 keeps the inherited preliminary-squad ceiling as
+            // an inline one-byte fallback. With no ACTUAL_COMP property this
+            // value independently gates the call-up confirmation button.
+            let address=base+rva;
+            let preliminary_value=process.read_u8(address).filter(|value|*value<=99).ok_or("Nie odczytano domyślnego limitu zatwierdzania powołań.")?;
+            let signature=process.read_exact(address-1,3).ok_or("Nie potwierdzono kodu domyślnego limitu zatwierdzania.")?;
+            if signature.first()!=Some(&0xB0)||signature.get(2)!=Some(&0xC3) {
+                warnings.push("Nie potwierdzono kodu domyślnego limitu zatwierdzania; nie dołączono synchronizacji przycisku Potwierdź.".into());
+            }else{
+                let maximum_view=rules.iter_mut().find(|rule|rule.label=="Maksymalna wielkość składu i rejestracji"||rule.label=="Wielkość kadry — maksimum"||rule.id=="competition-max-squad"||rule.id=="engine-default-max");
+                if let Some(view)=maximum_view {
+                    if let Some(token)=view.token.as_ref() {
+                        if let Some((_,draft))=drafts.iter_mut().find(|(candidate,_)|candidate==token) {
+                            let patch=LeagueQuotaPatch{address,before:vec![preliminary_value],after:vec![preliminary_value]};
+                            draft.guards.push(LeagueGuard{address:address-1,bytes:vec![0xB0]});
+                            draft.guards.push(LeagueGuard{address:address+1,bytes:vec![0xC3]});
+                            draft.guards.retain(|guard|guard.address!=patch.address);
+                            draft.patches.push(patch);draft.code_patch=true;draft.persistent=false;draft.shared_default=true;
+                            league_verify_quota(&process,&cache,draft,date)?;
+                            let displayed_value=view.value;view.label="Maksymalna liczba powołanych i zatwierdzanych".into();view.persistent=false;view.copies+=1;shared_default=true;
+                            view.note=Some(if displayed_value==preliminary_value as u32 {
+                                format!("Zapis zmienia razem dziedziczony limit powołań i przycisku Potwierdź: {displayed_value}. Zmiana obowiązuje do zamknięcia gry.")
+                            }else{
+                                format!("Dziedziczony limit powołań wynosi {displayed_value}, a domyślny limit zatwierdzania {preliminary_value}. Zapis wyrówna wszystkie wartości do wpisanej liczby i obowiązuje do zamknięcia gry.")
+                            });
+                        }
+                    }
+                }
+            }
+        }else if let Some((entry_rva,target_rva))=league_code_rvas(process.native_plugin_profile_id.as_deref()).preliminary_redirect {
             // Some international competitions inherit max_prelim_squad_size
             // directly from the database and therefore have no writable
             // ACTUAL_COMP property. Redirect its getter to max_squad_size so
             // the confirmation button uses the same edited maximum.
-            let entry=base+0x129E530;let target=base+0x129E240;
+            let entry=base+entry_rva;let target=base+target_rva;
             let before=process.read_exact(entry,5).ok_or("Nie potwierdzono kodu limitu przycisku Potwierdź.")?;
             if before==[0x56,0x57,0x48,0x83,0xEC] {
                 let relative=(target as i64-(entry+5) as i64) as i32;
