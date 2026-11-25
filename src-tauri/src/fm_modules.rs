@@ -50,6 +50,16 @@ pub async fn inspect_fm_modules() -> Result<FmModuleReport, String> {
 }
 
 pub(crate) fn inspect_fm_modules_blocking() -> Result<FmModuleReport, String> {
+    inspect_modules(false)
+}
+
+/// Normal connection needs only the two libraries that define its memory layout.
+/// Keep the wider inventory/hash report available to explicit diagnostics.
+pub(crate) fn inspect_reader_modules() -> Result<FmModuleReport, String> {
+    inspect_modules(true)
+}
+
+fn inspect_modules(reader_only: bool) -> Result<FmModuleReport, String> {
     let process = detect_football_manager();
 
     if !process.detected {
@@ -99,6 +109,9 @@ pub(crate) fn inspect_fm_modules_blocking() -> Result<FmModuleReport, String> {
     let mut hashed_count = 0_usize;
 
     for module in &mut modules {
+        if reader_only && !["game_plugin.dll", "GameAssembly.dll"].iter().any(|name| module.name.eq_ignore_ascii_case(name)) {
+            continue;
+        }
         if !module.is_candidate || hashed_count >= MAX_HASHED_CANDIDATES {
             continue;
         }
@@ -140,6 +153,34 @@ pub(crate) fn inspect_fm_modules_blocking() -> Result<FmModuleReport, String> {
 
 #[cfg(target_os = "windows")]
 fn enumerate_modules(
+    pid: u32,
+    normalized_game_directory: &str,
+) -> Result<Vec<FmLoadedModule>, String> {
+    use std::{thread, time::Duration};
+
+    let mut last_error = None;
+
+    // CreateToolhelp32Snapshot potrafi zwrócić przejściowy ERROR_PARTIAL_COPY,
+    // gdy FM ładuje lub zwalnia bibliotekę dokładnie w chwili wykonywania
+    // migawki. Nie uznajemy pojedynczej takiej próby za trwałą awarię.
+    for attempt in 0..5_u64 {
+        match enumerate_modules_once(pid, normalized_game_directory) {
+            Ok(modules) => return Ok(modules),
+            Err(error) => last_error = Some(error),
+        }
+
+        if attempt < 4 {
+            thread::sleep(Duration::from_millis(40 * (attempt + 1)));
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| {
+        "Nie udało się pobrać listy modułów procesu FM.".to_string()
+    }))
+}
+
+#[cfg(target_os = "windows")]
+fn enumerate_modules_once(
     pid: u32,
     normalized_game_directory: &str,
 ) -> Result<Vec<FmLoadedModule>, String> {

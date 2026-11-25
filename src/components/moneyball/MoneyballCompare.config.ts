@@ -27,7 +27,7 @@ export const MONEYBALL_COMPARE_METRIC_GROUPS: CompareMetricGroup[] = [
       },
       {
         label: "Celne strz.",
-        columns: ["% strzałów"],
+        columns: ["Celne strzały (%)", "% strzałów"],
       },
     ],
   },
@@ -61,7 +61,7 @@ export const MONEYBALL_COMPARE_METRIC_GROUPS: CompareMetricGroup[] = [
     metrics: [
       {
         label: "Podania %",
-        columns: ["Pod %"],
+        columns: ["Podania (%)", "Pod %"],
       },
       {
         label: "Próby/90",
@@ -95,7 +95,7 @@ export const MONEYBALL_COMPARE_METRIC_GROUPS: CompareMetricGroup[] = [
       },
       {
         label: "Celne",
-        columns: ["Doś C"],
+        columns: ["Celne dośrodkowania", "Doś C"],
       },
       {
         label: "Celne/90",
@@ -103,7 +103,7 @@ export const MONEYBALL_COMPARE_METRIC_GROUPS: CompareMetricGroup[] = [
       },
       {
         label: "Celne %",
-        columns: ["Doś C/P"],
+        columns: ["Dośrodkowania (%)", "Doś C/P"],
       },
     ],
   },
@@ -133,7 +133,7 @@ export const MONEYBALL_COMPARE_METRIC_GROUPS: CompareMetricGroup[] = [
     metrics: [
       {
         label: "Próby odb.",
-        columns: ["Wślizgi"],
+        columns: ["Próby odbiorów", "Wślizgi"],
       },
       {
         label: "Odbiory/90",
@@ -141,7 +141,7 @@ export const MONEYBALL_COMPARE_METRIC_GROUPS: CompareMetricGroup[] = [
       },
       {
         label: "Odbiór %",
-        columns: ["Odb%"],
+        columns: ["Odbiory (%)", "Odb%"],
       },
       {
         label: "Klucz. odb./90",
@@ -162,11 +162,11 @@ export const MONEYBALL_COMPARE_METRIC_GROUPS: CompareMetricGroup[] = [
       },
       {
         label: "Główki %",
-        columns: ["% Głw"],
+        columns: ["Główki (%)", "% Głw"],
       },
       {
         label: "Wygr. główki",
-        columns: ["Głw"],
+        columns: ["Wygrane główki", "Głw"],
       },
       {
         label: "Zaw. bramki",
@@ -193,7 +193,7 @@ export const MONEYBALL_COMPARE_METRIC_GROUPS: CompareMetricGroup[] = [
       },
       {
         label: "Żółte",
-        columns: ["ŻK"],
+        columns: ["Żółte kartki", "ŻK"],
         higherBetter: false,
       },
       {

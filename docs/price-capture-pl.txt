@@ -1,0 +1,49 @@
+PRÓBNY ODCZYT WYNIKU KALKULACJI FM27
+
+To narzędzie weryfikacyjne, a nie ukończona kolumna ceny sprzedaży.
+Nie oblicza własnej ceny i nie wywołuje funkcji FM. Czeka, aż sam FM wykona
+obliczenie dla wybranego zawodnika. Wynik może dotyczyć innego trybu wyceny
+niż oferta kupna; nie jest jeszcze gwarantowaną ceną akceptacji.
+
+WYMAGANIA
+Windows x64, rozpoznane wydanie FM27, wczytana kariera klubowa, połączenie
+z aplikacją. Microsoft CDB x64: instalator Windows SDK, składnik
+„Debugging Tools for Windows”. Sam WinDbg ze sklepu może nie zawierać CDB.
+Aplikacja szuka: Windows Kits\10\Debuggers\x64\cdb.exe w Program Files.
+Oficjalna instrukcja:
+https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/debugger-download-tools
+
+PRZEBIEG
+1. Zapisz karierę, użyj kopii zapisu i wstrzymaj upływ czasu w FM.
+2. W aplikacji: Transfery, kliknij nazwisko, rozwiń „Próbny odczyt ceny z FM”.
+3. Przygotuj próbę i uruchom CDB. Na czas próby nie używaj edytora ani
+   innych debuggerów. CDB na krótko zatrzymuje wykonywanie gry.
+4. Gdy konsola wyświetli FMPRICE_READY, przejdź do FM. Otwórz ponownie
+   ekran transferu/oferty TEGO SAMEGO zawodnika. Nie wysyłaj oferty.
+   Samo otwarcie profilu może nie uruchomić obliczenia; pamięć podręczna
+   gry również może sprawić, że nie będzie nowego wyniku.
+5. Po przechwyceniu konsola sama odłączy debugger. W aplikacji kliknij
+   „Odczytaj raport”. Nie zmieniaj daty, klubu ani zapisu w trakcie próby.
+6. Porównaj wynik z aktualnym żądaniem klubu w FM. Zapisz, czy to kwota
+   płatna od razu, czy są raty/premie/procent od sprzedaży. Skopiuj raport
+   i dołącz go do rozmowy razem z kwotą/ekranem z gry.
+
+ZAKOŃCZENIE / BRAK WYNIKU
+Jeżeli po około 30 sekundach nie ma wyniku, przejdź do konsoli CDB,
+naciśnij Ctrl+C, wpisz qd i naciśnij Enter. To odłącza debugger i pozostawia
+FM uruchomiony. Następnie odczytaj raport. Nie zostawiaj próby bez nadzoru.
+CDB uruchamiany jest z -pd (odłączanie przy zakończeniu debuggera).
+Zamknięcie aplikacji nie kończy osobnej konsoli CDB; zakończ ją samodzielnie.
+Nie używaj polecenia q zamiast qd. Nie kończ procesu FM.
+
+CO JEST ROBIONE
+CDB zakłada tymczasowe punkty zatrzymania w kodzie i na powrocie funkcji;
+nie zmienia atrybutów, kontraktów ani cen w bazie i nie wstrzykuje DLL.
+Pilnuje zawodnika, klubu, daty, wątku i stosu. Pobiera wynik funkcji oraz
+jej kontekst. Narzędzie wymaga sprawdzenia w działającym FM; pomyślna
+kompilacja aplikacji nie potwierdza działania przechwycenia ani ceny.
+
+RAPORT
+Aplikacja eksportuje tylko wynik/kontekst próby, a nie cały dziennik CDB.
+Surowy capture.log w folderze próby może zawierać lokalne ścieżki systemowe;
+nie trzeba go udostępniać. Nic nie jest wysyłane automatycznie.

@@ -25,7 +25,7 @@ const drawerStyle: CSSProperties = {
   height: "100vh",
   display: "flex",
   flexDirection: "column",
-  borderLeft: "1px solid #334155",
+  borderLeft: "1px solid var(--team-accent-border, #334155)",
   background: "#0f141d",
   boxShadow: "-26px 0 70px rgba(0, 0, 0, 0.5)",
 };
@@ -37,8 +37,8 @@ const drawerHeaderStyle: CSSProperties = {
   justifyContent: "space-between",
   gap: 12,
   padding: "10px 14px",
-  borderBottom: "1px solid #26334a",
-  background: "linear-gradient(135deg, #111827, #0f172a)",
+  borderBottom: "1px solid var(--team-accent-border, #26334a)",
+  background: "linear-gradient(110deg, var(--team-header-glow, #111827), transparent), #0f172a",
 };
 
 const drawerTitleBlockStyle: CSSProperties = {

@@ -80,7 +80,7 @@ function goalkeeperMetric(
 }
 
 function getSavesPer90(row: TableRow): MoneyballMetric {
-  const saves = getNumberFromColumnsLocal(row, ["Obs"]);
+  const saves = getNumberFromColumnsLocal(row, ["Obrony", "Obs"]);
   const minutes = getNumberFromColumnsLocal(row, ["Minuty", "Min"]);
 
   if (saves === null || minutes === null || minutes <= 0) {
@@ -109,32 +109,32 @@ function getGoalkeeperMoneyballSections(row: TableRow): MoneyballSection[] {
       metrics: [
         goalkeeperMetric(row, ["Minuty", "Min"], "Minuty"),
         goalkeeperMetric(row, ["Występy"], "Występy"),
-        goalkeeperMetric(row, ["Średnia ocena w klubie"], "Śr. ocena"),
+        goalkeeperMetric(row, ["Śr. ocena", "Średnia ocena w klubie"], "Śr. ocena"),
         goalkeeperMetric(row, ["Ostatnie 5 występów klubowych"], "Ostatnie 5"),
       ],
     },
     {
       title: "Bronienie strzałów",
       metrics: [
-        goalkeeperMetric(row, ["OS %"], "OS %"),
+        goalkeeperMetric(row, ["Obrony (%)", "OS %"], "OS %"),
         goalkeeperMetric(row, ["xOS %"], "xOS %"),
-        goalkeeperMetric(row, ["Obs"], "Obronione"),
+        goalkeeperMetric(row, ["Obrony", "Obs"], "Obronione"),
         getSavesPer90(row),
       ],
     },
     {
       title: "Oczekiwane gole",
       metrics: [
-        goalkeeperMetric(row, ["xGUn"], "xG uniknięte"),
-        goalkeeperMetric(row, ["ZxG/90"], "ZxG/90"),
+        goalkeeperMetric(row, ["xG uniknięte", "xGUn"], "xG uniknięte"),
+        goalkeeperMetric(row, ["xG uniknięte/90", "ZxG/90"], "ZxG/90"),
       ],
     },
     {
       title: "Parady i reakcje",
       metrics: [
         goalkeeperMetric(row, ["Złapane strzały", "Złapane", "ZłS"], "Złapane"),
-        goalkeeperMetric(row, ["Sps"], "Sparowane"),
-        goalkeeperMetric(row, ["Ssr"], "Sparowane na róg", {
+        goalkeeperMetric(row, ["Sparowane strzały", "Sps"], "Sparowane"),
+        goalkeeperMetric(row, ["Strzały przeniesione", "Ssr"], "Przeniesione", {
           better: "lower",
         }),
       ],
@@ -142,7 +142,7 @@ function getGoalkeeperMoneyballSections(row: TableRow): MoneyballSection[] {
     {
       title: "Dystrybucja",
       metrics: [
-        goalkeeperMetric(row, ["Pod %"], "Podania %"),
+        goalkeeperMetric(row, ["Podania (%)", "Pod %"], "Podania %"),
         goalkeeperMetric(row, ["Pod/90"], "Podania/90"),
         goalkeeperMetric(row, ["PodC/90"], "Celne/90"),
         goalkeeperMetric(row, ["Str Płk/90"], "Straty/90", {
@@ -188,11 +188,11 @@ function getGoalkeeperMoneyballInsights(
     });
   }
 
-  const savePercent = getNumberFromColumnsLocal(row, ["OS %"]);
+  const savePercent = getNumberFromColumnsLocal(row, ["Obrony (%)", "OS %"]);
   const expectedSavePercent = getNumberFromColumnsLocal(row, ["xOS %"]);
-  const preventedGoals = getNumberFromColumnsLocal(row, ["xGUn"]);
-  const preventedPer90 = getNumberFromColumnsLocal(row, ["ZxG/90"]);
-  const parriedToCorner = getNumberFromColumnsLocal(row, ["Ssr"]);
+  const preventedGoals = getNumberFromColumnsLocal(row, ["xG uniknięte", "xGUn"]);
+  const preventedPer90 = getNumberFromColumnsLocal(row, ["xG uniknięte/90", "ZxG/90"]);
+  const parriedToCorner = getNumberFromColumnsLocal(row, ["Strzały przeniesione", "Ssr"]);
 
   if (preventedGoals !== null && preventedGoals > 0) {
     insights.push({
@@ -238,13 +238,13 @@ function getGoalkeeperPositionProfile(row: TableRow): MoneyballPositionProfile {
   const positives: string[] = [];
   const warnings: string[] = [];
 
-  const savePercent = getNumberFromColumnsLocal(row, ["OS %"]);
+  const savePercent = getNumberFromColumnsLocal(row, ["Obrony (%)", "OS %"]);
   const expectedSavePercent = getNumberFromColumnsLocal(row, ["xOS %"]);
-  const preventedGoals = getNumberFromColumnsLocal(row, ["xGUn"]);
-  const preventedPer90 = getNumberFromColumnsLocal(row, ["ZxG/90"]);
-  const parried = getNumberFromColumnsLocal(row, ["Sps"]);
-  const parriedToCorner = getNumberFromColumnsLocal(row, ["Ssr"]);
-  const passPercent = getNumberFromColumnsLocal(row, ["Pod %"]);
+  const preventedGoals = getNumberFromColumnsLocal(row, ["xG uniknięte", "xGUn"]);
+  const preventedPer90 = getNumberFromColumnsLocal(row, ["xG uniknięte/90", "ZxG/90"]);
+  const parried = getNumberFromColumnsLocal(row, ["Sparowane strzały", "Sps"]);
+  const parriedToCorner = getNumberFromColumnsLocal(row, ["Strzały przeniesione", "Ssr"]);
+  const passPercent = getNumberFromColumnsLocal(row, ["Podania (%)", "Pod %"]);
   const losses90 = getNumberFromColumnsLocal(row, ["Str Płk/90"]);
 
   if (preventedGoals !== null && preventedGoals > 0) {
@@ -584,7 +584,7 @@ useEffect(() => {
       <div>
         <h3 style={styles.playerDuelTitle}>Porównanie Moneyball H2H</h3>
         <div style={styles.playerDuelSubtitle}>
-          Porównaj aktualnego zawodnika z konkretnym piłkarzem z importu
+          Porównaj aktualnego zawodnika z konkretnym piłkarzem z kadry
         </div>
       </div>
 
