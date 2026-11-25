@@ -733,7 +733,7 @@ export default function App() {
           setRows(current=>merge(current));
           setHeaders(current=>Array.from(new Set([...current,...result.headers])));
         });
-        if (result.managedMode === "nation") syncSelectedPlayers(result.rows);
+        if (result.managedMode === "nation" && result.rows.some(row => "Powołany" in row)) syncSelectedPlayers(result.rows);
         setSnapshot(current=>createFmSnapshot({...result,
           rows:merge(current?.rows??[]),headers:Array.from(new Set([...(current?.headers??[]),...result.headers])),
           teamLogoDataUrl:current?.teamLogoDataUrl??null}));

@@ -382,6 +382,7 @@ mod windows_reader {
     const FM27_PLUGIN_2026_11_10: &str = "f79b0a3413dd0e3f461b0afbc3ff397003f4a26d7525a30717428de6a8b91196";
     const FM27_PLUGIN_2503222: &str = fm_version::FM27_NATIVE_2503222_PROFILE_ID;
     const FM27_PLUGIN_2026_11_17: &str = fm_version::FM27_NATIVE_2026_11_17_PROFILE_ID;
+    const FM27_PLUGIN_2026_11_25: &str = fm_version::FM27_NATIVE_2026_11_25_PROFILE_ID;
     const FM27_2503222_RETIREMENT_MANAGER: usize = 0x5812D50;
     const FM27_2503222_PLAYERS: usize = 0x5820810;
     // Native code, RTTI and every address used by the reader live before this
@@ -1145,7 +1146,9 @@ mod windows_reader {
 
     // Research report only. No write handle, inferred ownership or edit token.
     fn league_native_type(process:&RemoteProcess,base:usize,vtable:usize)->Option<String> {
-        let (data_start,data_end)=if dynamic_league_profile(process) {
+        let (data_start,data_end)=if process.native_plugin_profile_id.as_deref()==Some(FM27_PLUGIN_2026_11_25) {
+            (0x4C36000usize,0x5A8B000usize)
+        } else if dynamic_league_profile(process) {
             // Exact RTTI-bearing PE sections of the uploaded F79B... DLL.
             // Code and global addresses are not borrowed from an older build.
             (0x4BDD000usize,0x58F0000usize)
@@ -1902,6 +1905,8 @@ mod windows_reader {
     fn league_compatible_fm27(process: &RemoteProcess) -> bool {
         verified_fm27(process)
             || dynamic_league_profile(process)
+            || (process.layout.id==fm_version::FM27_2026_11_25.id
+                && process.native_plugin_profile_id.as_deref()==Some(FM27_PLUGIN_2026_11_25))
     }
     // FM27 native home-shirt palette: CLUB + B0 -> info + 78 pointer vector.
     // Verified against 1sbc/1scl in CLUB::get (110A55F/110665C), 114BC00,
@@ -2040,8 +2045,11 @@ mod windows_reader {
         if cache.database.managed_mode=="club" {
             let team=contract_team(process,person).ok_or_else(||read("Kontrakt menedżera jest chwilowo niedostępny. Ponów odświeżanie po zakończeniu przetwarzania w FM."))?;
             if team!=cache.team { return Err(refresh_error("R04","Menedżer prowadzi teraz inny zespół. Użyj „Połącz ponownie”.")); }
-        } else if record_uid(process,cache.nation)!=cache.database.managed_nation_uid {
-            return Err(refresh_error("R04","Zmieniła się prowadzona reprezentacja. Użyj „Połącz ponownie”."));
+        } else {
+            let nation_uid=record_uid(process,cache.nation).ok_or_else(||read("Reprezentacja jest chwilowo niedostępna. Ponów odświeżanie."))?;
+            if Some(nation_uid)!=cache.database.managed_nation_uid {
+                return Err(refresh_error("R04","Zmieniła się prowadzona reprezentacja."));
+            }
         }
         if let Some(club)=cache.club {
             let club_uid=record_uid(process,club).ok_or_else(||read("Nie można teraz odczytać klubu. Ponów odświeżanie."))?;
@@ -2113,6 +2121,9 @@ mod windows_reader {
         let (groups,own_clubs)=if let Some(club)=cache.club {
             collect_managed_club_players(&process,club,cache.team,&candidates,Some(&source.own_uids))?
         } else { (HashMap::new(),HashSet::new()) };
+        let national_roster=if cache.club.is_none() {
+            collect_team_roster_uids(&process,cache.team,&candidates).ok()
+        } else { None };
         let world_date=native_plugin_shift(&process).and_then(|shift|
             process.read_u32(cache.plugin_base+0x56AD378+shift).filter(|raw|decode_fm_date(*raw).is_some()).map(normalize_fm_date)
         );
@@ -2127,17 +2138,21 @@ mod windows_reader {
         let mut rows=Vec::new();let mut read_cache=PlayerReadCache::default();
         for cached in source.candidates.iter() {
             if cache.club.is_some() && !groups.contains_key(&cached.uid) { continue; }
+            if cache.club.is_none() && cached.nation_address!=cache.nation { continue; }
             let candidate=live_candidate(&process,cached).ok_or_else(||refresh_error("R07","Adres zawodnika zmienił się podczas odczytu. Ponów odświeżanie."))?;
             if cache.club.is_none() && candidate.nation_address!=cache.nation { continue; }
             let gender=cache.database.managed_squad_gender.as_deref();
-            if gender==Some("Kobiety") && !candidate.female || gender==Some("Mężczyźni") && candidate.female { continue; }
+            if cache.club.is_some() && (gender==Some("Kobiety") && !candidate.female || gender==Some("Mężczyźni") && candidate.female) { continue; }
             let player=read_player(&process,candidate.uid,candidate.person_address,candidate.player_address,candidate.ca,candidate.pa,&mut read_cache).ok_or_else(||refresh_error("R10","Dane zawodnika są aktualizowane przez FM. Ponów odświeżanie."))?;
             let mut row=player_to_row(player,world_date,derived_year);
             attach_euro_rate(&mut row,euro_per_gbp);
             if cache.club.is_some() { row.insert("Grupa klubowa".into(),groups.get(&candidate.uid).cloned().unwrap_or_default()); }
+            if let Some(roster)=&national_roster {
+                row.insert("Powołany".into(), if roster.contains(&candidate.uid) { "Tak" } else { "Nie" }.into());
+            }
             rows.push(row);
         }
-        if rows.is_empty() { return Err(refresh_error("R10","Skład jest chwilowo niedostępny. Ponów odświeżanie po zakończeniu operacji w grze.")); }
+        if rows.is_empty() && cache.club.is_some() { return Err(refresh_error("R10","Skład jest chwilowo niedostępny. Ponów odświeżanie po zakończeniu operacji w grze.")); }
         refresh_identity_check(&process,&cache)?;
         if current_registry.is_some() && native_player_vector(&process,cache.plugin_base)!=current_registry {
             return Err(refresh_error("R07","Rejestr zawodników zmienił się w trakcie odczytu. Ponów odświeżanie."));
@@ -2442,8 +2457,20 @@ mod windows_reader {
             }
         }
         let direct_club = early_club.or_else(|| resolve_active_contract_club(&process, &resolver, &active_human_team));
-        let (human_binding, mut binding_diagnostics) = if direct_club.is_some() {
-            // A proven native club job needs no heap-wide UI binding lookup.
+        let direct_nation = active_human_team.team_address.and_then(|team| {
+            refresh_manager_person(&process, active_human_team.registry_slot, &human_managers, team)?;
+            let native_type = resolver.native_type_name(process.read_ptr(team)?)?;
+            if !matches!(native_type.as_str(), ".?AVNATIONAL_TEAM@db@@" | ".?AVEXTERN_NATIONAL_TEAM@db@@") {
+                return None;
+            }
+            let (nation, name) = direct_team_nation(&process, team, &nation_counts)?;
+            Some(ManagedTeamResolution {
+                team_address: team, team_name: name.clone(), nation_address: nation,
+                nation_name: name, score: 0,
+            })
+        });
+        let (human_binding, mut binding_diagnostics) = if direct_club.is_some() || direct_nation.is_some() {
+            // A confirmed contract and typed team owner suffice without UI bindings.
             (None, HumanBindingDiagnostics::default())
         } else {
             let known_team_uids = collect_known_team_uids(&process, &uid_objects, &club_candidates);
@@ -2458,7 +2485,7 @@ mod windows_reader {
         // humanTeam is UI state and may be absent or stale on unrelated screens.
         let club_mode = direct_club.is_some()
             || human_binding.map(|binding| binding.club_manager_evidence > 0).unwrap_or(false);
-        let managed = direct_club.or_else(|| human_binding.and_then(|binding| {
+        let managed = direct_club.or(direct_nation).or_else(|| human_binding.and_then(|binding| {
             if club_mode {
                 return resolve_bound_club_team(&process, binding, active_human_team.team_address, &human_managers);
             }
@@ -2538,48 +2565,21 @@ mod windows_reader {
         let (club_groups, own_clubs) = if let Some(club) = managed_club {
             collect_managed_club_players(&process, club, managed.team_address, &player_candidates, None)?
         } else { (HashMap::new(), HashSet::new()) };
-        let active_national_roster = if club_mode {
-            HashSet::new()
-        } else {
-            collect_team_roster_uids(&process, managed.team_address, &player_candidates)
-        };
-        let national_wishlist = if club_mode {
-            None
-        } else {
-            let mut wishlist = collect_national_wishlist_uids(
-                &process,
-                active_human_team.human_address,
-                managed.nation_address,
-                &player_candidates,
-                &active_national_roster,
-            );
-            // Powołani muszą być widoczni na liście kandydatów nawet wtedy,
-            // gdy FM przechowuje listę życzeń i bieżącą kadrę osobno.
-            wishlist.extend(active_national_roster.iter().copied());
-            if wishlist.is_empty() {
-                return Err(
-                    "Rozpoznano reprezentację, ale nie udało się jednoznacznie odczytać trwałej Krajowej listy życzeń z danych reprezentacji lub federacji."
-                        .to_string(),
-                );
-            }
-            Some(wishlist)
-        };
+        let active_national_roster = (!club_mode)
+            .then(|| collect_team_roster_uids(&process, managed.team_address, &player_candidates).ok())
+            .flatten();
         let selected_candidates = player_candidates
             .values()
             .filter(|candidate| {
-                (if club_mode {
+                if club_mode {
                     club_groups.contains_key(&candidate.uid)
+                        && managed_gender.map_or(true, |female| candidate.female == female)
                 } else {
-                    national_wishlist
-                        .as_ref()
-                        .is_some_and(|wishlist| wishlist.contains(&candidate.uid))
-                })
-                    && managed_gender
-                        .map(|female| candidate.female == female)
-                        .unwrap_or(true)
+                    candidate.nation_address == managed_nation_address
+                }
             })
             .collect::<Vec<_>>();
-        if selected_candidates.is_empty() {
+        if selected_candidates.is_empty() && club_mode {
             return Err(format!(
                 "Rozpoznano prowadzony zespół, ale nie znaleziono jego zawodników. Odśwież połączenie po wczytaniu zapisu."
             ));
@@ -2669,7 +2669,9 @@ mod windows_reader {
                     row.insert("Klub".into(), managed_team.clone().unwrap_or_default());
                     row.insert("Grupa klubowa".into(), club_groups.get(&uid).cloned().unwrap_or_default());
                 } else {
-                    row.insert("Powołany".into(), if active_national_roster.contains(&uid) { "Tak" } else { "Nie" }.into());
+                    if let Some(roster) = &active_national_roster {
+                        row.insert("Powołany".into(), if roster.contains(&uid) { "Tak" } else { "Nie" }.into());
+                    }
                 }
                 row
             })
@@ -5310,7 +5312,12 @@ mod windows_reader {
         process: &RemoteProcess,
         team: usize,
         candidates: &HashMap<u32, PlayerCandidate>,
-    ) -> HashSet<u32> {
+    ) -> Result<HashSet<u32>, String> {
+        let entries = pointer_vector(process, team + TEAM_PLAYERS_BEGIN, 200)
+            .map_err(|_| "Nie udało się odczytać aktualnych powołań reprezentacji.".to_string())?;
+        if entries.is_empty() {
+            return Ok(HashSet::new());
+        }
         let by_address = candidates
             .values()
             .flat_map(|candidate| {
@@ -5321,9 +5328,6 @@ mod windows_reader {
             })
             .collect::<HashMap<_, _>>();
         let mut roster = HashSet::new();
-        let Ok(entries) = pointer_vector(process, team + TEAM_PLAYERS_BEGIN, 200) else {
-            return roster;
-        };
         for entry in entries {
             let uid = by_address.get(&entry).copied().or_else(|| {
                 (0..=0x80).step_by(8).find_map(|offset| {
@@ -5336,63 +5340,7 @@ mod windows_reader {
                 roster.insert(uid);
             }
         }
-        roster
-    }
-
-    fn collect_national_wishlist_uids(
-        process: &RemoteProcess,
-        human: Option<usize>,
-        nation: usize,
-        candidates: &HashMap<u32, PlayerCandidate>,
-        active_roster: &HashSet<u32>,
-    ) -> HashSet<u32> {
-        let by_address = candidates
-            .values()
-            .flat_map(|candidate| [
-                (candidate.person_address, candidate.uid),
-                (candidate.player_address, candidate.uid),
-            ])
-            .collect::<HashMap<_, _>>();
-        // Krajowa lista życzeń widoczna w UI należy do aktywnego HUMAN, nie do
-        // wektora kadry NATIONAL_TEAM. To ten sam potwierdzony układ, którego
-        // używa wyszukiwarka list życzeń: HUMAN +230 -> listy, lista +50/+80
-        // -> rekordy zawodników. Największa aktywna lista odpowiada domyślnej
-        // liście krajowej (np. 119), podczas gdy TEAM_PLAYERS zawiera 23–26.
-        if let Some(human) = human {
-            if let Ok(lists) = pointer_vector(process, human + 0x230, 1024) {
-                let mut human_lists = Vec::<HashSet<u32>>::new();
-                for list in lists {
-                    let mut members = HashSet::new();
-                    if let Ok(targets) = pointer_vector(process, list + 0x50, 200_000) {
-                        for target in targets {
-                            if let Some(address) = process.read_ptr(target + 0x60) {
-                                if let Some(uid) = by_address.get(&address).copied() {
-                                    if candidates.get(&uid).is_some_and(|candidate|candidate.nation_address==nation) {members.insert(uid);}
-                                }
-                            }
-                        }
-                    }
-                    if let Ok(entries) = pointer_vector(process, list + 0x80, 200_000) {
-                        for entry in entries {
-                            if let Some(address) = process.read_ptr(entry) {
-                                if let Some(uid) = by_address.get(&address).copied() {
-                                    if candidates.get(&uid).is_some_and(|candidate|candidate.nation_address==nation) {members.insert(uid);}
-                                }
-                            }
-                        }
-                    }
-                    if members.len() > active_roster.len() && members.len() <= 2_000 {
-                        human_lists.push(members);
-                    }
-                }
-                human_lists.sort_by_key(|members| std::cmp::Reverse(members.len()));
-                if let Some(members) = human_lists.into_iter().next() { return members; }
-            }
-        }
-        // Nie wykonuj kosztownego skanowania grafu TEAM/NATION. Jeśli natywna
-        // lista HUMAN nie jest dostępna, połączenie ma zakończyć się szybko z
-        // komunikatem, zamiast blokować okno na wiele minut.
-        HashSet::new()
+        Ok(roster)
     }
 
     fn looks_like_club(process: &RemoteProcess, address: usize) -> bool {

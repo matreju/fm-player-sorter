@@ -52,6 +52,9 @@ jobs:
       - name: Test build selection
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked --lib fm_version::tests
 
+      - name: Test call-up limit profiles
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked --lib league_code_tests
+
       - name: Verify updater signing key
         shell: pwsh
         env:
@@ -72,10 +75,10 @@ jobs:
           releaseName: FM Player Sorter v__VERSION__
           releaseBody: |
             Aktualizacja obecnej aplikacji przez wbudowany aktualizator.
-            Pełna Krajowa lista życzeń jest wybierana jako największa potwierdzona kolekcja (do 200 zawodników), niezależnie od mniejszej kadry powołanych. Tożsamość menedżera reprezentacji nie wymaga klubowego wskaźnika zespołu w kontrakcie. Automatyczne zgrupowania mają trwałe identyfikatory i nie nadpisują wcześniejszych powołań po ponownym uruchomieniu aplikacji.
-            Statystyki klubowe mają awaryjne sumowanie z historii meczów, gdy FM27 nie zwraca zbiorczego rekordu sezonu. Kafelki pokazują mecze, minuty, gole, asysty oraz czyste konta zależnie od pozycji.
-            Dodano panel Reprezentacja z informacjami o kraju, stadionie, federacji, aktywnych rozgrywkach i edytorem zasad. Limit powołań jest dostępny jako „Wielkość kadry — maksimum”. Kolejne połączenia korzystają z pamięci skrótów niezmienionych plików gry.
-            Zmiany w pamięci trafiają do pliku kariery dopiero po zapisaniu gry w FM. Przed edycją wykonaj kopię zapisu.
+            Obsługa plików FM27 po aktualizacji z 25 listopada.
+            Widok reprezentacji pokazuje piłkarzy o głównej narodowości prowadzonego kraju także przy pustej kadrze. Powołani są oznaczani osobno.
+            Odświeżanie aktualizuje powołania i w razie utraty sesji automatycznie ponawia pełny odczyt.
+            Edytor limitu powołań i przywracanie zapamiętanego limitu obsługują rozpoznaną bibliotekę z 25 listopada.
           releaseDraft: false
           prerelease: ${{ github.ref_name == 'agent/fm27-compatibility' }}
           updaterJsonPreferNsis: true

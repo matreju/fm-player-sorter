@@ -13,6 +13,7 @@ pub(crate) const FM27_NATIVE_2486695_PROFILE_ID:&str="bc940e472418fc5c214208d7cf
 pub(crate) const FM27_NATIVE_2493426_PROFILE_ID:&str="252ff8fb5b7a4a5a5464db6ba632e309eef9b6e65ffa992ae20575a189e66c6a";
 pub(crate) const FM27_NATIVE_2503222_PROFILE_ID:&str="8c6971ce0b1c8afe6529ea3f46205a5175aea988a97d7421a980da42e23fe340";
 pub(crate) const FM27_NATIVE_2026_11_17_PROFILE_ID:&str="d12202dd01c3911d4c4e55e778f37b2251ffb10f9cf8cecc3b9ec08ece622c6b";
+pub(crate) const FM27_NATIVE_2026_11_25_PROFILE_ID:&str="4781439443abfb4b8197de03f1bed5b76063c862d014cfe01c5f54d83c9875ee";
 
 fn pe_layout_matches(path:&Path,raw_hash:&str,expected:&str)->Result<bool,String> {
     use std::{collections::BTreeMap,sync::{Mutex,OnceLock}};
@@ -46,6 +47,9 @@ pub(crate) fn native_profile_id(path:&Path,raw_hash:Option<&str>)->Result<Option
     }
     if raw.eq_ignore_ascii_case(FM27_NATIVE_2026_11_17_PROFILE_ID) {
         return Ok(Some(FM27_NATIVE_2026_11_17_PROFILE_ID.into()));
+    }
+    if raw.eq_ignore_ascii_case(FM27_NATIVE_2026_11_25_PROFILE_ID) {
+        return Ok(Some(FM27_NATIVE_2026_11_25_PROFILE_ID.into()));
     }
     if pe_layout_matches(path,raw,FM27_NATIVE_2486695_LAYOUT_SHA256)? {
         Ok(Some(FM27_NATIVE_2486695_PROFILE_ID.into()))
@@ -183,8 +187,19 @@ pub(crate) const FM27_2026_11_17: FmLayout = FmLayout {
     static_methods: [("GameRecordSerialisation.get_Instance", 0x33FFB0), ("GamePlugin.get_ChannelDataPool", 0x33AA50)],
 };
 
+// The Nov 25 metadata retains the binding field offsets and managed probe
+// layout. Native plugin addresses are tracked separately.
+pub(crate) const FM27_2026_11_25: FmLayout = FmLayout {
+    id: "fm27-6000.3.18-2026-11-25",
+    name: "FM27 2026-11-25 national-team reader (experimental)",
+    exe_hash: "f8a46c63cdaab5710a6520094c93e0766998a9dbb07161be7923b6ac13e09fe6",
+    assembly_hash: "8b5707a924a6c8cb493cd67bc620be25a456ae5dc6b6f313f3f1d4f70fdeb552",
+    metadata_hash: "a307ba7844c35d9e9ee2c63ac6dd2d4dac74ffb730ea903444fc1f0b0baac8fd",
+    ..FM27_2026_11_17
+};
+
 pub(crate) fn profile_for_hashes(assembly: &str, metadata: &str) -> Option<FmLayout> {
-    [FM26, FM27, FM27_2026_11_10, FM27_2026_11_13, FM27_2026_11_17].into_iter().find(|profile| {
+    [FM26, FM27, FM27_2026_11_10, FM27_2026_11_13, FM27_2026_11_17, FM27_2026_11_25].into_iter().find(|profile| {
         profile.assembly_hash.eq_ignore_ascii_case(assembly)
             && profile.metadata_hash.eq_ignore_ascii_case(metadata)
     })
@@ -233,6 +248,8 @@ mod tests {
         assert_eq!(profile_for_hashes(FM27_2026_11_10.assembly_hash, FM27_2026_11_10.metadata_hash).unwrap().id, FM27_2026_11_10.id);
         assert_eq!(profile_for_hashes(FM27_2026_11_13.assembly_hash, FM27_2026_11_13.metadata_hash).unwrap().id, FM27_2026_11_13.id);
         assert_eq!(profile_for_hashes(FM27_2026_11_17.assembly_hash, FM27_2026_11_17.metadata_hash).unwrap().id, FM27_2026_11_17.id);
+        assert_eq!(profile_for_hashes(FM27_2026_11_25.assembly_hash, FM27_2026_11_25.metadata_hash).unwrap().id, FM27_2026_11_25.id);
+        assert!(profile_for_hashes(FM27_2026_11_25.assembly_hash, FM27_2026_11_17.metadata_hash).is_none());
         assert_eq!(FM27_2026_11_17.binding_node_data_key, 0x80);
         assert_eq!(FM27_2026_11_13.binding_node_data_key, 0x70);
         assert_eq!(profile_for_hashes(FM26.assembly_hash, FM26.metadata_hash).unwrap().edition, 26);

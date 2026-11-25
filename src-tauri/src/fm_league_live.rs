@@ -25,7 +25,13 @@ struct LeagueCodeRvas {
     preliminary_redirect:Option<(usize,usize)>,
 }
 fn league_code_rvas(profile:Option<&str>)->LeagueCodeRvas {
-    if profile==Some(FM27_PLUGIN_2026_11_17) {
+    if profile==Some(FM27_PLUGIN_2026_11_25) {
+        LeagueCodeRvas {
+            default_max:[0x12E7023,0x12E702B],
+            preliminary_default:Some(0x45EAD54),
+            preliminary_redirect:None,
+        }
+    }else if profile==Some(FM27_PLUGIN_2026_11_17) {
         // 2026-11-17 moved the two inherited max-squad immediates and changed
         // get_max_prelim_squad_size into a small property lookup with an inline
         // fallback. Patch the three one-byte defaults together.
@@ -50,6 +56,14 @@ fn league_default_max_addresses(process:&RemoteProcess,base:usize)->[usize;2] {
 #[cfg(test)]
 mod league_code_tests {
     use super::*;
+
+    #[test]
+    fn november_25_profile_uses_its_own_callup_defaults() {
+        let code=league_code_rvas(Some(FM27_PLUGIN_2026_11_25));
+        assert_eq!(code.default_max,[0x12E7023,0x12E702B]);
+        assert_eq!(code.preliminary_default,Some(0x45EAD54));
+        assert!(code.preliminary_redirect.is_none());
+    }
 
     #[test]
     fn november_17_profile_uses_relocated_callup_defaults() {
@@ -84,7 +98,7 @@ fn league_live_date(process:&RemoteProcess,cache:&RefreshSession)->Result<u32,St
     if let Some(shift)=native_plugin_shift(process) {
         return process.read_u32(cache.plugin_base+0x56AD378+shift).filter(|date|decode_fm_date(*date).is_some()).map(normalize_fm_date).ok_or_else(||"Nie potwierdzono aktualnej daty FM.".into());
     }
-    if dynamic_league_profile(process) {
+    if league_compatible_fm27(process) {
         let schedule=process.read_ptr(cache.team+TEAM_SCHEDULE).ok_or("Nie odczytano terminarza prowadzonej drużyny.")?;
         for offset in SCHEDULE_DATE {
             if let Some(raw)=process.read_u32(schedule+offset).filter(|raw|decode_fm_date(*raw).is_some()) {

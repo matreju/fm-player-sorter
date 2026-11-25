@@ -153,13 +153,21 @@ export function FmConnectionPanel({
       setIsLoading(true);
       setLoadError(null);
       setDateStatus(null);
-      const nextResult = await (quick?refreshFootballManagerDatabase():loadFootballManagerDatabase());
+      let nextResult = await (quick?refreshFootballManagerDatabase():loadFootballManagerDatabase());
+      const needsReconnect = quick && !nextResult.success && (
+        nextResult.stage === "refresh-reconnect-required" || nextResult.message.includes("[FM-R07]")
+      );
+      if (needsReconnect) {
+        quickReadRef.current = false;
+        setLoadProgress("Ponowne odczytywanie danych FM…");
+        nextResult = await loadFootballManagerDatabase();
+      }
       setResult({ ...nextResult, rows: [], headers: [] });
 
       if (!nextResult.success) {
+        if (needsReconnect) onFmUnavailable();
         setLoadError(nextResult.message);
         setIsOpen(true);
-        if(quick && nextResult.stage==="refresh-reconnect-required")onFmUnavailable();
         return;
       }
 
